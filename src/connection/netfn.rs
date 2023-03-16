@@ -6,7 +6,7 @@ pub trait NetFns {
     type Command;
 
     fn request(cmd: Self::Command) -> Self;
-    fn new_response(cmd: Self::Command) -> Self;
+    fn response(cmd: Self::Command) -> Self;
     fn is_response(&self) -> bool;
     fn cmd(&self) -> Self::Command;
 }
@@ -39,9 +39,9 @@ impl NetFn {
     pub fn from_parts(netfn: u8, cmd: u8) -> Self {
         match netfn {
             0x0A => StorageNetFn::request(cmd.into()).into(),
-            0x0B => StorageNetFn::new_response(cmd.into()).into(),
+            0x0B => StorageNetFn::response(cmd.into()).into(),
             0x06 => AppNetFn::request(cmd.into()).into(),
-            0x07 => AppNetFn::new_response(cmd.into()).into(),
+            0x07 => AppNetFn::response(cmd.into()).into(),
             netfn => Self::Unknown(netfn, cmd),
         }
     }

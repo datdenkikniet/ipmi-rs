@@ -46,7 +46,7 @@ impl NetFns for NetFn {
         Self::new(false, cmd)
     }
 
-    fn new_response(cmd: Self::Command) -> Self {
+    fn response(cmd: Self::Command) -> Self {
         Self::new(true, cmd)
     }
 
