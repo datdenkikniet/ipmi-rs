@@ -120,7 +120,7 @@ impl TryFrom<Response> for ParsedResponse {
                     .ok_or(ParseResponseError::InvalidData),
                 StorageCommand::GetSelEntry { .. } => {
                     let next_entry =
-                        SelRecordId::new(u16::from_le_bytes([value.data[0], value.data[1]]));
+                        SelRecordId::new_raw(u16::from_le_bytes([value.data[0], value.data[1]]));
                     SelEntry::from_data(&value.data[2..])
                         .map(|entry| Self::SelEntry { next_entry, entry })
                         .map_err(|_| ParseResponseError::InvalidData)

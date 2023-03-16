@@ -100,7 +100,7 @@ where
 
         match result {
             ParsedResponse::SelEntry { next_entry, entry } => Ok((entry, next_entry)),
-            _ => unreachable!(),
+            v => panic!("Expected SEL entry, got {:?}", v),
         }
     }
 }

@@ -136,8 +136,18 @@ impl SelRecordId {
     pub const FIRST: Self = Self(0x0000);
     pub const LAST: Self = Self(0xFFFF);
 
-    pub fn new(id: u16) -> Self {
-        Self(id)
+    pub fn new(id: u16) -> Option<Self> {
+        if id == Self::FIRST.0 {
+            None
+        } else if id == Self::LAST.0 {
+            None
+        } else {
+            Some(Self(id))
+        }
+    }
+
+    pub(crate) fn new_raw(id: u16) -> Self {
+        SelRecordId(id)
     }
 
     pub fn value(&self) -> u16 {
@@ -276,7 +286,7 @@ impl SelEntry {
             return Err(ParseSelEntryError::NotEnoughData);
         }
 
-        let record_id = SelRecordId::new(u16::from_le_bytes([data[0], data[1]]));
+        let record_id = SelRecordId(u16::from_le_bytes([data[0], data[1]]));
         let record_type = SelRecordType::from(data[2]);
         let timestamp = u32::from_le_bytes([data[3], data[4], data[5], data[6]]);
 
