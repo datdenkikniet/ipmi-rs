@@ -14,7 +14,7 @@ impl Command {
         }
     }
 
-    pub fn from_parts(id: u8) -> Self {
+    pub fn from_response_parts(id: u8) -> Self {
         match id {
             0x01 => Self::GetDeviceId,
             v => Self::Unknown(v),
@@ -56,7 +56,7 @@ impl NetFns for NetFn {
         self.command
     }
 
-    fn data(&self) -> Vec<u8> {
+    fn request_data(&self) -> Vec<u8> {
         Vec::new()
     }
 }

@@ -98,7 +98,7 @@ impl TryFrom<IpmiRecv> for Response {
         let (netfn, cmd) = (value.message.netfn, value.message.cmd);
 
         Response::new(
-            NetFn::from_parts(netfn, cmd, data),
+            NetFn::from_response_parts(netfn, cmd, data),
             value.msg_id,
             LogicalUnit::ZERO,
             cc,

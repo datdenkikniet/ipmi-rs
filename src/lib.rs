@@ -6,7 +6,7 @@ use connection::{LogicalUnit, NetFn, NetFns, ParsedResponse, Request, Response};
 
 pub mod storage;
 pub use storage::{Command as StorageCommand, NetFn as StorageNetFn};
-use storage::{SelAllocInfo, SelEntry, SelInfo, SelRecordId};
+use storage::{GetSelEntry, SelAllocInfo, SelEntry, SelInfo, SelRecordId};
 
 #[macro_use]
 mod fmt;
@@ -90,12 +90,12 @@ where
         record_id: SelRecordId,
     ) -> Result<(SelEntry, SelRecordId), IpmiError<T::Error>> {
         let result = self.send_recv(NetFn::Storage(StorageNetFn::request(
-            StorageCommand::GetSelEntry {
+            StorageCommand::GetSelEntry(Some(GetSelEntry {
                 reservation_id: None,
                 record_id,
                 offset: 0,
                 bytes_to_read: None,
-            },
+            })),
         )))?;
 
         match result {

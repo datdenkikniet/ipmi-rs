@@ -10,30 +10,33 @@ pub use sel::{
 use crate::connection::NetFns;
 
 #[derive(Clone, Debug, PartialEq)]
+pub struct GetSelEntry {
+    pub reservation_id: Option<NonZeroU16>,
+    pub record_id: SelRecordId,
+    pub offset: u8,
+    pub bytes_to_read: Option<NonMaxU8>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub enum Command {
     GetSelInfo,
     GetSelAllocInfo,
     ReserveSel,
-    GetSelEntry {
-        reservation_id: Option<NonZeroU16>,
-        record_id: SelRecordId,
-        offset: u8,
-        bytes_to_read: Option<NonMaxU8>,
-    },
+    GetSelEntry(Option<GetSelEntry>),
     PartialAddSelEntry,
     ClearSel,
     Unknown(u8, Vec<u8>),
 }
 
 impl Command {
-    pub fn data(&self) -> Vec<u8> {
+    pub fn request_data(&self) -> Vec<u8> {
         match self {
-            Command::GetSelEntry {
+            Command::GetSelEntry(Some(GetSelEntry {
                 reservation_id,
                 record_id,
                 offset,
                 bytes_to_read,
-            } => {
+            })) => {
                 let mut data = vec![0u8; 6];
 
                 data[0..2]
@@ -60,21 +63,16 @@ impl Command {
         }
     }
 
-    pub fn parts(&self) -> (u8, Vec<u8>) {
-        (self.cmd_id(), self.data())
+    pub fn request_parts(&self) -> (u8, Vec<u8>) {
+        (self.cmd_id(), self.request_data())
     }
 
-    pub fn from_parts(cmd: u8, data: &[u8]) -> Self {
+    pub fn from_response_parts(cmd: u8, data: &[u8]) -> Self {
         match cmd {
             0x40 => Self::GetSelInfo,
             0x41 => Self::GetSelAllocInfo,
             0x42 => Self::ReserveSel,
-            0x43 => Self::GetSelEntry {
-                reservation_id: None,
-                record_id: SelRecordId::FIRST,
-                offset: 0,
-                bytes_to_read: None,
-            },
+            0x43 => Self::GetSelEntry(None),
             0x45 => Self::PartialAddSelEntry,
             0x47 => Self::ClearSel,
             v => Self::Unknown(v, data.iter().map(Clone::clone).collect()),
@@ -113,8 +111,8 @@ impl NetFns for NetFn {
         self.cmd.clone()
     }
 
-    fn data(&self) -> Vec<u8> {
-        self.cmd().data()
+    fn request_data(&self) -> Vec<u8> {
+        self.cmd().request_data()
     }
 }
 

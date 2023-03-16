@@ -9,7 +9,7 @@ pub trait NetFns {
     fn response(cmd: Self::Command) -> Self;
     fn is_response(&self) -> bool;
     fn cmd(&self) -> Self::Command;
-    fn data(&self) -> Vec<u8>;
+    fn request_data(&self) -> Vec<u8>;
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -37,12 +37,12 @@ direct_from!(
 );
 
 impl NetFn {
-    pub fn from_parts(netfn: u8, cmd: u8, data: &[u8]) -> Self {
+    pub fn from_response_parts(netfn: u8, cmd: u8, data: &[u8]) -> Self {
         match netfn {
-            0x0A => StorageNetFn::request(StorageCommand::from_parts(cmd, data)).into(),
-            0x0B => StorageNetFn::response(StorageCommand::from_parts(cmd, data)).into(),
-            0x06 => AppNetFn::request(AppCommand::from_parts(cmd)).into(),
-            0x07 => AppNetFn::response(AppCommand::from_parts(cmd)).into(),
+            0x0A => StorageNetFn::request(StorageCommand::from_response_parts(cmd, data)).into(),
+            0x0B => StorageNetFn::response(StorageCommand::from_response_parts(cmd, data)).into(),
+            0x06 => AppNetFn::request(AppCommand::from_response_parts(cmd)).into(),
+            0x07 => AppNetFn::response(AppCommand::from_response_parts(cmd)).into(),
             netfn => Self::Unknown(netfn, cmd, data.iter().map(Clone::clone).collect()),
         }
     }
@@ -79,7 +79,7 @@ impl NetFn {
         match self {
             NetFn::Storage(str_netfn) => {
                 let netfn = if !str_netfn.is_response() { 0x0A } else { 0x0B };
-                let (cmd, data) = str_netfn.cmd().parts();
+                let (cmd, data) = str_netfn.cmd().request_parts();
                 (netfn, cmd, data)
             }
             NetFn::App(app_netfn) => {
