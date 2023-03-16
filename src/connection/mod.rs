@@ -1,3 +1,6 @@
+mod completion_code;
+pub use completion_code::CompletionCode;
+
 mod file;
 pub use file::File;
 

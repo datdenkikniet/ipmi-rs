@@ -32,8 +32,14 @@ impl<T> From<T> for Ipmi<T> {
 #[derive(Clone, Debug, PartialEq)]
 pub enum IpmiError<T> {
     NetFnIsResponse(NetFn),
-    IncorrectResponseSeq(i64, i64),
-    UnexpectedResponse(NetFn, NetFn),
+    IncorrectResponseSeq {
+        seq_sent: i64,
+        seq_recvd: i64,
+    },
+    UnexpectedResponse {
+        netfn_sent: NetFn,
+        netfn_recvd: NetFn,
+    },
     ResponseParseFailed(<ParsedResponse as TryFrom<Response>>::Error),
     Connection(T),
 }
@@ -70,14 +76,17 @@ where
         let response = self.inner.send_recv(&request)?;
 
         if response.seq() != seq {
-            return Err(IpmiError::IncorrectResponseSeq(seq, response.seq()));
+            return Err(IpmiError::IncorrectResponseSeq {
+                seq_sent: seq,
+                seq_recvd: response.seq(),
+            });
         }
 
         if !response.netfn().is_response_for(&netfn) {
-            return Err(IpmiError::UnexpectedResponse(
-                netfn.clone(),
-                response.netfn().clone(),
-            ));
+            return Err(IpmiError::UnexpectedResponse {
+                netfn_sent: netfn.clone(),
+                netfn_recvd: response.netfn().clone(),
+            });
         }
 
         response

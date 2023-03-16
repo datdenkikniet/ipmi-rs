@@ -6,6 +6,8 @@ use crate::{
     AppCommand, NetFn, NetFns, StorageCommand,
 };
 
+use super::CompletionCode;
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Response {
     /// The NetFn of this response.
@@ -85,7 +87,7 @@ impl Loggable for ParsedResponse {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ParseResponseError {
-    Failed { completion_code: u8 },
+    Failed { completion_code: CompletionCode },
     InvalidData,
     UnknownNetFn,
 }
@@ -96,7 +98,7 @@ impl TryFrom<Response> for ParsedResponse {
     fn try_from(value: Response) -> Result<ParsedResponse, Self::Error> {
         if value.completion_code != 0 {
             return Err(ParseResponseError::Failed {
-                completion_code: value.completion_code,
+                completion_code: value.completion_code.into(),
             });
         }
 
