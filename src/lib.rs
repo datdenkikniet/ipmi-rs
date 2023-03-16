@@ -6,7 +6,7 @@ use connection::{LogicalUnit, NetFn, NetFns, ParsedResponse, Request, Response};
 
 pub mod storage;
 pub use storage::{Command as StorageCommand, NetFn as StorageNetFn};
-use storage::{SelAllocInfo, SelInfo};
+use storage::{SelAllocInfo, SelEntry, SelInfo, SelRecordId};
 
 #[macro_use]
 mod fmt;
@@ -83,6 +83,25 @@ where
         response
             .try_into()
             .map_err(|e| IpmiError::ResponseParseFailed(e))
+    }
+
+    pub fn get_sel_entry(
+        &mut self,
+        record_id: SelRecordId,
+    ) -> Result<(SelEntry, SelRecordId), IpmiError<T::Error>> {
+        let result = self.send_recv(NetFn::Storage(StorageNetFn::request(
+            StorageCommand::GetSelEntry {
+                reservation_id: None,
+                record_id,
+                offset: 0,
+                bytes_to_read: None,
+            },
+        )))?;
+
+        match result {
+            ParsedResponse::SelEntry { next_entry, entry } => Ok((entry, next_entry)),
+            _ => unreachable!(),
+        }
     }
 }
 

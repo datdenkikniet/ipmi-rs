@@ -1,10 +1,8 @@
 use std::time::Duration;
 
 use ipmi_rs::{
-    connection::NetFns,
-    connection::{File, NetFn},
-    storage::SelRecordId,
-    AppCommand, AppNetFn, Ipmi, LogOutput, Loggable, StorageCommand, StorageNetFn,
+    connection::File, connection::NetFns, storage::SelRecordId, AppCommand, AppNetFn, Ipmi,
+    LogOutput, Loggable, StorageCommand,
 };
 
 fn main() {
@@ -35,14 +33,7 @@ fn main() {
         ipmi_rs::log!(log_output, "No SEL Alloc information available");
     }
 
-    let first_entry = ipmi.send_recv(NetFn::Storage(StorageNetFn::request(
-        StorageCommand::GetSelEntry {
-            reservation_id: None,
-            record_id: SelRecordId::FIRST,
-            offset: 0,
-            bytes_to_read: None,
-        },
-    )));
+    let (first_entry, _next_entry) = ipmi.get_sel_entry(SelRecordId::FIRST).unwrap();
 
-    first_entry.unwrap().log(log_output);
+    first_entry.log(log_output);
 }
