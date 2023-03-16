@@ -98,7 +98,7 @@ impl TryFrom<IpmiRecv> for Response {
         let (netfn, cmd) = (value.message.netfn, value.message.cmd);
 
         Response::new(
-            NetFn::from_parts(netfn, cmd),
+            NetFn::from_parts(netfn, cmd, data),
             value.msg_id,
             LogicalUnit::ZERO,
             cc,
@@ -162,11 +162,12 @@ impl super::IpmiConnection for File {
     type Error = io::Error;
 
     fn send(&mut self, request: &Request) -> io::Result<()> {
-        let mut request_data: Vec<u8> = request.data().iter().map(Clone::clone).collect();
-
         let bmc_addr = &mut IpmiSysIfaceAddr::bmc();
 
-        let (netfn, cmd) = request.netfn().parts();
+        let (netfn, cmd, mut data) = request.netfn().parts();
+
+        let data_len = data.len() as u16;
+        let ptr = data.as_mut_ptr();
 
         let mut request = IpmiRequest {
             addr: bmc_addr as *mut _ as *mut u8,
@@ -175,8 +176,8 @@ impl super::IpmiConnection for File {
             message: IpmiMessage {
                 netfn,
                 cmd,
-                data_len: request.data().len() as u16,
-                data: request_data.as_mut_ptr(),
+                data_len,
+                data: ptr,
             },
         };
 
@@ -199,6 +200,9 @@ impl super::IpmiConnection for File {
 
         let mut response_data = [0u8; 1024];
 
+        let response_data_len = response_data.len() as u16;
+        let response_data_ptr = response_data.as_mut_ptr();
+
         let mut recv = IpmiRecv {
             addr: bmc_addr as *mut _ as *mut u8,
             addr_len: core::mem::size_of_val(bmc_addr) as u32,
@@ -207,8 +211,8 @@ impl super::IpmiConnection for File {
             message: IpmiMessage {
                 netfn: 0,
                 cmd: 0,
-                data_len: response_data.len() as u16,
-                data: response_data.as_mut_ptr(),
+                data_len: response_data_len,
+                data: response_data_ptr,
             },
         };
 

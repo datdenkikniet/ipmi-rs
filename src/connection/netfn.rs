@@ -9,13 +9,14 @@ pub trait NetFns {
     fn response(cmd: Self::Command) -> Self;
     fn is_response(&self) -> bool;
     fn cmd(&self) -> Self::Command;
+    fn data(&self) -> Vec<u8>;
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum NetFn {
     App(AppNetFn),
     Storage(StorageNetFn),
-    Unknown(u8, u8),
+    Unknown(u8, u8, Vec<u8>),
 }
 
 macro_rules! direct_from {
@@ -36,29 +37,57 @@ direct_from!(
 );
 
 impl NetFn {
-    pub fn from_parts(netfn: u8, cmd: u8) -> Self {
+    pub fn from_parts(netfn: u8, cmd: u8, data: &[u8]) -> Self {
         match netfn {
-            0x0A => StorageNetFn::request(cmd.into()).into(),
-            0x0B => StorageNetFn::response(cmd.into()).into(),
-            0x06 => AppNetFn::request(cmd.into()).into(),
-            0x07 => AppNetFn::response(cmd.into()).into(),
-            netfn => Self::Unknown(netfn, cmd),
+            0x0A => StorageNetFn::request(StorageCommand::from_parts(cmd, data)).into(),
+            0x0B => StorageNetFn::response(StorageCommand::from_parts(cmd, data)).into(),
+            0x06 => AppNetFn::request(AppCommand::from_parts(cmd)).into(),
+            0x07 => AppNetFn::response(AppCommand::from_parts(cmd)).into(),
+            netfn => Self::Unknown(netfn, cmd, data.iter().map(Clone::clone).collect()),
         }
     }
 
-    pub fn parts(&self) -> (u8, u8) {
+    fn cmd_id(&self) -> u8 {
+        match self {
+            NetFn::App(netfn) => netfn.cmd().cmd_id(),
+            NetFn::Storage(netfn) => netfn.cmd().cmd_id(),
+            NetFn::Unknown(_, cmd_id, _) => *cmd_id,
+        }
+    }
+
+    pub fn netfn_id(&self) -> u8 {
+        match self {
+            NetFn::App(netfn) => {
+                if netfn.is_response() {
+                    0x07
+                } else {
+                    0x06
+                }
+            }
+            NetFn::Storage(netfn) => {
+                if netfn.is_response() {
+                    0x0B
+                } else {
+                    0x0A
+                }
+            }
+            NetFn::Unknown(netfn, _, _) => *netfn,
+        }
+    }
+
+    pub fn parts(&self) -> (u8, u8, Vec<u8>) {
         match self {
             NetFn::Storage(str_netfn) => {
                 let netfn = if !str_netfn.is_response() { 0x0A } else { 0x0B };
-                let cmd = str_netfn.cmd().into();
-                (netfn, cmd)
+                let (cmd, data) = str_netfn.cmd().parts();
+                (netfn, cmd, data)
             }
-            NetFn::App(str_netfn) => {
-                let netfn = if !str_netfn.is_response() { 0x06 } else { 0x07 };
-                let cmd = str_netfn.cmd().into();
-                (netfn, cmd)
+            NetFn::App(app_netfn) => {
+                let netfn = if !app_netfn.is_response() { 0x06 } else { 0x07 };
+                let cmd = app_netfn.cmd().cmd_id();
+                (netfn, cmd, Vec::new())
             }
-            NetFn::Unknown(netfn, cmd) => (*netfn, *cmd),
+            NetFn::Unknown(netfn, cmd, data) => (*netfn, *cmd, data.clone()),
         }
     }
 
@@ -66,13 +95,16 @@ impl NetFn {
         match self {
             NetFn::Storage(netfn) => netfn.is_response(),
             NetFn::App(netfn) => netfn.is_response(),
-            NetFn::Unknown(netfn, _) => netfn % 2 == 1,
+            NetFn::Unknown(netfn, _, _) => netfn % 2 == 1,
         }
     }
 
     pub fn is_response_for(&self, other: &Self) -> bool {
-        let (net_fn, cmd) = self.parts();
-        let (other_net_fn, other_cmd) = other.parts();
+        let net_fn = self.netfn_id();
+        let cmd = self.cmd_id();
+
+        let other_net_fn = other.netfn_id();
+        let other_cmd = other.cmd_id();
 
         (other_net_fn + 1 == net_fn) && cmd == other_cmd
     }

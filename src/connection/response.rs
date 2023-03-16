@@ -2,7 +2,7 @@ use crate::{
     app::DeviceId,
     connection::LogicalUnit,
     fmt::{LogOutput, Loggable},
-    storage::{SelAllocInfo, SelInfo},
+    storage::{SelAllocInfo, SelEntry, SelInfo, SelRecordId},
     AppCommand, NetFn, NetFns, StorageCommand,
 };
 
@@ -72,6 +72,10 @@ impl Response {
 pub enum ParsedResponse {
     SelInfo(SelInfo),
     SelAllocInfo(SelAllocInfo),
+    SelEntry {
+        next_entry: SelRecordId,
+        entry: SelEntry,
+    },
     DeviceId(DeviceId),
 }
 
@@ -81,6 +85,10 @@ impl Loggable for ParsedResponse {
             ParsedResponse::SelInfo(sel_info) => sel_info.log(output),
             ParsedResponse::SelAllocInfo(sel_alloc_info) => sel_alloc_info.log(output),
             ParsedResponse::DeviceId(device_id) => device_id.log(output),
+            ParsedResponse::SelEntry { next_entry, entry } => {
+                entry.log(output);
+                log::debug!("  Next entry: 0x{:02X}", next_entry.value());
+            }
         }
     }
 }
@@ -110,8 +118,15 @@ impl TryFrom<Response> for ParsedResponse {
                 StorageCommand::GetSelAllocInfo => SelAllocInfo::from_data(&value.data)
                     .map(Into::into)
                     .ok_or(ParseResponseError::InvalidData),
-                StorageCommand::Unknown(_) => Err(ParseResponseError::UnknownNetFn),
-                _ => unimplemented!(),
+                StorageCommand::GetSelEntry { .. } => {
+                    let next_entry =
+                        SelRecordId::new(u16::from_le_bytes([value.data[0], value.data[1]]));
+                    SelEntry::from_data(&value.data[2..])
+                        .map(|entry| Self::SelEntry { next_entry, entry })
+                        .map_err(|_| ParseResponseError::InvalidData)
+                }
+                StorageCommand::Unknown(_, _) => Err(ParseResponseError::UnknownNetFn),
+                _ => unimplemented!("{:?}", netfn),
             },
             NetFn::App(netfn) => match netfn.cmd() {
                 AppCommand::GetDeviceId => DeviceId::from_data(&value.data)

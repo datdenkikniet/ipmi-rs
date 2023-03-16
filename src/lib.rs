@@ -54,11 +54,7 @@ impl<T> Ipmi<T>
 where
     T: connection::IpmiConnection,
 {
-    pub fn send_recv(
-        &mut self,
-        netfn: NetFn,
-        data: &[u8],
-    ) -> Result<ParsedResponse, IpmiError<T::Error>> {
+    pub fn send_recv(&mut self, netfn: NetFn) -> Result<ParsedResponse, IpmiError<T::Error>> {
         if netfn.is_response() {
             return Err(IpmiError::NetFnIsResponse(netfn));
         }
@@ -66,12 +62,7 @@ where
         let seq = self.counter;
         self.counter += 1;
 
-        let request = Request::new(
-            netfn,
-            LogicalUnit::ONE,
-            seq,
-            data.iter().map(Clone::clone).collect(),
-        );
+        let request = Request::new(netfn.clone(), LogicalUnit::ONE, seq);
 
         let response = self.inner.send_recv(&request)?;
 
@@ -100,7 +91,7 @@ macro_rules! get_parsed {
         impl<T: connection::IpmiConnection> Ipmi<T> {
             $(
                 pub fn $name(&mut self) -> Result<$out, IpmiError<T::Error>> {
-                    let response = self.send_recv($command.into(), &[])?;
+                    let response = self.send_recv($command.into())?;
 
                     match response {
                         ParsedResponse::$out_variant(value) => Ok(value),

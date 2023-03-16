@@ -6,20 +6,18 @@ pub enum Command {
     Unknown(u8),
 }
 
-impl From<u8> for Command {
-    fn from(value: u8) -> Self {
-        match value {
-            0x01 => Self::GetDeviceId,
-            v => Self::Unknown(v),
+impl Command {
+    pub fn cmd_id(&self) -> u8 {
+        match self {
+            Command::GetDeviceId => 0x01,
+            Command::Unknown(v) => *v,
         }
     }
-}
 
-impl From<Command> for u8 {
-    fn from(value: Command) -> Self {
-        match value {
-            Command::GetDeviceId => 0x01,
-            Command::Unknown(v) => v,
+    pub fn from_parts(id: u8) -> Self {
+        match id {
+            0x01 => Self::GetDeviceId,
+            v => Self::Unknown(v),
         }
     }
 }
@@ -56,6 +54,10 @@ impl NetFns for NetFn {
 
     fn cmd(&self) -> Self::Command {
         self.command
+    }
+
+    fn data(&self) -> Vec<u8> {
+        Vec::new()
     }
 }
 
