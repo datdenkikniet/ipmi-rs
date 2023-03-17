@@ -3,7 +3,14 @@ use crate::{
     LogOutput, Loggable,
 };
 
+#[derive(Clone, Copy, Debug)]
 pub struct GetAllocInfo;
+
+impl Into<Message> for GetAllocInfo {
+    fn into(self) -> Message {
+        Message::new(NetFn::Storage, 0x21, Vec::new())
+    }
+}
 
 impl IpmiCommand for GetAllocInfo {
     type Output = AllocInfo;
@@ -20,12 +27,7 @@ impl IpmiCommand for GetAllocInfo {
     }
 }
 
-impl Into<Message> for GetAllocInfo {
-    fn into(self) -> Message {
-        Message::new(NetFn::Storage, 0x41, Vec::new())
-    }
-}
-
+#[derive(Clone, Debug)]
 pub struct AllocInfo {
     inner: crate::storage::AllocInfo,
 }
@@ -40,7 +42,7 @@ impl AllocInfo {
 
 impl Loggable for AllocInfo {
     fn log(&self, output: LogOutput) {
-        crate::log!(output, "SEL Allocation Information:");
+        crate::log!(output, "SDR Repository Allocation Information:");
         self.inner.log(output);
     }
 }

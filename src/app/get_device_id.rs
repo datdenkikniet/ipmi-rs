@@ -1,5 +1,5 @@
 use crate::{
-    connection::{IpmiCommand, Message, NetFn},
+    connection::{IpmiCommand, Message, NetFn, ParseResponseError},
     LogOutput, Loggable,
 };
 
@@ -19,9 +19,9 @@ impl IpmiCommand for GetDeviceId {
     fn parse_response(
         completion_code: crate::connection::CompletionCode,
         data: &[u8],
-    ) -> Result<Self::Output, crate::connection::ParseResponseError<Self::Error>> {
+    ) -> Result<Self::Output, ParseResponseError<Self::Error>> {
         Self::check_cc_success(completion_code)?;
-        DeviceId::from_data(data).ok_or(().into())
+        DeviceId::from_data(data).ok_or(ParseResponseError::NotEnoughData)
     }
 }
 
@@ -114,7 +114,7 @@ impl Loggable for DeviceId {
 
         log!(level, "Device ID information:");
         log!(level, "  Device ID:            0x{:02X}", dev_id);
-        log!(level, "  Device rev:           0x{:02X}", dev_rev);
+        log!(level, "  Device revision:      0x{:02X}", dev_rev);
         log!(level, "  Manufacturer ID:      0x{:02X}", manf_id);
         log!(level, "  Product ID:           0x{:02X}", self.product_id);
         log!(level, "  IPMI Version:         {}.{}", v_maj, v_min);

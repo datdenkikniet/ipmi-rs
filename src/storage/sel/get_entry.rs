@@ -18,12 +18,12 @@ pub struct GetEntry {
 }
 
 impl GetEntry {
-    pub fn new(reservation_id: Option<NonZeroU16>, record_id: RecordId, offset: u8) -> Self {
+    pub fn new(reservation_id: Option<NonZeroU16>, record_id: RecordId) -> Self {
         Self {
             reservation_id,
             record_id,
-            offset,
             // Always read all bytes
+            offset: 0,
             bytes_to_read: None,
         }
     }
@@ -58,7 +58,7 @@ impl IpmiCommand for GetEntry {
         }
 
         let next_entry = RecordId::new_raw(u16::from_le_bytes([data[0], data[1]]));
-        let entry = Entry::from_data(&data[2..])?;
+        let entry = Entry::parse(&data[2..])?;
         Ok(EntryInfo { next_entry, entry })
     }
 }

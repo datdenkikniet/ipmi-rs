@@ -163,7 +163,7 @@ pub enum ParseEntryError {
 }
 
 impl Entry {
-    pub fn from_data(data: &[u8]) -> Result<Self, ParseEntryError> {
+    pub fn parse(data: &[u8]) -> Result<Self, ParseEntryError> {
         if data.len() < 15 {
             return Err(ParseEntryError::NotEnoughData);
         }
@@ -201,7 +201,7 @@ impl Entry {
                 record_id,
                 ty: v,
                 timestamp: Timestamp::from(timestamp),
-                manufacturer_id: u32::from_be_bytes([data[7], data[8], data[9], 0]),
+                manufacturer_id: u32::from_le_bytes([data[7], data[8], data[9], 0]),
                 data: [data[10], data[11], data[12], data[13], data[14], data[15]],
             }),
             SelRecordType::NonTimestampedOem(v) => Ok(Self::OemNotTimestamped {

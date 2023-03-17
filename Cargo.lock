@@ -69,6 +69,7 @@ dependencies = [
 name = "ipmi-rs"
 version = "0.1.0"
 dependencies = [
+ "bitflags",
  "log",
  "nix",
  "nonmax",
