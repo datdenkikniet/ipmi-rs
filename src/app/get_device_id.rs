@@ -1,63 +1,27 @@
-use crate::{connection::NetFns, fmt::LogOutput, Loggable};
+use crate::{
+    connection::{IpmiCommand, Message, NetFn},
+    LogOutput, Loggable,
+};
 
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum Command {
-    GetDeviceId,
-    Unknown(u8),
-}
+pub struct GetDeviceId;
 
-impl Command {
-    pub fn cmd_id(&self) -> u8 {
-        match self {
-            Command::GetDeviceId => 0x01,
-            Command::Unknown(v) => *v,
-        }
-    }
-
-    pub fn from_response_parts(id: u8) -> Self {
-        match id {
-            0x01 => Self::GetDeviceId,
-            v => Self::Unknown(v),
-        }
+impl Into<Message> for GetDeviceId {
+    fn into(self) -> Message {
+        Message::new(NetFn::App, 0x01, Vec::new())
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NetFn {
-    is_response: bool,
-    command: Command,
-}
+impl IpmiCommand for GetDeviceId {
+    type Output = DeviceId;
 
-impl NetFn {
-    const fn new(is_response: bool, command: Command) -> Self {
-        Self {
-            is_response,
-            command,
-        }
-    }
-}
+    type Error = ();
 
-impl NetFns for NetFn {
-    type Command = Command;
-
-    fn request(cmd: Self::Command) -> Self {
-        Self::new(false, cmd)
-    }
-
-    fn response(cmd: Self::Command) -> Self {
-        Self::new(true, cmd)
-    }
-
-    fn is_response(&self) -> bool {
-        self.is_response
-    }
-
-    fn cmd(&self) -> Self::Command {
-        self.command
-    }
-
-    fn request_data(&self) -> Vec<u8> {
-        Vec::new()
+    fn parse_response(
+        completion_code: crate::connection::CompletionCode,
+        data: &[u8],
+    ) -> Result<Self::Output, crate::connection::ParseResponseError<Self::Error>> {
+        Self::check_cc_success(completion_code)?;
+        DeviceId::from_data(data).ok_or(().into())
     }
 }
 

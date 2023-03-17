@@ -77,3 +77,13 @@ impl From<u8> for CompletionCode {
         }
     }
 }
+
+impl CompletionCode {
+    pub fn is_success(&self) -> bool {
+        matches!(self, Self::Success)
+    }
+
+    pub fn is_reserved(&self) -> bool {
+        matches!(self, Self::Reserved(_))
+    }
+}

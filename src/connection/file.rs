@@ -5,10 +5,12 @@ use std::{
 };
 
 use crate::{
-    connection::{LogicalUnit, Request, Response},
+    connection::{Request, Response},
     fmt::{LogOutput, Loggable},
     NetFn,
 };
+
+use super::Message;
 
 #[repr(C)]
 #[derive(Debug)]
@@ -22,14 +24,6 @@ pub struct IpmiMessage {
 impl IpmiMessage {
     fn data(&self) -> &[u8] {
         unsafe { core::slice::from_raw_parts(self.data, self.data_len as usize) }
-    }
-
-    fn cc_and_data(&self) -> Option<(u8, &[u8])> {
-        if self.data_len > 0 {
-            Some((self.data()[0], &self.data()[1..]))
-        } else {
-            None
-        }
     }
 }
 
@@ -90,21 +84,18 @@ impl TryFrom<IpmiRecv> for Response {
     type Error = CreateResponseError;
 
     fn try_from(value: IpmiRecv) -> Result<Self, Self::Error> {
-        let (cc, data) = value
-            .message
-            .cc_and_data()
-            .ok_or(CreateResponseError::NotEnoughData)?;
-
         let (netfn, cmd) = (value.message.netfn, value.message.cmd);
 
-        Response::new(
-            NetFn::from_response_parts(netfn, cmd, data),
-            value.msg_id,
-            LogicalUnit::ZERO,
-            cc,
-            data,
-        )
-        .ok_or(CreateResponseError::NotAResponse)
+        let netfn_parsed = NetFn::from(netfn);
+
+        if netfn_parsed.response_value() == netfn {
+            let message = Message::new(netfn_parsed, cmd, value.message.data().to_vec());
+            let response =
+                Response::new(message, value.msg_id).ok_or(CreateResponseError::NotEnoughData)?;
+            Ok(response)
+        } else {
+            Err(CreateResponseError::NotAResponse)
+        }
     }
 }
 
@@ -161,10 +152,12 @@ impl super::IpmiConnection for File {
     type RecvError = io::Error;
     type Error = io::Error;
 
-    fn send(&mut self, request: &Request) -> io::Result<()> {
+    fn send(&mut self, request: &mut Request) -> io::Result<()> {
         let bmc_addr = &mut IpmiSysIfaceAddr::bmc();
 
-        let (netfn, cmd, mut data) = request.netfn().parts();
+        let netfn = request.netfn().request_value();
+        let cmd = request.cmd();
+        let data = request.data_mut();
 
         let data_len = data.len() as u16;
         let ptr = data.as_mut_ptr();
@@ -264,7 +257,7 @@ impl super::IpmiConnection for File {
         result
     }
 
-    fn send_recv(&mut self, request: &Request) -> io::Result<Response> {
+    fn send_recv(&mut self, request: &mut Request) -> io::Result<Response> {
         self.send(request)?;
         self.recv()
     }

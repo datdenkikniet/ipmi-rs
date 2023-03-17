@@ -1,8 +1,10 @@
 use std::time::Duration;
 
 use ipmi_rs::{
-    connection::File, connection::NetFns, storage::SelRecordId, AppCommand, AppNetFn, Ipmi,
-    LogOutput, Loggable, StorageCommand,
+    app::GetDeviceId,
+    connection::File,
+    storage::{GetSelAllocInfo, GetSelEntry, GetSelInfo, SelCommand, SelRecordId},
+    Ipmi, Loggable,
 };
 
 fn main() {
@@ -12,28 +14,20 @@ fn main() {
     let mut ipmi = Ipmi::new(file);
     let log_output = log::Level::Info.into();
 
-    let device_id = ipmi
-        .send_recv(AppNetFn::request(AppCommand::GetDeviceId).into())
-        .unwrap();
+    let info = ipmi.send_recv(GetSelInfo).unwrap();
+    info.log(log_output);
 
-    device_id.log(log_output);
-
-    let sel_info = ipmi.get_sel_info().unwrap();
-
-    sel_info.log(log_output);
-
-    if sel_info
-        .supported_cmds
-        .contains(&StorageCommand::GetSelAllocInfo)
-    {
-        let sel_alloc_info = ipmi.get_sel_alloc_info().unwrap();
-
-        sel_alloc_info.log(log_output);
-    } else {
-        ipmi_rs::log!(log_output, "No SEL Alloc information available");
+    if info.supported_cmds.contains(&SelCommand::GetAllocInfo) {
+        let alloc_info = ipmi.send_recv(GetSelAllocInfo).unwrap();
+        alloc_info.log(log_output);
     }
 
-    let (first_entry, _next_entry) = ipmi.get_sel_entry(SelRecordId::FIRST).unwrap();
+    let first_record = ipmi
+        .send_recv(GetSelEntry::new(None, SelRecordId::FIRST, 0))
+        .unwrap();
 
-    first_entry.log(log_output);
+    first_record.log(log_output);
+
+    let device_id = ipmi.send_recv(GetDeviceId).unwrap();
+    device_id.log(log_output);
 }
