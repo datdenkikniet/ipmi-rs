@@ -10,6 +10,9 @@ pub use get_info::{
 mod get_alloc_info;
 pub use get_alloc_info::{AllocInfo, GetAllocInfo as GetSdrAllocInfo};
 
+mod units;
+pub use units::Unit;
+
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct RecordId(u16);
 

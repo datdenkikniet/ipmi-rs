@@ -23,6 +23,17 @@ impl LogicalUnit {
     pub const THREE: Self = Self(3);
 }
 
+impl TryFrom<u8> for LogicalUnit {
+    type Error = ();
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            0..=3 => Ok(Self(value)),
+            _ => Err(()),
+        }
+    }
+}
+
 pub trait IpmiConnection {
     type SendError: core::fmt::Debug;
     type RecvError: core::fmt::Debug;

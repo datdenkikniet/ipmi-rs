@@ -11,6 +11,7 @@ log = "0.4"
 time = { version = "0.3", optional = true, default-features = false, features = [ "formatting" ] }
 nonmax = "0.5"
 bitflags = "1.3"
+finte = "0.2"
 
 [dev-dependencies.pretty_env_logger]
 version = "0.4"
