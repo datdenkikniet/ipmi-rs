@@ -4,7 +4,7 @@ use ipmi_rs::{
     app::GetDeviceId,
     connection::File,
     storage::{
-        GetSdrAllocInfo, GetSdrEntry, GetSdrRepositoryInfo, GetSelAllocInfo, GetSelEntry,
+        GetDeviceSdr, GetSdrAllocInfo, GetSdrRepositoryInfo, GetSelAllocInfo, GetSelEntry,
         GetSelInfo, SdrOperation, SdrRecordId, SelCommand, SelRecordId,
     },
     Ipmi, Loggable,
@@ -43,11 +43,11 @@ fn main() {
     }
 
     let first_entry = ipmi
-        .send_recv(GetSdrEntry::new(None, SdrRecordId::FIRST))
+        .send_recv(GetDeviceSdr::new(None, SdrRecordId::FIRST))
         .unwrap();
 
     let second_entry = ipmi
-        .send_recv(GetSdrEntry::new(None, first_entry.next_entry))
+        .send_recv(GetDeviceSdr::new(None, first_entry.next_entry))
         .unwrap();
 
     use ipmi_rs::LogOutput;

@@ -1,7 +1,8 @@
 mod get_sdr;
-pub use get_sdr::{
-    EntryInfo as SdrEntryInfo, GetEntry as GetSdrEntry, RecordContents as SdrEntry, *,
-};
+pub use get_sdr::{GetDeviceSdr, RecordInfo as SdrRecordInfo, *};
+
+mod record;
+pub use record::{Record as SdrRecord, RecordHeader as SdrRecordHeader};
 
 mod get_info;
 pub use get_info::{
