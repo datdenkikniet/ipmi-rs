@@ -11,7 +11,9 @@ pub struct FullSensorRecord {
     pub entity_instance: EntityInstance,
     pub initialization: SensorInitialization,
     pub capabilities: SensorCapabilities,
+    // TODO: Make a type
     pub ty: u8,
+    // TODO: Make a type
     pub event_reading_type_code: u8,
     pub sensor_units: SensorUnits,
     pub base_unit: Unit,
@@ -214,5 +216,26 @@ impl FullSensorRecord {
             oem_data,
             id_string,
         })
+    }
+
+    pub fn threshold(&self, kind: ThresholdKind) -> Threshold {
+        let readable = self.capabilities.threshold_access.readable(kind);
+        let settable = self.capabilities.threshold_access.settable(kind);
+
+        let asserts = self.capabilities.assertion_threshold_events.for_kind(kind);
+        let deasserts = self
+            .capabilities
+            .deassertion_threshold_events
+            .for_kind(kind);
+
+        Threshold {
+            kind,
+            readable,
+            settable,
+            event_assert_going_high: asserts.contains(&EventKind::GoingHigh),
+            event_assert_going_low: asserts.contains(&EventKind::GoingLow),
+            event_deassert_going_high: deasserts.contains(&EventKind::GoingHigh),
+            event_deassert_going_low: deasserts.contains(&EventKind::GoingLow),
+        }
     }
 }

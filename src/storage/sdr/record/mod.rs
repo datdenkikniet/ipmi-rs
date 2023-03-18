@@ -135,6 +135,58 @@ bitflags::bitflags! {
     }
 }
 
+impl ThresholdAssertEventMask {
+    pub fn for_kind(&self, kind: ThresholdKind) -> &[EventKind] {
+        static BOTH: [EventKind; 2] = [EventKind::GoingHigh, EventKind::GoingLow];
+        static HIGH: [EventKind; 1] = [EventKind::GoingHigh];
+        static LOW: [EventKind; 1] = [EventKind::GoingLow];
+        static NONE: [EventKind; 0] = [];
+
+        let (low, high) = match kind {
+            ThresholdKind::LowerNonCritical => (
+                self.contains(Self::LOWER_NON_CRITICAL_GOING_LOW),
+                self.contains(Self::LOWER_NON_CRITICAL_GOING_HIGH),
+            ),
+            ThresholdKind::LowerCritical => (
+                self.contains(Self::LOWER_CRITICAL_GOING_LOW),
+                self.contains(Self::LOWER_CRITICAL_GOING_HIGH),
+            ),
+            ThresholdKind::LowerNonRecoverable => (
+                self.contains(Self::LOWER_NON_RECOVERABLE_GOING_LOW),
+                self.contains(Self::LOWER_NON_RECOVERABLE_GOING_HIGH),
+            ),
+            ThresholdKind::UpperNonCritical => (
+                self.contains(Self::UPPER_NON_CRITICAL_GOING_LOW),
+                self.contains(Self::UPPER_NON_CRITICAL_GOING_HIGH),
+            ),
+            ThresholdKind::UpperCritical => (
+                self.contains(Self::UPPER_CRITICAL_GOING_LOW),
+                self.contains(Self::UPPER_CRITICAL_GOING_HIGH),
+            ),
+            ThresholdKind::UpperNonRecoverable => (
+                self.contains(Self::UPPER_NON_RECOVERABLE_GOING_LOW),
+                self.contains(Self::UPPER_NON_RECOVERABLE_GOING_HIGH),
+            ),
+        };
+
+        if low && high {
+            &BOTH
+        } else if low {
+            &LOW
+        } else if high {
+            &HIGH
+        } else {
+            &NONE
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum EventKind {
+    GoingHigh,
+    GoingLow,
+}
+
 #[derive(Debug, Clone, Copy)]
 
 pub struct Thresholds {
@@ -144,6 +196,54 @@ pub struct Thresholds {
     pub upper_non_recoverable: bool,
     pub upper_critical: bool,
     pub upper_non_critical: bool,
+}
+
+impl Thresholds {
+    pub fn for_kind(&self, kind: ThresholdKind) -> bool {
+        match kind {
+            ThresholdKind::LowerNonCritical => self.lower_non_critical,
+            ThresholdKind::LowerCritical => self.lower_critical,
+            ThresholdKind::LowerNonRecoverable => self.lower_non_recoverable,
+            ThresholdKind::UpperNonCritical => self.upper_non_critical,
+            ThresholdKind::UpperCritical => self.upper_critical,
+            ThresholdKind::UpperNonRecoverable => self.upper_non_recoverable,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ThresholdKind {
+    LowerNonCritical,
+    LowerCritical,
+    LowerNonRecoverable,
+    UpperNonCritical,
+    UpperCritical,
+    UpperNonRecoverable,
+}
+
+impl ThresholdKind {
+    pub fn variants() -> impl Iterator<Item = Self> {
+        [
+            Self::LowerNonCritical,
+            Self::LowerCritical,
+            Self::LowerNonRecoverable,
+            Self::UpperNonCritical,
+            Self::UpperCritical,
+            Self::UpperNonRecoverable,
+        ]
+        .into_iter()
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct Threshold {
+    pub kind: ThresholdKind,
+    pub readable: bool,
+    pub settable: bool,
+    pub event_assert_going_high: bool,
+    pub event_assert_going_low: bool,
+    pub event_deassert_going_high: bool,
+    pub event_deassert_going_low: bool,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -163,10 +263,33 @@ pub enum ThresholdAccessCapability {
     },
 }
 
+impl ThresholdAccessCapability {
+    pub fn readable(&self, kind: ThresholdKind) -> bool {
+        match self {
+            ThresholdAccessCapability::Readable { readable, .. } => readable.for_kind(kind),
+            ThresholdAccessCapability::ReadableAndSettable { readable, .. } => {
+                readable.for_kind(kind)
+            }
+            _ => false,
+        }
+    }
+
+    pub fn settable(&self, kind: ThresholdKind) -> bool {
+        match self {
+            ThresholdAccessCapability::ReadableAndSettable { settable, .. } => {
+                settable.for_kind(kind)
+            }
+            _ => false,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct SensorCapabilities {
     pub ignore: bool,
     pub auto_rearm: bool,
+    // TODO: make a type
+    pub event_message_control: u8,
     pub hysteresis: HysteresisCapability,
     pub threshold_access: ThresholdAccessCapability,
     pub assertion_threshold_events: ThresholdAssertEventMask,
@@ -189,6 +312,7 @@ impl SensorCapabilities {
             0b11 => HysteresisCapability::FixedAndUnreadable,
             _ => unreachable!(),
         };
+        let event_message_control = caps & 0b11;
 
         let assertion_event_mask = ThresholdAssertEventMask::from_bits_truncate(assert_lower_thrsd);
         let deassertion_event_mask =
@@ -242,6 +366,7 @@ impl SensorCapabilities {
             ignore,
             auto_rearm,
             hysteresis,
+            event_message_control,
             threshold_access: threshold_access_support,
             assertion_threshold_events: assertion_event_mask,
             deassertion_threshold_events: deassertion_event_mask,
