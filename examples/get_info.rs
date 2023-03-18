@@ -46,6 +46,10 @@ fn main() {
         .send_recv(GetSdrEntry::new(None, SdrRecordId::FIRST))
         .unwrap();
 
+    let second_entry = ipmi
+        .send_recv(GetSdrEntry::new(None, first_entry.next_entry))
+        .unwrap();
+
     use ipmi_rs::LogOutput;
-    ipmi_rs::log!(log_output, "{:02X?}", first_entry);
+    ipmi_rs::log!(log_output, "\n{:#?}", second_entry);
 }

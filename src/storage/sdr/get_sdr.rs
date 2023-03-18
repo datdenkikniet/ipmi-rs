@@ -1,4 +1,4 @@
-use std::num::{NonZeroU16, NonZeroU8};
+use std::num::NonZeroU16;
 
 use nonmax::NonMaxU8;
 
@@ -167,12 +167,6 @@ impl From<u8> for SensorInitialization {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct InitState {
-    pub event_generation_enabled: bool,
-    pub sensor_scanning_enabled: bool,
-}
-
-#[derive(Debug, Clone, Copy)]
 pub enum HysteresisCapability {
     NoneOrUnspecified,
     Readable,
@@ -232,6 +226,8 @@ pub struct SensorCapabilities {
     pub auto_rearm: bool,
     pub hysteresis: HysteresisCapability,
     pub threshold_access: ThresholdAccessCapability,
+    pub assertion_threshold_events: ThresholdAssertEventMask,
+    pub deassertion_threshold_events: ThresholdAssertEventMask,
 }
 
 impl SensorCapabilities {
@@ -304,6 +300,8 @@ impl SensorCapabilities {
             auto_rearm,
             hysteresis,
             threshold_access: threshold_access_support,
+            assertion_threshold_events: assertion_event_mask,
+            deassertion_threshold_events: deassertion_event_mask,
         }
     }
 }
@@ -394,8 +392,52 @@ pub enum Linearization {
     Sqr,
     Cube,
     Sqrt,
-    InverseCube,
+    CubeRoot,
     Oem(u8),
+    Unknown(u8),
+}
+
+impl From<u8> for Linearization {
+    fn from(value: u8) -> Self {
+        match value {
+            0 => Self::Linear,
+            1 => Self::Ln,
+            2 => Self::Log10,
+            3 => Self::Log2,
+            4 => Self::E,
+            5 => Self::Exp10,
+            6 => Self::Exp2,
+            7 => Self::OneOverX,
+            8 => Self::Sqr,
+            9 => Self::Sqrt,
+            10 => Self::Cube,
+            11 => Self::Sqrt,
+            12 => Self::CubeRoot,
+            0x71..=0x7F => Self::Oem(value),
+            v => Self::Unknown(v),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Direction {
+    UnspecifiedNotApplicable,
+    Input,
+    Output,
+}
+
+impl TryFrom<u8> for Direction {
+    type Error = ();
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        let dir = match value {
+            0b00 => Self::UnspecifiedNotApplicable,
+            0b01 => Self::Input,
+            0b10 => Self::Output,
+            _ => return Err(()),
+        };
+        Ok(dir)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -412,14 +454,17 @@ impl<'a> Into<SensorId> for TypeLengthRaw<'a> {
         let Self(value, data) = self;
         let type_code = (value >> 6) & 0x3;
 
+        let length = (value & 0xF) as usize;
+
+        let data = &data[..length];
+
+        let str = core::str::from_utf8(data).map(ToString::to_string);
+
         match type_code {
-            0b00 => {
-                let str = core::str::from_utf8(data).unwrap().to_string();
-                SensorId::Unicode(str)
-            }
+            0b00 => SensorId::Unicode(str.unwrap()),
             0b01 => SensorId::BCDPlus(data.to_vec()),
             0b10 => SensorId::Ascii6BPacked(data.to_vec()),
-            0b11 => SensorId::Ascii8BAndLatin1(data.to_vec()),
+            0b11 => SensorId::Ascii8BAndLatin1(str.unwrap()),
             _ => unreachable!(),
         }
     }
@@ -430,20 +475,34 @@ pub enum SensorId {
     Unicode(String),
     BCDPlus(Vec<u8>),
     Ascii6BPacked(Vec<u8>),
-    Ascii8BAndLatin1(Vec<u8>),
+    Ascii8BAndLatin1(String),
 }
 
 impl SensorId {
     pub fn as_str(&self) -> Option<&str> {
         match self {
             SensorId::Unicode(v) => Some(v.as_str()),
+            SensorId::Ascii8BAndLatin1(v) => Some(v.as_str()),
             _ => None,
         }
     }
 }
 
 #[derive(Debug, Clone)]
-pub enum Record {
+pub struct RecordHeader {
+    pub id: RecordId,
+    pub sdr_version_major: u8,
+    pub sdr_version_minor: u8,
+}
+
+#[derive(Debug, Clone)]
+pub struct Record {
+    pub header: RecordHeader,
+    pub contents: RecordContents,
+}
+
+#[derive(Debug, Clone)]
+pub enum RecordContents {
     FullSensor {
         owner: SensorOwner,
         owner_channel: u8,
@@ -452,24 +511,19 @@ pub enum Record {
         entity_id: u8,
         entity_instance: EntityInstance,
         initialization: SensorInitialization,
-        init_state: InitState,
         capabilities: SensorCapabilities,
         ty: u8,
         event_reading_type_code: u8,
-        threshold_reading_mask: Thresholds,
-        assertion_event_mask: ThresholdAssertEventMask,
-        deassertion_event_mask: ThresholdAssertEventMask,
-        settable_threshold_mask: Thresholds,
-        readable_threshold_msak: Thresholds,
         sensor_units: SensorUnits,
-        base_unit: u8,
-        modifier_unit: Option<NonZeroU8>,
+        base_unit: Unit,
+        modifier_unit: Option<Unit>,
         linearization: Linearization,
         m: i16,
         tolerance: u8,
         b: i16,
         accuracy: u16,
         accuracy_exponent: u8,
+        direction: Option<Direction>,
         result_exponent: i8,
         b_exponent: i8,
         // TODO: convert these to the correct
@@ -478,15 +532,15 @@ pub enum Record {
         normal_maximum: Option<u8>,
         normal_minimum: Option<u8>,
         max_reading: u8,
-        minimum_reading: u8,
+        min_reading: u8,
         upper_non_recoverable_threshold: u8,
         upper_critical_threshold: u8,
         upper_non_critical_threshold: u8,
         lower_non_recoverable_threshold: u8,
         lower_critical_threshold: u8,
         lower_non_critical_threshold: u8,
-        positive_going_threshold_hystersis_value: u8,
-        negative_going_threshold_hystersis_value: u8,
+        positive_going_threshold_hysteresis_value: u8,
+        negative_going_threshold_hysteresis_value: u8,
         oem_data: u8,
         id_string: SensorId,
     },
@@ -512,75 +566,184 @@ impl Record {
             return None;
         }
 
-        let sensor_owner = SensorOwner::from(data[5]);
-        let sensor_owner_lun = data[6];
-        let sensor_owner_channel = (sensor_owner_lun & 0xF0) >> 4;
-        let sensor_owner_lun = LogicalUnit::try_from(sensor_owner_lun & 0x3).unwrap();
+        let contents = if record_type == 0x01 {
+            let owner = SensorOwner::from(data[5]);
+            let owner_lun_channel = data[6];
+            let owner_channel = (owner_lun_channel & 0xF0) >> 4;
+            let owner_lun = LogicalUnit::try_from(owner_lun_channel & 0x3).unwrap();
 
-        let sensor_number = data[7];
+            let sensor_number = NonMaxU8::new(data[7])?;
 
-        let entity_id = data[8];
+            let entity_id = data[8];
 
-        let entity_instance = data[9];
-        let entity_instance = EntityInstance::from(entity_instance);
+            let entity_instance = data[9];
+            let entity_instance = EntityInstance::from(entity_instance);
 
-        let sensor_initialization = data[10];
-        let sensor_initialization = SensorInitialization::from(sensor_initialization);
+            let initialization = data[10];
+            let initialization = SensorInitialization::from(initialization);
 
-        let sensor_capabilities = data[11];
+            let sensor_capabilities = data[11];
 
-        let sensor_type = data[12];
-        let event_reading_type_code = data[13];
+            let sensor_type = data[12];
+            let event_reading_type_code = data[13];
 
-        let assertion_event_mask_lower_thrsd_reading_mask =
-            u16::from_le_bytes([data[14], data[15]]);
-        let deassertion_event_mask_upper_thrsd_reading_mask =
-            u16::from_le_bytes([data[16], data[17]]);
-        let settable_thrsd_readable_thrsd_mask = u16::from_le_bytes([data[18], data[19]]);
+            let assertion_event_mask_lower_thrsd_reading_mask =
+                u16::from_le_bytes([data[14], data[15]]);
+            let deassertion_event_mask_upper_thrsd_reading_mask =
+                u16::from_le_bytes([data[16], data[17]]);
+            let settable_thrsd_readable_thrsd_mask = u16::from_le_bytes([data[18], data[19]]);
 
-        let sensor_capabilities = SensorCapabilities::new(
-            sensor_capabilities,
-            assertion_event_mask_lower_thrsd_reading_mask,
-            deassertion_event_mask_upper_thrsd_reading_mask,
-            settable_thrsd_readable_thrsd_mask,
-        );
+            let capabilities = SensorCapabilities::new(
+                sensor_capabilities,
+                assertion_event_mask_lower_thrsd_reading_mask,
+                deassertion_event_mask_upper_thrsd_reading_mask,
+                settable_thrsd_readable_thrsd_mask,
+            );
 
-        let sensor_units_1 = data[20];
-        let sensor_units = SensorUnits::from(sensor_units_1);
+            let sensor_units_1 = data[20];
+            let sensor_units = SensorUnits::from(sensor_units_1);
 
-        let base_unit = data[21];
-        let unit = Unit::try_from(base_unit).unwrap_or(Unit::Unknown);
+            let base_unit = data[21];
+            let base_unit = Unit::try_from(base_unit).unwrap_or(Unit::Unknown);
 
-        panic!("{:?}", unit);
+            let modifier_unit = data[22];
+            let modifier_unit = if modifier_unit == 0 {
+                None
+            } else {
+                Some(Unit::try_from(base_unit).unwrap_or(Unit::Unknown))
+            };
 
-        let modifier_unit = data[22];
-        let linearization = data[23];
-        let m_lsb = data[24];
-        let m_msb_tolerance = data[25];
-        let b_lsb = data[26];
-        let b_msb_accuracy_lsb = data[27];
-        let accuracy_msb_accuracy_exp_sensor_dir = data[28];
-        let r_exp_b_exp = data[29];
-        let analog_characteristics = data[30];
-        let nominal_reading = data[31];
-        let normal_maximum = data[32];
-        let normal_minimum = data[33];
-        let sensor_max = data[34];
-        let sensor_min = data[35];
+            let linearization = data[23];
+            let linearization = Linearization::from(linearization & 0x7F);
 
-        let upper_non_recoverabel_threshold = data[36];
-        let upper_critical_threshold = data[37];
-        let upper_non_critical_threshold = data[38];
-        let lower_non_recoverable_threshold = data[39];
-        let lower_critical_threshold = data[40];
-        let lower_non_critical_threshold = data[41];
-        let postitive_going_threshold_hysterisis = data[42];
-        let negative_going_threshold_hysterisis = data[43];
-        let oem = data[46];
-        let id_string_type_len = data[47];
-        let id_string_bytes = &data[48..];
+            let m_lsb = data[24];
+            let m_msb_tolerance = data[25];
+            let m_sign = m_msb_tolerance & 0x80;
+            let m = i16::from_le_bytes([m_lsb, m_sign | (m_msb_tolerance >> 6) & 0x1]);
 
-        todo!()
+            let tolerance = m_msb_tolerance & 0x3F;
+
+            let b_lsb = data[26];
+            let b_msb_accuracy_lsb = data[27];
+
+            let b_sign = b_msb_accuracy_lsb & 1;
+            let b = i16::from_le_bytes([b_lsb, b_sign | (b_msb_accuracy_lsb >> 6)]);
+
+            let accuracy_msb_accuracy_exp_sensor_dir = data[28];
+
+            let accuracy = u16::from_le_bytes([
+                (accuracy_msb_accuracy_exp_sensor_dir >> 4) & 0xF,
+                (b_msb_accuracy_lsb & 0x3F),
+            ]);
+
+            let accuracy_exponent = (accuracy_msb_accuracy_exp_sensor_dir >> 2) & 0x3;
+
+            let direction = Direction::try_from(accuracy_msb_accuracy_exp_sensor_dir & 0b11).ok();
+
+            let r_exp_b_exp = data[29];
+
+            let r_sign = r_exp_b_exp & 1;
+            let result_exponent = (r_sign | ((r_exp_b_exp >> 4) & 0x3)) as i8;
+
+            let b_sign = (r_exp_b_exp & 0x08) << 4;
+            let b_exponent = (b_sign | (r_exp_b_exp & 0x3)) as i8;
+
+            let analog_characteristics = data[30];
+
+            let nominal_reading = data[31];
+            let nominal_reading = if (analog_characteristics & 0x1) == 0x1 {
+                Some(nominal_reading)
+            } else {
+                None
+            };
+
+            let normal_maximum = data[32];
+            let normal_maximum = if (analog_characteristics & 0x2) == 0x2 {
+                Some(normal_maximum)
+            } else {
+                None
+            };
+
+            let normal_minimum = data[33];
+            let normal_minimum = if (analog_characteristics & 0x4) == 0x4 {
+                Some(normal_minimum)
+            } else {
+                None
+            };
+
+            let max_reading = data[34];
+            let min_reading = data[35];
+
+            let upper_non_recoverable_threshold = data[36];
+            let upper_critical_threshold = data[37];
+            let upper_non_critical_threshold = data[38];
+            let lower_non_recoverable_threshold = data[39];
+            let lower_critical_threshold = data[40];
+            let lower_non_critical_threshold = data[41];
+            let positive_going_threshold_hysteresis_value = data[42];
+            let negative_going_threshold_hysteresis_value = data[43];
+
+            // Two reserved bytes in between
+
+            let oem_data = data[46];
+
+            let id_string_type_len = data[47];
+            let id_string_bytes = &data[48..];
+            let id_string = TypeLengthRaw::new(id_string_type_len, id_string_bytes).into();
+
+            RecordContents::FullSensor {
+                owner,
+                owner_channel,
+                owner_lun,
+                sensor_number,
+                entity_id,
+                entity_instance,
+                initialization,
+                capabilities,
+                ty: sensor_type,
+                event_reading_type_code,
+                sensor_units,
+                base_unit,
+                modifier_unit,
+                linearization,
+                m,
+                tolerance,
+                b,
+                accuracy,
+                accuracy_exponent,
+                direction,
+                result_exponent,
+                b_exponent,
+                nominal_reading,
+                normal_maximum,
+                normal_minimum,
+                max_reading,
+                min_reading,
+                upper_non_recoverable_threshold,
+                upper_critical_threshold,
+                upper_non_critical_threshold,
+                lower_non_recoverable_threshold,
+                lower_critical_threshold,
+                lower_non_critical_threshold,
+                positive_going_threshold_hysteresis_value,
+                negative_going_threshold_hysteresis_value,
+                oem_data,
+                id_string,
+            }
+        } else {
+            RecordContents::Unknown {
+                data: record_data.to_vec(),
+            }
+        };
+
+        Some(Self {
+            header: RecordHeader {
+                id: record_id,
+                sdr_version_minor: sdr_version_min,
+                sdr_version_major: sdr_version_maj,
+            },
+            contents,
+        })
     }
 }
 
