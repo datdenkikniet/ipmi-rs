@@ -22,8 +22,7 @@ pub struct CompactSensorRecord {
     pub entity_instance: EntityInstance,
     pub initialization: SensorInitialization,
     pub capabilities: SensorCapabilities,
-    // TODO: Make a type SensorType
-    pub ty: u8,
+    pub ty: SensorType,
     // TODO: Make a type EventReadingTypeCode
     pub event_reading_type_code: u8,
     pub sensor_units: SensorUnits,

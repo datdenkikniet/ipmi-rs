@@ -8,7 +8,7 @@ use nonmax::NonMaxU8;
 
 use crate::connection::LogicalUnit;
 
-use super::{RecordId, Unit};
+use super::{RecordId, SensorType, Unit};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SensorKey {
@@ -456,9 +456,9 @@ impl SensorUnits {
             _ => unreachable!(),
         };
 
-        let base_unit = Unit::try_from(base_unit).unwrap_or(Unit::Unknown);
+        let base_unit = Unit::from(base_unit);
 
-        let modifier_unit = Unit::try_from(modifier_unit).unwrap_or(Unit::Unknown);
+        let modifier_unit = Unit::from(modifier_unit);
 
         let modifier = match (sensor_units_1 >> 1) & 0b11 {
             0b00 => None,
@@ -580,10 +580,10 @@ pub enum SensorId {
 }
 
 impl SensorId {
-    pub fn as_str(&self) -> Option<&str> {
+    pub fn as_string(&self) -> Option<String> {
         match self {
-            SensorId::Unicode(v) => Some(v.as_str()),
-            SensorId::Ascii8BAndLatin1(v) => Some(v.as_str()),
+            SensorId::Unicode(v) => Some(v.clone()),
+            SensorId::Ascii8BAndLatin1(v) => Some(v.clone()),
             _ => None,
         }
     }
@@ -673,8 +673,7 @@ pub struct SensorRecordCommon {
     pub entity_instance: EntityInstance,
     pub initialization: SensorInitialization,
     pub capabilities: SensorCapabilities,
-    // TODO: Make a type SensorType
-    pub ty: u8,
+    pub ty: SensorType,
     // TODO: Make a type EventReadingTypeCode
     pub event_reading_type_code: u8,
     pub sensor_units: SensorUnits,
@@ -698,7 +697,7 @@ impl SensorRecordCommon {
 
         let sensor_capabilities = record_data[6];
 
-        let sensor_type = record_data[7];
+        let sensor_type = record_data[7].into();
         let event_reading_type_code = record_data[8];
 
         let assertion_event_mask_lower_thrsd_reading_mask =

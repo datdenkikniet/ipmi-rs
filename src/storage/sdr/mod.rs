@@ -15,6 +15,9 @@ pub use get_alloc_info::{AllocInfo, GetAllocInfo as GetSdrAllocInfo};
 mod units;
 pub use units::Unit;
 
+mod sensor_type;
+pub use sensor_type::SensorType;
+
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct RecordId(u16);
 

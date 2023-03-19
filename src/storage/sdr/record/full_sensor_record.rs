@@ -1,3 +1,5 @@
+use std::num::NonZeroU8;
+
 use super::*;
 
 #[derive(Debug, Clone)]
@@ -9,8 +11,7 @@ pub struct FullSensorRecord {
     pub entity_instance: EntityInstance,
     pub initialization: SensorInitialization,
     pub capabilities: SensorCapabilities,
-    // TODO: Make a type SensorType
-    pub ty: u8,
+    pub ty: SensorType,
     // TODO: Make a type EventReadingTypeCode
     pub event_reading_type_code: u8,
     pub sensor_units: SensorUnits,
@@ -37,8 +38,8 @@ pub struct FullSensorRecord {
     pub lower_non_recoverable_threshold: u8,
     pub lower_critical_threshold: u8,
     pub lower_non_critical_threshold: u8,
-    pub positive_going_threshold_hysteresis_value: u8,
-    pub negative_going_threshold_hysteresis_value: u8,
+    pub positive_going_threshold_hysteresis_value: Option<NonZeroU8>,
+    pub negative_going_threshold_hysteresis_value: Option<NonZeroU8>,
     pub oem_data: u8,
     pub id_string: SensorId,
 }
@@ -92,6 +93,7 @@ impl FullSensorRecord {
         let m_lsb = record_data[1];
         let m_msb_tolerance = record_data[2];
         let m_sign = m_msb_tolerance & 0x80;
+
         let m = i16::from_le_bytes([m_lsb, m_sign | (m_msb_tolerance >> 6) & 0x1]);
 
         let tolerance = m_msb_tolerance & 0x3F;
@@ -154,8 +156,8 @@ impl FullSensorRecord {
         let lower_non_recoverable_threshold = record_data[16];
         let lower_critical_threshold = record_data[17];
         let lower_non_critical_threshold = record_data[18];
-        let positive_going_threshold_hysteresis_value = record_data[19];
-        let negative_going_threshold_hysteresis_value = record_data[20];
+        let positive_going_threshold_hysteresis_value = NonZeroU8::new(record_data[19]);
+        let negative_going_threshold_hysteresis_value = NonZeroU8::new(record_data[20]);
 
         // Two reserved bytes in between
 
@@ -222,5 +224,41 @@ impl FullSensorRecord {
             event_deassert_going_high: deasserts.contains(&EventKind::GoingHigh),
             event_deassert_going_low: deasserts.contains(&EventKind::GoingLow),
         }
+    }
+
+    fn convert(&self, value: u8) -> Option<f32> {
+        let m = self.m as f32;
+        let b = self.b as f32;
+        let format = self.analog_data_format?;
+
+        let value = match format {
+            DataFormat::Unsigned => value as f32,
+            DataFormat::OnesComplement => !value as i8 as f32,
+            DataFormat::TwosComplement => value as i8 as f32,
+        };
+
+        Some(((m * value) + b) / m)
+    }
+
+    pub fn nominal_value(&self) -> Option<f32> {
+        self.convert(self.nominal_reading?)
+    }
+
+    pub fn normal_max(&self) -> Option<f32> {
+        self.convert(self.normal_maximum?)
+    }
+
+    pub fn normal_min(&self) -> Option<f32> {
+        self.convert(self.normal_minimum?)
+    }
+
+    pub fn positive_going_hysteresis(&self) -> Option<f32> {
+        let value = self.positive_going_threshold_hysteresis_value?;
+        self.convert(value.get())
+    }
+
+    pub fn negative_going_threshold_hysteresis(&self) -> Option<f32> {
+        let value = self.negative_going_threshold_hysteresis_value?;
+        self.convert(value.get())
     }
 }
