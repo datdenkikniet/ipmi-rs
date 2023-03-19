@@ -161,8 +161,8 @@ impl FullSensorRecord {
 
         let oem_data = record_data[23];
 
-        let id_string_type_len = record_data[25];
-        let id_string_bytes = &record_data[26..];
+        let id_string_type_len = record_data[24];
+        let id_string_bytes = &record_data[25..];
 
         let id_string = TypeLengthRaw::new(id_string_type_len, id_string_bytes).into();
 
