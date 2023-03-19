@@ -6,8 +6,10 @@ pub mod storage;
 
 #[macro_use]
 mod fmt;
-use connection::{IpmiCommand, LogicalUnit, NetFn, ParseResponseError, Request};
 pub use fmt::{LogOutput, Loggable};
+
+use connection::{IpmiCommand, LogicalUnit, NetFn, ParseResponseError, Request};
+use storage::{sdr::record::Record as SdrRecord, GetDeviceSdr, SdrRecordId};
 
 pub struct Ipmi<T> {
     inner: T,
@@ -59,6 +61,13 @@ impl<T> Ipmi<T>
 where
     T: connection::IpmiConnection,
 {
+    pub fn sdrs<'a>(&'a mut self) -> impl Iterator<Item = SdrRecord> + 'a {
+        SdrIter {
+            ipmi: self,
+            next_id: Some(SdrRecordId::FIRST),
+        }
+    }
+
     pub fn send_recv<C>(
         &mut self,
         request: C,
@@ -100,5 +109,30 @@ where
                 data: response.data().to_vec(),
             }
         })
+    }
+}
+
+pub struct SdrIter<'ipmi, T> {
+    ipmi: &'ipmi mut Ipmi<T>,
+    next_id: Option<SdrRecordId>,
+}
+
+impl<T> Iterator for SdrIter<'_, T>
+where
+    T: connection::IpmiConnection,
+{
+    type Item = SdrRecord;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let next_id = self.next_id?;
+        let next_record = self.ipmi.send_recv(GetDeviceSdr::new(None, next_id)).ok()?;
+
+        if !next_record.next_entry.is_last() {
+            self.next_id = Some(next_record.next_entry);
+        } else {
+            self.next_id.take();
+        }
+
+        Some(next_record.record)
     }
 }

@@ -4,7 +4,7 @@ use std::num::NonZeroU16;
 
 pub use sel::{RecordId as SelRecordId, *};
 
-mod sdr;
+pub mod sdr;
 pub use sdr::{RecordId as SdrRecordId, *};
 
 use crate::{LogOutput, Loggable};

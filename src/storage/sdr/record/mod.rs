@@ -1,13 +1,50 @@
 mod full_sensor_record;
 pub use full_sensor_record::FullSensorRecord;
 
+mod compact_sensor_record;
+pub use compact_sensor_record::CompactSensorRecord;
+
 use nonmax::NonMaxU8;
 
 use crate::connection::LogicalUnit;
 
 use super::{RecordId, Unit};
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SensorKey {
+    pub owner_id: SensorOwner,
+    pub owner_channel: u8,
+    pub fru_inv_device_owner_lun: LogicalUnit,
+    pub owner_lun: LogicalUnit,
+    pub sensor_number: NonMaxU8,
+}
+
+impl SensorKey {
+    pub fn parse(record_data: &[u8]) -> Option<Self> {
+        if record_data.len() != 3 {
+            return None;
+        }
+
+        let owner_id = SensorOwner::from(record_data[0]);
+        let owner_channel_fru_lun = record_data[1];
+        let owner_channel = (owner_channel_fru_lun & 0xF0) >> 4;
+        let fru_inv_device_owner_lun =
+            LogicalUnit::try_from((owner_channel_fru_lun >> 2) & 0x3).unwrap();
+        let owner_lun = LogicalUnit::try_from(owner_channel_fru_lun & 0x3).unwrap();
+
+        let sensor_number = NonMaxU8::new(record_data[2])?;
+
+        Some(Self {
+            owner_id,
+            owner_channel,
+            fru_inv_device_owner_lun,
+            owner_lun,
+            sensor_number,
+        })
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum SensorOwner {
     I2C(u8),
     System(u8),
@@ -393,28 +430,20 @@ pub enum RateUnit {
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ModifierUnit {
-    BasicUnitDivByModifierUnit,
-    BasicUnitMulByModifierUnit,
+    BasUnitDivByModifier(Unit),
+    BaseUnitMulByModifier(Unit),
 }
 
 #[derive(Debug, Clone, Copy)]
 pub struct SensorUnits {
-    pub analog_data_format: Option<DataFormat>,
     pub rate: Option<RateUnit>,
     pub modifier: Option<ModifierUnit>,
     pub is_percentage: bool,
+    pub base_unit: Unit,
 }
 
-impl From<u8> for SensorUnits {
-    fn from(sensor_units_1: u8) -> Self {
-        let analog_data_format = match (sensor_units_1 >> 6) & 0x03 {
-            0b00 => Some(DataFormat::Unsigned),
-            0b01 => Some(DataFormat::OnesComplement),
-            0b10 => Some(DataFormat::TwosComplement),
-            0b11 => None,
-            _ => unreachable!(),
-        };
-
+impl SensorUnits {
+    pub fn from(sensor_units_1: u8, base_unit: u8, modifier_unit: u8) -> Self {
         let rate = match (sensor_units_1 >> 3) & 0b111 {
             0b000 => None,
             0b001 => Some(RateUnit::Microsecond),
@@ -427,10 +456,14 @@ impl From<u8> for SensorUnits {
             _ => unreachable!(),
         };
 
+        let base_unit = Unit::try_from(base_unit).unwrap_or(Unit::Unknown);
+
+        let modifier_unit = Unit::try_from(modifier_unit).unwrap_or(Unit::Unknown);
+
         let modifier = match (sensor_units_1 >> 1) & 0b11 {
             0b00 => None,
-            0b01 => Some(ModifierUnit::BasicUnitDivByModifierUnit),
-            0b10 => Some(ModifierUnit::BasicUnitMulByModifierUnit),
+            0b01 => Some(ModifierUnit::BasUnitDivByModifier(modifier_unit)),
+            0b10 => Some(ModifierUnit::BaseUnitMulByModifier(modifier_unit)),
             0b11 => None,
             _ => unreachable!(),
         };
@@ -438,9 +471,9 @@ impl From<u8> for SensorUnits {
         let is_percentage = (sensor_units_1 & 0x1) == 0x1;
 
         Self {
-            analog_data_format,
             rate,
             modifier,
+            base_unit,
             is_percentage,
         }
     }
@@ -522,9 +555,9 @@ impl<'a> Into<SensorId> for TypeLengthRaw<'a> {
         let Self(value, data) = self;
         let type_code = (value >> 6) & 0x3;
 
-        let length = (value & 0xF) as usize;
+        let length = value & 0xF;
 
-        let data = &data[..length];
+        let data = &data[..(length as usize).min(data.len())];
 
         let str = core::str::from_utf8(data).map(ToString::to_string);
 
@@ -559,6 +592,7 @@ impl SensorId {
 #[derive(Debug, Clone)]
 pub struct RecordHeader {
     pub id: RecordId,
+
     pub sdr_version_major: u8,
     pub sdr_version_minor: u8,
 }
@@ -572,10 +606,27 @@ pub struct Record {
 #[derive(Debug, Clone)]
 pub enum RecordContents {
     FullSensor(FullSensorRecord),
-    Unknown { data: Vec<u8> },
+    CompactSensor(CompactSensorRecord),
+    Unknown { ty: u8, data: Vec<u8> },
 }
 
 impl Record {
+    pub fn full_sensor(&self) -> Option<&FullSensorRecord> {
+        if let RecordContents::FullSensor(full_sensor) = &self.contents {
+            Some(full_sensor)
+        } else {
+            None
+        }
+    }
+
+    pub fn compact_sensor(&self) -> Option<&CompactSensorRecord> {
+        if let RecordContents::CompactSensor(compact_sensor) = &self.contents {
+            Some(compact_sensor)
+        } else {
+            None
+        }
+    }
+
     pub fn parse(data: &[u8]) -> Option<Self> {
         if data.len() < 5 {
             return None;
@@ -593,9 +644,12 @@ impl Record {
         }
 
         let contents = if record_type == 0x01 {
-            RecordContents::FullSensor(FullSensorRecord::parse(record_data)?)
+            RecordContents::FullSensor(FullSensorRecord::parse(record_data).ok()?)
+        } else if record_type == 0x02 {
+            RecordContents::CompactSensor(CompactSensorRecord::parse(record_data)?)
         } else {
             RecordContents::Unknown {
+                ty: record_type,
                 data: record_data.to_vec(),
             }
         };
@@ -608,5 +662,77 @@ impl Record {
             },
             contents,
         })
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct SensorRecordCommon {
+    pub key: SensorKey,
+    // TODO: make a type EntityId
+    pub entity_id: u8,
+    pub entity_instance: EntityInstance,
+    pub initialization: SensorInitialization,
+    pub capabilities: SensorCapabilities,
+    // TODO: Make a type SensorType
+    pub ty: u8,
+    // TODO: Make a type EventReadingTypeCode
+    pub event_reading_type_code: u8,
+    pub sensor_units: SensorUnits,
+}
+
+impl SensorRecordCommon {
+    pub fn parse(record_data: &[u8]) -> Option<(Self, &[u8])> {
+        if record_data.len() < 17 {
+            return None;
+        }
+
+        let sensor_key = SensorKey::parse(&record_data[..3])?;
+
+        let entity_id = record_data[3];
+
+        let entity_instance = record_data[4];
+        let entity_instance = EntityInstance::from(entity_instance);
+
+        let initialization = record_data[5];
+        let initialization = SensorInitialization::from(initialization);
+
+        let sensor_capabilities = record_data[6];
+
+        let sensor_type = record_data[7];
+        let event_reading_type_code = record_data[8];
+
+        let assertion_event_mask_lower_thrsd_reading_mask =
+            u16::from_le_bytes([record_data[9], record_data[10]]);
+        let deassertion_event_mask_upper_thrsd_reading_mask =
+            u16::from_le_bytes([record_data[11], record_data[12]]);
+        let settable_thrsd_readable_thrsd_mask =
+            u16::from_le_bytes([record_data[13], record_data[14]]);
+
+        let capabilities = SensorCapabilities::new(
+            sensor_capabilities,
+            assertion_event_mask_lower_thrsd_reading_mask,
+            deassertion_event_mask_upper_thrsd_reading_mask,
+            settable_thrsd_readable_thrsd_mask,
+        );
+
+        let sensor_units_1 = record_data[15];
+        let base_unit = record_data[16];
+        let modifier_unit = record_data[17];
+
+        let sensor_units = SensorUnits::from(sensor_units_1, base_unit, modifier_unit);
+
+        Some((
+            Self {
+                key: sensor_key,
+                entity_id,
+                entity_instance,
+                initialization,
+                capabilities,
+                ty: sensor_type,
+                event_reading_type_code,
+                sensor_units,
+            },
+            &record_data[18..],
+        ))
     }
 }

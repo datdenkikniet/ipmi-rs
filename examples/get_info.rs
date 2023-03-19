@@ -4,8 +4,8 @@ use ipmi_rs::{
     app::GetDeviceId,
     connection::File,
     storage::{
-        GetDeviceSdr, GetSdrAllocInfo, GetSdrRepositoryInfo, GetSelAllocInfo, GetSelEntry,
-        GetSelInfo, SdrOperation, SdrRecordId, SelCommand, SelRecordId,
+        GetSdrAllocInfo, GetSdrRepositoryInfo, GetSelAllocInfo, GetSelEntry, GetSelInfo,
+        SdrOperation, SelCommand, SelRecordId,
     },
     Ipmi, Loggable,
 };
@@ -42,15 +42,25 @@ fn main() {
         sdr_alloc_info.log(log_output);
     }
 
-    let first_entry = ipmi
-        .send_recv(GetDeviceSdr::new(None, SdrRecordId::FIRST))
-        .unwrap();
+    let mut printed_full = false;
+    let mut printed_compact = false;
+    let mut records = ipmi.sdrs();
 
-    let second_entry = ipmi
-        .send_recv(GetDeviceSdr::new(None, first_entry.next_entry))
-        .unwrap();
+    while !printed_full || !printed_compact {
+        let next_record = if let Some(record) = records.next() {
+            record
+        } else {
+            break;
+        };
 
-    use ipmi_rs::LogOutput;
-    ipmi_rs::log!(log_output, "\n{:#?}", first_entry);
-    ipmi_rs::log!(log_output, "\n{:#?}", second_entry);
+        if next_record.full_sensor().is_some() && !printed_full {
+            println!("{:#?}", next_record);
+            printed_full = true;
+        }
+
+        if next_record.compact_sensor().is_some() && !printed_compact {
+            println!("{:#?}", next_record);
+            printed_compact = true;
+        }
+    }
 }

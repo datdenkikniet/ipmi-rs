@@ -1,11 +1,7 @@
 mod get_sdr;
 pub use get_sdr::{GetDeviceSdr, RecordInfo as SdrRecordInfo, *};
 
-mod record;
-pub use record::{
-    Record as SdrRecord, RecordHeader as SdrRecordHeader, Threshold as SdrThreshold,
-    ThresholdKind as SdrThresholdKind,
-};
+pub mod record;
 
 mod get_info;
 pub use get_info::{

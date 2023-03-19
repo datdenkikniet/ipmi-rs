@@ -6,6 +6,13 @@ use crate::connection::{IpmiCommand, Message, NetFn, ParseResponseError};
 
 use super::{record::Record, RecordId};
 
+/// Get a device SDR.
+///
+/// This command must be used in accordance with the IPMI spec, i.e.
+/// all SDRs must be obtained sequentially. It is recommended that you use
+/// the [`Ipmi::sdrs`] function for this.
+///
+/// [`Ipmi::sdrs`]: crate::Ipmi::sdrs
 #[derive(Debug, Clone, Copy)]
 pub struct GetDeviceSdr {
     reservation_id: Option<NonZeroU16>,
