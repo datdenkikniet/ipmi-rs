@@ -6,7 +6,7 @@ pub use compact_sensor_record::CompactSensorRecord;
 
 use nonmax::NonMaxU8;
 
-use crate::connection::LogicalUnit;
+use crate::{connection::LogicalUnit, LogOutput, Loggable};
 
 use super::{RecordId, SensorType, Unit};
 
@@ -41,6 +41,21 @@ impl SensorKey {
             owner_lun,
             sensor_number,
         })
+    }
+}
+
+impl SensorKey {
+    fn log(&self, output: LogOutput) {
+        use crate::log;
+
+        let sensor_owner = match self.owner_id {
+            SensorOwner::I2C(addr) => format!("I2C @ 0x{:02X}", addr),
+            SensorOwner::System(addr) => format!("System @ 0x{:02X}", addr),
+        };
+        log!(output, "  Sensor Owner:    {}", sensor_owner);
+        log!(output, "  Owner channel:   {}", self.owner_channel);
+        log!(output, "  Owner LUN:       {}", self.owner_lun.value());
+        log!(output, "  Sensor Number:   {}", self.sensor_number);
     }
 }
 
@@ -579,12 +594,12 @@ pub enum SensorId {
     Ascii8BAndLatin1(String),
 }
 
-impl SensorId {
-    pub fn as_string(&self) -> Option<String> {
+impl core::fmt::Display for SensorId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            SensorId::Unicode(v) => Some(v.clone()),
-            SensorId::Ascii8BAndLatin1(v) => Some(v.clone()),
-            _ => None,
+            SensorId::Unicode(v) => write!(f, "{}", v),
+            SensorId::Ascii8BAndLatin1(v) => write!(f, "{}", v),
+            _ => todo!(),
         }
     }
 }
@@ -733,5 +748,50 @@ impl SensorRecordCommon {
             },
             &record_data[18..],
         ))
+    }
+}
+
+impl Loggable for Record {
+    fn log(&self, output: LogOutput) {
+        use crate::log;
+
+        let full = self.full_sensor();
+        let compact = self.compact_sensor();
+
+        if full.is_some() {
+            log!(output, "SDR Record (Full):");
+        } else if compact.is_some() {
+            log!(output, "SDR Record (Compact):");
+        } else {
+            log!(output, "Cannot log unknown sensor.");
+            return;
+        }
+
+        let RecordHeader {
+            id,
+            sdr_version_major: sdr_v_maj,
+            sdr_version_minor: sdr_v_min,
+        } = &self.header;
+
+        log!(output, "  Record ID:       0x{:04X}", id.0);
+        log!(output, "  SDR Version:     {sdr_v_maj}.{sdr_v_min}");
+
+        if let Some(full) = full {
+            full.key.log(output);
+            log!(output, "  Sensor ID:       {}", full.id_string);
+            log!(output, "  Entity ID:       {}", full.entity_id);
+
+            let nominal_reading = full
+                .nominal_value()
+                .map(|n| full.sensor_units.base_unit.display(true, n))
+                .unwrap_or("Unknown".into());
+
+            log!(output, "  Nominal reading: {}", nominal_reading);
+            log!(output, "  Result exponent: {}", full.result_exponent);
+            log!(output, "  M: {:?}", full.m);
+        } else if let Some(compact) = compact {
+            compact.key.log(output);
+            log!(output, "  Sensor ID:       {}", compact.id_string);
+        }
     }
 }

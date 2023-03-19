@@ -228,7 +228,7 @@ impl FullSensorRecord {
 
     fn convert(&self, value: u8) -> Option<f32> {
         let m = self.m as f32;
-        let b = self.b as f32;
+        let b = (self.b as f32).powf(self.b_exponent as f32);
         let format = self.analog_data_format?;
 
         let value = match format {

@@ -34,6 +34,12 @@ impl TryFrom<u8> for LogicalUnit {
     }
 }
 
+impl LogicalUnit {
+    pub fn value(&self) -> u8 {
+        self.0
+    }
+}
+
 pub trait IpmiConnection {
     type SendError: core::fmt::Debug;
     type RecvError: core::fmt::Debug;
