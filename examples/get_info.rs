@@ -51,5 +51,6 @@ fn main() {
         .unwrap();
 
     use ipmi_rs::LogOutput;
+    ipmi_rs::log!(log_output, "\n{:#?}", first_entry);
     ipmi_rs::log!(log_output, "\n{:#?}", second_entry);
 }
