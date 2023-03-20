@@ -158,6 +158,7 @@ impl super::IpmiConnection for File {
 
         let netfn = request.netfn().request_value();
         let cmd = request.cmd();
+        let seq = request.seq();
         let data = request.data_mut();
 
         let data_len = data.len() as u16;
@@ -166,7 +167,7 @@ impl super::IpmiConnection for File {
         let mut request = IpmiRequest {
             addr: bmc_addr as *mut _ as *mut u8,
             addr_len: core::mem::size_of_val(bmc_addr) as u32,
-            msg_id: request.seq() as i64,
+            msg_id: seq,
             message: IpmiMessage {
                 netfn,
                 cmd,
@@ -183,6 +184,9 @@ impl super::IpmiConnection for File {
         unsafe {
             ioctl::ipmi_send_request(self.fd(), &mut request as *mut _)?;
         }
+
+        // Ensure that data and bmc_addr live until _after_ the IOCTL completes.
+        drop((data, bmc_addr));
 
         Ok(())
     }
@@ -229,6 +233,10 @@ impl super::IpmiConnection for File {
                 }
             }
         };
+
+        // Ensure that response_data and bmc_addr live until _after_ the
+        // IOCTL completes.
+        drop((response_data, bmc_addr));
 
         let end = std::time::Instant::now();
         let duration = (end - start).as_millis() as u32;
