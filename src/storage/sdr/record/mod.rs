@@ -678,6 +678,14 @@ impl Record {
             contents,
         })
     }
+
+    pub fn id(&self) -> Option<&SensorId> {
+        match &self.contents {
+            RecordContents::FullSensor(full) => Some(&full.id_string),
+            RecordContents::CompactSensor(compact) => Some(&compact.id_string),
+            RecordContents::Unknown { .. } => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -787,8 +795,6 @@ impl Loggable for Record {
                 .unwrap_or("Unknown".into());
 
             log!(output, "  Nominal reading: {}", nominal_reading);
-            log!(output, "  Result exponent: {}", full.result_exponent);
-            log!(output, "  M: {:?}", full.m);
         } else if let Some(compact) = compact {
             compact.key.log(output);
             log!(output, "  Sensor ID:       {}", compact.id_string);
