@@ -1,4 +1,5 @@
 use std::{
+    ffi::c_int,
     io,
     os::fd::AsRawFd,
     time::{Duration, Instant},
@@ -135,7 +136,7 @@ pub struct File {
 }
 
 impl File {
-    fn fd(&mut self) -> i32 {
+    fn fd(&mut self) -> c_int {
         self.inner.as_raw_fd()
     }
 
