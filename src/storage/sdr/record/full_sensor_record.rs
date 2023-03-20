@@ -92,7 +92,11 @@ impl FullSensorRecord {
 
         let m_lsb = record_data[1];
         let m_msb_tolerance = record_data[2];
-        let m_sign = m_msb_tolerance & 0x80;
+        let m_sign = if m_msb_tolerance & 0x80 == 0x80 {
+            0b11111100
+        } else {
+            0
+        };
 
         let m = i16::from_le_bytes([m_lsb, m_sign | (m_msb_tolerance >> 6) & 0x1]);
 
@@ -101,7 +105,11 @@ impl FullSensorRecord {
         let b_lsb = record_data[3];
         let b_msb_accuracy_lsb = record_data[4];
 
-        let b_sign = b_msb_accuracy_lsb & 1;
+        let b_sign = if b_msb_accuracy_lsb & 1 == 1 {
+            0b11111100
+        } else {
+            0
+        };
         let b = i16::from_le_bytes([b_lsb, b_sign | (b_msb_accuracy_lsb >> 6)]);
 
         let accuracy_msb_accuracy_exp_sensor_dir = record_data[5];
@@ -118,11 +126,19 @@ impl FullSensorRecord {
 
         let r_exp_b_exp = record_data[6];
 
-        let r_sign = r_exp_b_exp & 1;
-        let result_exponent = (r_sign | ((r_exp_b_exp >> 4) & 0x3)) as i8;
+        let r_sign = if r_exp_b_exp & 0x80 == 0x80 {
+            0b11111000
+        } else {
+            0
+        };
+        let result_exponent = (r_sign | ((r_exp_b_exp >> 4) & 0x7)) as i8;
 
-        let b_sign = (r_exp_b_exp & 0x08) << 4;
-        let b_exponent = (b_sign | (r_exp_b_exp & 0x3)) as i8;
+        let b_sign = if r_exp_b_exp & 0x8 == 0x8 {
+            0b11111000
+        } else {
+            0
+        };
+        let b_exponent = (b_sign | (r_exp_b_exp & 0x7)) as i8;
 
         let analog_characteristics = record_data[7];
 
@@ -228,7 +244,8 @@ impl FullSensorRecord {
 
     fn convert(&self, value: u8) -> Option<f32> {
         let m = self.m as f32;
-        let b = (self.b as f32).powf(self.b_exponent as f32);
+        let b = self.b as f32 * 10f32.powf(self.b_exponent as f32);
+        let result_mul = 10f32.powf(self.result_exponent as f32);
         let format = self.analog_data_format?;
 
         let value = match format {
@@ -237,7 +254,7 @@ impl FullSensorRecord {
             DataFormat::TwosComplement => value as i8 as f32,
         };
 
-        Some(((m * value) + b) / m)
+        Some((m * value + b) * result_mul)
     }
 
     pub fn nominal_value(&self) -> Option<f32> {
