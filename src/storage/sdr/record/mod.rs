@@ -614,7 +614,7 @@ impl<'a> Into<SensorId> for TypeLengthRaw<'a> {
         let Self(value, data) = self;
         let type_code = (value >> 6) & 0x3;
 
-        let length = value & 0xF;
+        let length = value & 0x1F;
 
         let data = &data[..(length as usize).min(data.len())];
 
