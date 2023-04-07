@@ -1,6 +1,7 @@
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum LogOutput<'a> {
     Log(log::Level),
+    LogTarget(log::Level, String),
     StdOut,
     StdErr,
     Path(&'a str),
@@ -23,6 +24,7 @@ macro_rules! log {
             LogOutput::StdOut => println!($($msg)*),
             LogOutput::StdErr => eprintln!($($msg)*),
             LogOutput::Log(level) => log::log!(level.clone(), $($msg)*),
+            LogOutput::LogTarget(level, target) => {log::log!(target: target, level.clone(), $($msg)*)}
             LogOutput::Path(path) => {
                 let message = format!($($msg)*);
 

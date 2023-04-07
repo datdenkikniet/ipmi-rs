@@ -8,7 +8,7 @@ use ipmi_rs::{
         record::RecordContents, GetSdrAllocInfo, GetSdrRepositoryInfo, GetSelAllocInfo,
         GetSelEntry, GetSelInfo, SdrOperation, SelCommand, SelRecordId,
     },
-    Ipmi, Loggable, SensorRecord,
+    Ipmi, LogOutput, Loggable, SensorRecord,
 };
 
 fn main() {
@@ -16,7 +16,8 @@ fn main() {
 
     let file = File::new("/dev/ipmi0", Duration::from_millis(2000)).unwrap();
     let mut ipmi = Ipmi::new(file);
-    let log_output = log::Level::Info.into();
+    let log_output = &LogOutput::LogTarget(log::Level::Info, "get_info".into());
+    let debug_log_output = &LogOutput::LogTarget(log::Level::Debug, "get_info".into());
 
     log::info!("Getting SEL info");
     let info = ipmi.send_recv(GetSelInfo).unwrap();
@@ -60,6 +61,7 @@ fn main() {
 
             if let Some(display) = full.display_reading(value.reading) {
                 log::info!("{}: {}", full.id_string(), display);
+                sensor.log(debug_log_output);
             }
         }
     }
