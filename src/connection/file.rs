@@ -176,7 +176,7 @@ impl super::IpmiConnection for File {
             },
         };
 
-        log::debug!("Sending request");
+        log::debug!("Sending request (netfn: 0x{netfn:02X}, cmd: 0x{cmd:02X})");
         request.log(&log::Level::Trace.into());
 
         // SAFETY: we send a mut pointer to an owned struct (`request`),
