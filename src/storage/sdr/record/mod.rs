@@ -48,9 +48,13 @@ impl Value {
     }
 
     pub fn display(&self, short: bool) -> String {
-        // TODO: use Modifier unit, percentage, and rate units
-        // somehow here
-        self.units.base_unit.display(short, self.value)
+        if self.units.is_percentage {
+            format!("{:.2} %", self.value)
+        } else {
+            // TODO: use Modifier unit and rate units
+            // somehow here
+            self.units.base_unit.display(short, self.value)
+        }
     }
 }
 
