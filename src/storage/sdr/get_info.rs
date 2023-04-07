@@ -7,8 +7,8 @@ use crate::{
 
 pub struct GetRepositoryInfo;
 
-impl Into<Message> for GetRepositoryInfo {
-    fn into(self) -> Message {
+impl From<GetRepositoryInfo> for Message {
+    fn from(_: GetRepositoryInfo) -> Self {
         Message::new(NetFn::Storage, 0x20, Vec::new())
     }
 }

@@ -442,7 +442,7 @@ impl SensorCapabilities {
             upper_non_critical: ((discrete_rd_thrsd_set_thrshd_read >> 3) & 0x1) == 1,
             lower_non_recoverable: ((discrete_rd_thrsd_set_thrshd_read >> 2) & 0x1) == 1,
             lower_critical: ((discrete_rd_thrsd_set_thrshd_read >> 1) & 0x1) == 1,
-            lower_non_critical: ((discrete_rd_thrsd_set_thrshd_read >> 0) & 0x1) == 1,
+            lower_non_critical: (discrete_rd_thrsd_set_thrshd_read & 0x1) == 1,
         };
 
         let threshold_access_support = match (caps & 0xC) >> 2 {
@@ -613,9 +613,9 @@ impl<'a> TypeLengthRaw<'a> {
     }
 }
 
-impl<'a> Into<SensorId> for TypeLengthRaw<'a> {
-    fn into(self) -> SensorId {
-        let Self(value, data) = self;
+impl<'a> From<TypeLengthRaw<'a>> for SensorId {
+    fn from(value: TypeLengthRaw<'a>) -> Self {
+        let TypeLengthRaw(value, data) = value;
         let type_code = (value >> 6) & 0x3;
 
         let length = value & 0x1F;

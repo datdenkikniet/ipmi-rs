@@ -14,25 +14,25 @@ pub use fmt::{LogOutput, Loggable};
 use connection::{IpmiCommand, LogicalUnit, NetFn, ParseResponseError, Request};
 use storage::{sdr::record::Record as SdrRecord, GetDeviceSdr, SdrRecordId};
 
-pub struct Ipmi<T> {
-    inner: T,
+pub struct Ipmi<CON> {
+    inner: CON,
     counter: i64,
 }
 
-impl<T> Ipmi<T> {
-    pub fn new(inner: T) -> Self {
+impl<CON> Ipmi<CON> {
+    pub fn new(inner: CON) -> Self {
         Self { inner, counter: 0 }
     }
 }
 
-impl<T> From<T> for Ipmi<T> {
-    fn from(value: T) -> Self {
+impl<CON> From<CON> for Ipmi<CON> {
+    fn from(value: CON) -> Self {
         Self::new(value)
     }
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub enum IpmiError<T, P> {
+pub enum IpmiError<CON, P> {
     NetFnIsResponse(NetFn),
     IncorrectResponseSeq {
         seq_sent: i64,
@@ -51,7 +51,7 @@ pub enum IpmiError<T, P> {
         completion_code: u8,
         data: Vec<u8>,
     },
-    Connection(T),
+    Connection(CON),
 }
 
 impl<T, P> From<T> for IpmiError<T, P> {
@@ -60,23 +60,25 @@ impl<T, P> From<T> for IpmiError<T, P> {
     }
 }
 
-impl<T> Ipmi<T>
+pub type IpmiCommandError<T, E> = IpmiError<T, ParseResponseError<E>>;
+
+impl<CON> Ipmi<CON>
 where
-    T: connection::IpmiConnection,
+    CON: connection::IpmiConnection,
 {
-    pub fn sdrs<'a>(&'a mut self) -> impl Iterator<Item = SdrRecord> + 'a {
+    pub fn sdrs(&mut self) -> impl Iterator<Item = SdrRecord> + '_ {
         SdrIter {
             ipmi: self,
             next_id: Some(SdrRecordId::FIRST),
         }
     }
 
-    pub fn send_recv<C>(
+    pub fn send_recv<CMD>(
         &mut self,
-        request: C,
-    ) -> Result<C::Output, IpmiError<T::Error, ParseResponseError<C::Error>>>
+        request: CMD,
+    ) -> Result<CMD::Output, IpmiCommandError<CON::Error, CMD::Error>>
     where
-        C: IpmiCommand,
+        CMD: IpmiCommand,
     {
         let seq = self.counter;
         self.counter += 1;
@@ -103,7 +105,7 @@ where
             });
         }
 
-        C::parse_response(response.cc().into(), response.data()).map_err(|error| {
+        CMD::parse_response(response.cc().into(), response.data()).map_err(|error| {
             IpmiError::ParsingFailed {
                 error,
                 netfn: response.netfn(),
@@ -115,8 +117,8 @@ where
     }
 }
 
-pub struct SdrIter<'ipmi, T> {
-    ipmi: &'ipmi mut Ipmi<T>,
+pub struct SdrIter<'ipmi, CON> {
+    ipmi: &'ipmi mut Ipmi<CON>,
     next_id: Option<SdrRecordId>,
 }
 

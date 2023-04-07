@@ -6,8 +6,8 @@ use crate::{
 #[derive(Clone, Copy, Debug)]
 pub struct GetAllocInfo;
 
-impl Into<Message> for GetAllocInfo {
-    fn into(self) -> Message {
+impl From<GetAllocInfo> for Message {
+    fn from(_: GetAllocInfo) -> Self {
         Message::new(NetFn::Storage, 0x21, Vec::new())
     }
 }

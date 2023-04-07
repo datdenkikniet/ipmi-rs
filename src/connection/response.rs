@@ -10,7 +10,7 @@ pub struct Response {
 
 impl Response {
     pub fn new(message: Message, seq: i64) -> Option<Self> {
-        if message.data().len() > 0 {
+        if !message.data().is_empty() {
             Some(Self { message, seq })
         } else {
             None

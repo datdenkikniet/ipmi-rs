@@ -33,21 +33,21 @@ impl GetDeviceSdr {
     }
 }
 
-impl Into<Message> for GetDeviceSdr {
-    fn into(self) -> Message {
+impl From<GetDeviceSdr> for Message {
+    fn from(value: GetDeviceSdr) -> Self {
         let mut data = vec![0u8; 6];
 
         data[0..2].copy_from_slice(
-            &self
+            &value
                 .reservation_id
                 .map(NonZeroU16::get)
                 .unwrap_or(0)
                 .to_le_bytes(),
         );
 
-        data[2..4].copy_from_slice(&self.record_id.value().to_le_bytes());
-        data[4] = self.offset;
-        data[5] = self.bytes_to_read.map(|v| v.get()).unwrap_or(0xFF);
+        data[2..4].copy_from_slice(&value.record_id.value().to_le_bytes());
+        data[4] = value.offset;
+        data[5] = value.bytes_to_read.map(|v| v.get()).unwrap_or(0xFF);
 
         Message::new(NetFn::Storage, 0x23, data)
     }

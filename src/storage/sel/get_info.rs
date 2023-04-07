@@ -20,8 +20,8 @@ impl IpmiCommand for GetInfo {
     }
 }
 
-impl Into<Message> for GetInfo {
-    fn into(self) -> Message {
+impl From<GetInfo> for Message {
+    fn from(_: GetInfo) -> Self {
         Message::new(NetFn::Storage, 0x40, Vec::new())
     }
 }

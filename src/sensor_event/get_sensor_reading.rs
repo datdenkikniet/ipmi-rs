@@ -58,12 +58,12 @@ impl SensorReading {
     }
 }
 
-impl Into<Message> for GetSensorReading {
-    fn into(self) -> Message {
+impl From<GetSensorReading> for Message {
+    fn from(value: GetSensorReading) -> Self {
         Message::new(
             crate::connection::NetFn::SensorEvent,
             0x2D,
-            vec![self.sensor_number.get()],
+            vec![value.sensor_number.get()],
         )
     }
 }

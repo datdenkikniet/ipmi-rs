@@ -101,7 +101,7 @@ impl TryFrom<IpmiRecv> for Response {
 }
 
 mod ioctl {
-    const IPMI_IOC_MAGIC: u8 = 'i' as u8;
+    const IPMI_IOC_MAGIC: u8 = b'i';
 
     use nix::{ioctl_read, ioctl_readwrite};
 
@@ -112,7 +112,7 @@ mod ioctl {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct IpmiSysIfaceAddr {
     ty: i32,
     channel: i16,
@@ -154,7 +154,8 @@ impl super::IpmiConnection for File {
     type Error = io::Error;
 
     fn send(&mut self, request: &mut Request) -> io::Result<()> {
-        let bmc_addr = &mut IpmiSysIfaceAddr::bmc();
+        let mut bmc_addr = IpmiSysIfaceAddr::bmc();
+        let bmc_addr_borrow = &mut bmc_addr;
 
         let netfn = request.netfn().request_value();
         let cmd = request.cmd();
@@ -165,8 +166,8 @@ impl super::IpmiConnection for File {
         let ptr = data.as_mut_ptr();
 
         let mut request = IpmiRequest {
-            addr: bmc_addr as *mut _ as *mut u8,
-            addr_len: core::mem::size_of_val(bmc_addr) as u32,
+            addr: bmc_addr_borrow as *mut _ as *mut u8,
+            addr_len: core::mem::size_of_val(bmc_addr_borrow) as u32,
             msg_id: seq,
             message: IpmiMessage {
                 netfn,
@@ -186,7 +187,10 @@ impl super::IpmiConnection for File {
         }
 
         // Ensure that data and bmc_addr live until _after_ the IOCTL completes.
-        drop((data, bmc_addr));
+        #[allow(clippy::drop_non_drop)]
+        drop(request);
+        #[allow(clippy::drop_non_drop)]
+        drop(bmc_addr);
 
         Ok(())
     }
@@ -194,7 +198,8 @@ impl super::IpmiConnection for File {
     fn recv(&mut self) -> io::Result<Response> {
         let start = std::time::Instant::now();
 
-        let bmc_addr = &mut IpmiSysIfaceAddr::bmc();
+        let mut bmc_addr = IpmiSysIfaceAddr::bmc();
+        let bmc_addr_borrow = &mut bmc_addr;
 
         let mut response_data = [0u8; 1024];
 
@@ -202,8 +207,8 @@ impl super::IpmiConnection for File {
         let response_data_ptr = response_data.as_mut_ptr();
 
         let mut recv = IpmiRecv {
-            addr: bmc_addr as *mut _ as *mut u8,
-            addr_len: core::mem::size_of_val(bmc_addr) as u32,
+            addr: bmc_addr_borrow as *mut _ as *mut u8,
+            addr_len: core::mem::size_of_val(bmc_addr_borrow) as u32,
             msg_id: 0,
             recv_type: 0,
             message: IpmiMessage {
@@ -236,12 +241,15 @@ impl super::IpmiConnection for File {
 
         // Ensure that response_data and bmc_addr live until _after_ the
         // IOCTL completes.
-        drop((response_data, bmc_addr));
+        #[allow(clippy::drop_copy)]
+        drop(response_data);
+        #[allow(clippy::drop_non_drop)]
+        drop(bmc_addr);
 
         let end = std::time::Instant::now();
         let duration = (end - start).as_millis() as u32;
 
-        let result = match ipmi_result {
+        match ipmi_result {
             Ok(recv) => {
                 log::debug!("Received response after {} ms", duration);
                 recv.log(&log::Level::Trace.into());
@@ -261,9 +269,7 @@ impl super::IpmiConnection for File {
                 );
                 Err(e.into())
             }
-        };
-
-        result
+        }
     }
 
     fn send_recv(&mut self, request: &mut Request) -> io::Result<Response> {

@@ -5,8 +5,8 @@ use crate::{
 
 pub struct GetDeviceId;
 
-impl Into<Message> for GetDeviceId {
-    fn into(self) -> Message {
+impl From<GetDeviceId> for Message {
+    fn from(_: GetDeviceId) -> Self {
         Message::new(NetFn::App, 0x01, Vec::new())
     }
 }

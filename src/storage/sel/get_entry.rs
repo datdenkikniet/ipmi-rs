@@ -63,14 +63,14 @@ impl IpmiCommand for GetEntry {
     }
 }
 
-impl Into<Message> for GetEntry {
-    fn into(self) -> Message {
-        let Self {
+impl From<GetEntry> for Message {
+    fn from(value: GetEntry) -> Self {
+        let GetEntry {
             reservation_id,
             record_id,
             offset,
             bytes_to_read,
-        } = self;
+        } = value;
 
         let mut data = vec![0u8; 6];
 

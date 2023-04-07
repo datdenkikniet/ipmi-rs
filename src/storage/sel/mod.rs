@@ -19,9 +19,7 @@ impl RecordId {
     pub const LAST: Self = Self(0xFFFF);
 
     pub fn new(id: u16) -> Option<Self> {
-        if id == Self::FIRST.0 {
-            None
-        } else if id == Self::LAST.0 {
+        if RecordId(id) == Self::FIRST || RecordId(id) == Self::LAST {
             None
         } else {
             Some(Self(id))
