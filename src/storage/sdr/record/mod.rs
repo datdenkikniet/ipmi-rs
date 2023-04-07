@@ -8,7 +8,33 @@ use nonmax::NonMaxU8;
 
 use crate::{connection::LogicalUnit, LogOutput, Loggable};
 
-use super::{RecordId, SensorType, Unit};
+use super::{event_reading_type_code::EventReadingTypeCodes, RecordId, SensorType, Unit};
+
+pub trait SensorRecord {
+    fn common(&self) -> &SensorRecordCommon;
+
+    fn capabilities(&self) -> &SensorCapabilities {
+        &self.common().capabilities
+    }
+
+    fn id_string(&self) -> &SensorId {
+        &self.common().sensor_id
+    }
+
+    fn direction(&self) -> Direction;
+
+    fn sensor_number(&self) -> SensorNumber {
+        self.common().key.sensor_number
+    }
+
+    fn entity_id(&self) -> u8 {
+        self.common().entity_id
+    }
+
+    fn key_data(&self) -> &SensorKey {
+        &self.common().key
+    }
+}
 
 #[derive(Debug)]
 pub struct Value {
@@ -622,6 +648,12 @@ impl core::fmt::Display for SensorId {
     }
 }
 
+impl Default for SensorId {
+    fn default() -> Self {
+        Self::Unicode("".into())
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SensorNumber(pub NonMaxU8);
 
@@ -712,22 +744,22 @@ impl Record {
 
     pub fn id(&self) -> Option<&SensorId> {
         match &self.contents {
-            RecordContents::FullSensor(full) => Some(&full.id_string),
-            RecordContents::CompactSensor(compact) => Some(&compact.id_string),
+            RecordContents::FullSensor(full) => Some(full.id_string()),
+            RecordContents::CompactSensor(compact) => Some(compact.id_string()),
             RecordContents::Unknown { .. } => None,
         }
     }
 
     pub fn sensor_number(&self) -> Option<SensorNumber> {
         match &self.contents {
-            RecordContents::FullSensor(full) => Some(full.key.sensor_number),
-            RecordContents::CompactSensor(compact) => Some(compact.key.sensor_number),
+            RecordContents::FullSensor(full) => Some(full.sensor_number()),
+            RecordContents::CompactSensor(compact) => Some(compact.sensor_number()),
             RecordContents::Unknown { .. } => None,
         }
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct SensorRecordCommon {
     pub key: SensorKey,
     // TODO: make a type EntityId
@@ -736,13 +768,17 @@ pub struct SensorRecordCommon {
     pub initialization: SensorInitialization,
     pub capabilities: SensorCapabilities,
     pub ty: SensorType,
-    // TODO: Make a type EventReadingTypeCode
-    pub event_reading_type_code: u8,
+    pub event_reading_type_code: EventReadingTypeCodes,
     pub sensor_units: SensorUnits,
+    pub sensor_id: SensorId,
 }
 
 impl SensorRecordCommon {
-    pub fn parse(record_data: &[u8]) -> Option<(Self, &[u8])> {
+    /// Parse common sensor record data, but set the SensorID to an empty UTF-8 String.
+    ///
+    /// You _must_ remember to [`SensorRecordCommon::set_id`] once the ID of the
+    /// record has been parsed.
+    pub(crate) fn parse_without_id(record_data: &[u8]) -> Option<(Self, &[u8])> {
         if record_data.len() < 17 {
             return None;
         }
@@ -760,7 +796,7 @@ impl SensorRecordCommon {
         let sensor_capabilities = record_data[6];
 
         let sensor_type = record_data[7].into();
-        let event_reading_type_code = record_data[8];
+        let event_reading_type_code = record_data[8].into();
 
         let assertion_event_mask_lower_thrsd_reading_mask =
             u16::from_le_bytes([record_data[9], record_data[10]]);
@@ -792,9 +828,14 @@ impl SensorRecordCommon {
                 ty: sensor_type,
                 event_reading_type_code,
                 sensor_units,
+                sensor_id: Default::default(),
             },
             &record_data[18..],
         ))
+    }
+
+    pub(crate) fn set_id(&mut self, id: SensorId) {
+        self.sensor_id = id;
     }
 }
 
@@ -824,9 +865,9 @@ impl Loggable for Record {
         log!(output, "  SDR Version:     {sdr_v_maj}.{sdr_v_min}");
 
         if let Some(full) = full {
-            full.key.log(output);
-            log!(output, "  Sensor ID:       {}", full.id_string);
-            log!(output, "  Entity ID:       {}", full.entity_id);
+            full.key_data().log(output);
+            log!(output, "  Sensor ID:       {}", full.id_string());
+            log!(output, "  Entity ID:       {}", full.entity_id());
 
             let display = |v: Value| v.display(true);
 
@@ -843,8 +884,8 @@ impl Loggable for Record {
             log!(output, "  Max reading:     {}", max_reading);
             log!(output, "  Min reading:     {}", min_reading);
         } else if let Some(compact) = compact {
-            compact.key.log(output);
-            log!(output, "  Sensor ID:       {}", compact.id_string);
+            compact.key_data().log(output);
+            log!(output, "  Sensor ID:       {}", compact.id_string());
         }
     }
 }

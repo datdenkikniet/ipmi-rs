@@ -3,6 +3,7 @@ pub mod app;
 pub mod connection;
 
 pub mod storage;
+pub use storage::sdr::record::SensorRecord;
 
 pub mod sensor_event;
 
@@ -127,7 +128,13 @@ where
 
     fn next(&mut self) -> Option<Self::Item> {
         let next_id = self.next_id?;
-        let next_record = self.ipmi.send_recv(GetDeviceSdr::new(None, next_id)).ok()?;
+        let next_record = self
+            .ipmi
+            .send_recv(GetDeviceSdr::new(None, next_id))
+            .map_err(|e| {
+                log::error!("Error occured while iterating SDR records: {e:?}");
+            })
+            .ok()?;
 
         if !next_record.next_entry.is_last() {
             self.next_id = Some(next_record.next_entry);

@@ -9,7 +9,7 @@ use ipmi_rs::{
         GetSdrAllocInfo, GetSdrRepositoryInfo, GetSelAllocInfo, GetSelEntry, GetSelInfo,
         SdrOperation, SelCommand, SelRecordId,
     },
-    Ipmi, Loggable,
+    Ipmi, Loggable, SensorRecord,
 };
 
 fn main() {
@@ -45,7 +45,7 @@ fn main() {
     }
 
     let sensors = ipmi.sdrs().collect::<Vec<_>>();
-    let sensor_0 = &sensors[0];
+    let sensor_0 = &sensors[13];
 
     let sensor_0_num = sensor_0.sensor_number().unwrap();
 
@@ -60,7 +60,7 @@ fn main() {
         } => {
             log::info!(
                 "{}: {}",
-                full.id_string,
+                full.id_string(),
                 full.display_reading(sensor_reading.reading).unwrap()
             )
         }

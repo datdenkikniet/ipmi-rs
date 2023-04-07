@@ -1,5 +1,3 @@
-use crate::storage::SensorType;
-
 use super::*;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -18,22 +16,22 @@ pub struct RecordSharing {
 
 #[derive(Debug, Clone)]
 pub struct CompactSensorRecord {
-    pub key: SensorKey,
-    // TODO: make a type EntityId
-    pub entity_id: u8,
-    pub entity_instance: EntityInstance,
-    pub initialization: SensorInitialization,
-    pub capabilities: SensorCapabilities,
-    pub ty: SensorType,
-    // TODO: Make a type EventReadingTypeCode
-    pub event_reading_type_code: u8,
-    pub sensor_units: SensorUnits,
+    common: SensorRecordCommon,
     pub direction: Direction,
     pub record_sharing: RecordSharing,
     pub positive_going_threshold_hysteresis_value: u8,
     pub negative_going_threshold_hysteresis_value: u8,
     pub oem_data: u8,
-    pub id_string: SensorId,
+}
+
+impl SensorRecord for CompactSensorRecord {
+    fn common(&self) -> &SensorRecordCommon {
+        &self.common
+    }
+
+    fn direction(&self) -> Direction {
+        self.direction
+    }
 }
 
 impl CompactSensorRecord {
@@ -42,19 +40,7 @@ impl CompactSensorRecord {
             return None;
         }
 
-        let (
-            SensorRecordCommon {
-                key,
-                entity_id,
-                entity_instance,
-                initialization,
-                capabilities,
-                ty,
-                event_reading_type_code,
-                sensor_units,
-            },
-            record_data,
-        ) = SensorRecordCommon::parse(record_data)?;
+        let (mut common, record_data) = SensorRecordCommon::parse_without_id(record_data)?;
 
         let direction_sharing_1 = record_data[0];
         let direction_sharing_2 = record_data[1];
@@ -88,21 +74,15 @@ impl CompactSensorRecord {
         let id_string_bytes = &record_data[9..];
         let id_string = TypeLengthRaw::new(id_string_type_len, id_string_bytes).into();
 
+        common.set_id(id_string);
+
         Some(Self {
-            key,
-            entity_id,
-            entity_instance,
-            initialization,
-            capabilities,
-            ty,
-            event_reading_type_code,
-            sensor_units,
+            common,
             direction,
             record_sharing,
             positive_going_threshold_hysteresis_value,
             negative_going_threshold_hysteresis_value,
             oem_data,
-            id_string,
         })
     }
 }

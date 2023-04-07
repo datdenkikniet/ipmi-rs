@@ -1,22 +1,11 @@
 use std::num::NonZeroU8;
 
-use crate::storage::SensorType;
-
 use super::*;
 
 #[derive(Debug, Clone)]
 
 pub struct FullSensorRecord {
-    pub key: SensorKey,
-    // TODO: make a type EntityId
-    pub entity_id: u8,
-    pub entity_instance: EntityInstance,
-    pub initialization: SensorInitialization,
-    pub capabilities: SensorCapabilities,
-    pub ty: SensorType,
-    // TODO: Make a type EventReadingTypeCode
-    pub event_reading_type_code: u8,
-    pub sensor_units: SensorUnits,
+    common: SensorRecordCommon,
     pub analog_data_format: Option<DataFormat>,
     pub linearization: Linearization,
     pub m: i16,
@@ -41,7 +30,6 @@ pub struct FullSensorRecord {
     pub positive_going_threshold_hysteresis_value: Option<NonZeroU8>,
     pub negative_going_threshold_hysteresis_value: Option<NonZeroU8>,
     pub oem_data: u8,
-    pub id_string: SensorId,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -49,6 +37,16 @@ pub enum ParseFullSensorRecordError {
     NotEnoughData,
     CouldNotParseCommon,
     NotEnoughDataAfterCommon,
+}
+
+impl SensorRecord for FullSensorRecord {
+    fn common(&self) -> &SensorRecordCommon {
+        &self.common
+    }
+
+    fn direction(&self) -> Direction {
+        self.direction
+    }
 }
 
 impl FullSensorRecord {
@@ -69,19 +67,8 @@ impl FullSensorRecord {
             _ => unreachable!(),
         };
 
-        let (
-            SensorRecordCommon {
-                key,
-                entity_id,
-                entity_instance,
-                initialization,
-                capabilities,
-                ty,
-                event_reading_type_code,
-                sensor_units,
-            },
-            record_data,
-        ) = SensorRecordCommon::parse(record_data).ok_or(CouldNotParseCommon)?;
+        let (mut common, record_data) =
+            SensorRecordCommon::parse_without_id(record_data).ok_or(CouldNotParseCommon)?;
 
         if record_data.len() < 24 {
             return Err(NotEnoughDataAfterCommon);
@@ -184,16 +171,11 @@ impl FullSensorRecord {
 
         let id_string = TypeLengthRaw::new(id_string_type_len, id_string_bytes).into();
 
+        common.set_id(id_string);
+
         Ok(Self {
-            key,
-            entity_id,
-            entity_instance,
-            initialization,
-            capabilities,
-            ty,
-            event_reading_type_code,
+            common,
             analog_data_format,
-            sensor_units,
             linearization,
             m,
             tolerance,
@@ -217,17 +199,19 @@ impl FullSensorRecord {
             positive_going_threshold_hysteresis_value,
             negative_going_threshold_hysteresis_value,
             oem_data,
-            id_string,
         })
     }
 
     pub fn threshold(&self, kind: ThresholdKind) -> Threshold {
-        let readable = self.capabilities.threshold_access.readable(kind);
-        let settable = self.capabilities.threshold_access.settable(kind);
+        let readable = self.capabilities().threshold_access.readable(kind);
+        let settable = self.capabilities().threshold_access.settable(kind);
 
-        let asserts = self.capabilities.assertion_threshold_events.for_kind(kind);
+        let asserts = self
+            .capabilities()
+            .assertion_threshold_events
+            .for_kind(kind);
         let deasserts = self
-            .capabilities
+            .capabilities()
             .deassertion_threshold_events
             .for_kind(kind);
 
@@ -256,7 +240,7 @@ impl FullSensorRecord {
 
         let value = (m * value + b) * result_mul;
 
-        Some(Value::new(self.sensor_units, value))
+        Some(Value::new(self.common().sensor_units, value))
     }
 
     pub fn display_reading(&self, value: u8) -> Option<String> {

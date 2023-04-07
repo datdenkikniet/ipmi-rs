@@ -65,6 +65,7 @@ macro_rules! event_reading_code {
             impl_event_reading_code!(generic: $disc_generic, $disc_generic_val);
         )*
 
+        #[derive(Debug, Clone, Copy, PartialEq)]
         pub enum EventReadingTypeCodes {
             Unspecified,
             Threshold,
