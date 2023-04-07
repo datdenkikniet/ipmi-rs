@@ -5,9 +5,8 @@ use ipmi_rs::{
     connection::File,
     sensor_event::GetSensorReading,
     storage::{
-        record::{Record, RecordContents},
-        GetSdrAllocInfo, GetSdrRepositoryInfo, GetSelAllocInfo, GetSelEntry, GetSelInfo,
-        SdrOperation, SelCommand, SelRecordId,
+        record::RecordContents, GetSdrAllocInfo, GetSdrRepositoryInfo, GetSelAllocInfo,
+        GetSelEntry, GetSelInfo, SdrOperation, SelCommand, SelRecordId,
     },
     Ipmi, Loggable, SensorRecord,
 };
@@ -45,25 +44,16 @@ fn main() {
     }
 
     let sensors = ipmi.sdrs().collect::<Vec<_>>();
-    let sensor_0 = &sensors[13];
 
-    let sensor_0_num = sensor_0.sensor_number().unwrap();
+    for sensor in &sensors {
+        if let RecordContents::FullSensor(full) = &sensor.contents {
+            let value = ipmi
+                .send_recv(GetSensorReading::for_sensor(full.sensor_number()))
+                .unwrap();
 
-    let sensor_reading = ipmi
-        .send_recv(GetSensorReading::for_sensor(sensor_0_num))
-        .unwrap();
-
-    match sensor_0 {
-        Record {
-            header: _,
-            contents: RecordContents::FullSensor(full),
-        } => {
-            log::info!(
-                "{}: {}",
-                full.id_string(),
-                full.display_reading(sensor_reading.reading).unwrap()
-            )
+            if let Some(display) = full.display_reading(value.reading) {
+                log::info!("{}: {}", full.id_string(), display);
+            }
         }
-        _ => {}
     }
 }
