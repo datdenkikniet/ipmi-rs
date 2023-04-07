@@ -1,5 +1,7 @@
 use std::num::NonZeroU8;
 
+use crate::storage::SensorType;
+
 use super::*;
 
 #[derive(Debug, Clone)]
@@ -25,13 +27,11 @@ pub struct FullSensorRecord {
     pub direction: Direction,
     pub result_exponent: i8,
     pub b_exponent: i8,
-    // TODO: convert these to the correct
-    // units based on sensor_units
-    pub nominal_reading: Option<u8>,
-    pub normal_maximum: Option<u8>,
-    pub normal_minimum: Option<u8>,
-    pub max_reading: u8,
-    pub min_reading: u8,
+    nominal_reading: Option<u8>,
+    normal_maximum: Option<u8>,
+    normal_minimum: Option<u8>,
+    max_reading: u8,
+    min_reading: u8,
     pub upper_non_recoverable_threshold: u8,
     pub upper_critical_threshold: u8,
     pub upper_non_critical_threshold: u8,
@@ -242,7 +242,7 @@ impl FullSensorRecord {
         }
     }
 
-    fn convert(&self, value: u8) -> Option<f32> {
+    fn convert(&self, value: u8) -> Option<Value> {
         let m = self.m as f32;
         let b = self.b as f32 * 10f32.powf(self.b_exponent as f32);
         let result_mul = 10f32.powf(self.result_exponent as f32);
@@ -254,27 +254,41 @@ impl FullSensorRecord {
             DataFormat::TwosComplement => value as i8 as f32,
         };
 
-        Some((m * value + b) * result_mul)
+        let value = (m * value + b) * result_mul;
+
+        Some(Value::new(self.sensor_units, value))
     }
 
-    pub fn nominal_value(&self) -> Option<f32> {
+    pub fn display_reading(&self, value: u8) -> Option<String> {
+        self.convert(value).map(|v| v.display(true))
+    }
+
+    pub fn nominal_value(&self) -> Option<Value> {
         self.convert(self.nominal_reading?)
     }
 
-    pub fn normal_max(&self) -> Option<f32> {
+    pub fn normal_max(&self) -> Option<Value> {
         self.convert(self.normal_maximum?)
     }
 
-    pub fn normal_min(&self) -> Option<f32> {
+    pub fn normal_min(&self) -> Option<Value> {
         self.convert(self.normal_minimum?)
     }
 
-    pub fn positive_going_hysteresis(&self) -> Option<f32> {
+    pub fn max_reading(&self) -> Option<Value> {
+        self.convert(self.max_reading)
+    }
+
+    pub fn min_reading(&self) -> Option<Value> {
+        self.convert(self.min_reading)
+    }
+
+    pub fn positive_going_hysteresis(&self) -> Option<Value> {
         let value = self.positive_going_threshold_hysteresis_value?;
         self.convert(value.get())
     }
 
-    pub fn negative_going_threshold_hysteresis(&self) -> Option<f32> {
+    pub fn negative_going_threshold_hysteresis(&self) -> Option<Value> {
         let value = self.negative_going_threshold_hysteresis_value?;
         self.convert(value.get())
     }

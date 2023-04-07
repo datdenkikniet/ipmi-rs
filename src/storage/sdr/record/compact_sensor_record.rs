@@ -1,3 +1,5 @@
+use crate::storage::SensorType;
+
 use super::*;
 
 #[derive(Debug, Clone, Copy, PartialEq)]

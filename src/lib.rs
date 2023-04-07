@@ -4,6 +4,8 @@ pub mod connection;
 
 pub mod storage;
 
+pub mod sensor_event;
+
 #[macro_use]
 mod fmt;
 pub use fmt::{LogOutput, Loggable};

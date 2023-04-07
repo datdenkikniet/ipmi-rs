@@ -35,7 +35,7 @@ impl Loggable for IpmiMessage {
         log!(level, "  Command    = 0x{:02X}", self.cmd);
         log!(level, "  Data len   = {}", self.data_len);
         if self.data_len > 0 {
-            log!(level, "  Data      = {:02X?}", self.data());
+            log!(level, "  Data       = {:02X?}", self.data());
         }
     }
 }

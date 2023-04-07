@@ -3,7 +3,9 @@ use std::time::Duration;
 use ipmi_rs::{
     app::GetDeviceId,
     connection::File,
+    sensor_event::GetSensorReading,
     storage::{
+        record::{Record, RecordContents},
         GetSdrAllocInfo, GetSdrRepositoryInfo, GetSelAllocInfo, GetSelEntry, GetSelInfo,
         SdrOperation, SelCommand, SelRecordId,
     },
@@ -42,25 +44,26 @@ fn main() {
         sdr_alloc_info.log(log_output);
     }
 
-    let mut printed_full = false;
-    let mut printed_compact = false;
-    let mut records = ipmi.sdrs();
+    let sensors = ipmi.sdrs().collect::<Vec<_>>();
+    let sensor_0 = &sensors[0];
 
-    while !printed_full || !printed_compact {
-        let next_record = if let Some(record) = records.next() {
-            record
-        } else {
-            break;
-        };
+    let sensor_0_num = sensor_0.sensor_number().unwrap();
 
-        if next_record.full_sensor().is_some() && !printed_full {
-            println!("{:#?}", next_record);
-            printed_full = true;
+    let sensor_reading = ipmi
+        .send_recv(GetSensorReading::for_sensor(sensor_0_num))
+        .unwrap();
+
+    match sensor_0 {
+        Record {
+            header: _,
+            contents: RecordContents::FullSensor(full),
+        } => {
+            log::info!(
+                "{}: {}",
+                full.id_string,
+                full.display_reading(sensor_reading.reading).unwrap()
+            )
         }
-
-        if next_record.compact_sensor().is_some() && !printed_compact {
-            println!("{:#?}", next_record);
-            printed_compact = true;
-        }
+        _ => {}
     }
 }

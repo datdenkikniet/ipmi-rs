@@ -10,13 +10,31 @@ use crate::{connection::LogicalUnit, LogOutput, Loggable};
 
 use super::{RecordId, SensorType, Unit};
 
+#[derive(Debug)]
+pub struct Value {
+    units: SensorUnits,
+    value: f32,
+}
+
+impl Value {
+    pub fn new(units: SensorUnits, value: f32) -> Self {
+        Self { units, value }
+    }
+
+    pub fn display(&self, short: bool) -> String {
+        // TODO: use Modifier unit, percentage, and rate units
+        // somehow here
+        self.units.base_unit.display(short, self.value)
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SensorKey {
     pub owner_id: SensorOwner,
     pub owner_channel: u8,
     pub fru_inv_device_owner_lun: LogicalUnit,
     pub owner_lun: LogicalUnit,
-    pub sensor_number: NonMaxU8,
+    pub sensor_number: SensorNumber,
 }
 
 impl SensorKey {
@@ -32,7 +50,7 @@ impl SensorKey {
             LogicalUnit::try_from((owner_channel_fru_lun >> 2) & 0x3).unwrap();
         let owner_lun = LogicalUnit::try_from(owner_channel_fru_lun & 0x3).unwrap();
 
-        let sensor_number = NonMaxU8::new(record_data[2])?;
+        let sensor_number = SensorNumber(NonMaxU8::new(record_data[2])?);
 
         Some(Self {
             owner_id,
@@ -55,7 +73,7 @@ impl SensorKey {
         log!(output, "  Sensor Owner:    {}", sensor_owner);
         log!(output, "  Owner channel:   {}", self.owner_channel);
         log!(output, "  Owner LUN:       {}", self.owner_lun.value());
-        log!(output, "  Sensor Number:   {}", self.sensor_number);
+        log!(output, "  Sensor Number:   {}", self.sensor_number.get());
     }
 }
 
@@ -604,6 +622,19 @@ impl core::fmt::Display for SensorId {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SensorNumber(pub NonMaxU8);
+
+impl SensorNumber {
+    pub fn new(value: NonMaxU8) -> Self {
+        Self(value)
+    }
+
+    pub fn get(&self) -> u8 {
+        self.0.get()
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct RecordHeader {
     pub id: RecordId,
@@ -683,6 +714,14 @@ impl Record {
         match &self.contents {
             RecordContents::FullSensor(full) => Some(&full.id_string),
             RecordContents::CompactSensor(compact) => Some(&compact.id_string),
+            RecordContents::Unknown { .. } => None,
+        }
+    }
+
+    pub fn sensor_number(&self) -> Option<SensorNumber> {
+        match &self.contents {
+            RecordContents::FullSensor(full) => Some(full.key.sensor_number),
+            RecordContents::CompactSensor(compact) => Some(compact.key.sensor_number),
             RecordContents::Unknown { .. } => None,
         }
     }
@@ -789,12 +828,20 @@ impl Loggable for Record {
             log!(output, "  Sensor ID:       {}", full.id_string);
             log!(output, "  Entity ID:       {}", full.entity_id);
 
+            let display = |v: Value| v.display(true);
+
             let nominal_reading = full
                 .nominal_value()
-                .map(|n| full.sensor_units.base_unit.display(true, n))
+                .map(display)
                 .unwrap_or("Unknown".into());
 
             log!(output, "  Nominal reading: {}", nominal_reading);
+
+            let max_reading = full.max_reading().map(display).unwrap_or("Unknown".into());
+            let min_reading = full.min_reading().map(display).unwrap_or("Unknown".into());
+
+            log!(output, "  Max reading:     {}", max_reading);
+            log!(output, "  Min reading:     {}", min_reading);
         } else if let Some(compact) = compact {
             compact.key.log(output);
             log!(output, "  Sensor ID:       {}", compact.id_string);
