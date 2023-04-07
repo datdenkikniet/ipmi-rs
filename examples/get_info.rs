@@ -18,19 +18,26 @@ fn main() {
     let mut ipmi = Ipmi::new(file);
     let log_output = log::Level::Info.into();
 
+    log::info!("Getting SEL info");
     let info = ipmi.send_recv(GetSelInfo).unwrap();
     info.log(log_output);
 
     if info.supported_cmds.contains(&SelCommand::GetAllocInfo) {
+        log::info!("Getting SEL Alloc info");
         let alloc_info = ipmi.send_recv(GetSelAllocInfo).unwrap();
         alloc_info.log(log_output);
+    } else {
+        log::info!("Getting SEL Alloc info is not supported");
     }
 
-    let first_record = ipmi
-        .send_recv(GetSelEntry::new(None, SelRecordId::FIRST))
-        .unwrap();
+    if info.entries > 0 {
+        log::info!("Getting first record");
+        let first_record = ipmi
+            .send_recv(GetSelEntry::new(None, SelRecordId::FIRST))
+            .unwrap();
 
-    first_record.log(log_output);
+        first_record.log(log_output);
+    }
 
     let device_id = ipmi.send_recv(GetDeviceId).unwrap();
     device_id.log(log_output);
