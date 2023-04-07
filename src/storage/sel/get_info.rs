@@ -91,7 +91,7 @@ impl Info {
 }
 
 impl Loggable for Info {
-    fn log(&self, level: LogOutput) {
+    fn log(&self, level: &LogOutput) {
         use crate::log;
         let (ver_maj, ver_min) = (self.version_maj, self.version_min);
 

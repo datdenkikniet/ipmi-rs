@@ -94,7 +94,7 @@ impl DeviceId {
 }
 
 impl Loggable for DeviceId {
-    fn log(&self, level: LogOutput) {
+    fn log(&self, level: &LogOutput) {
         use crate::log;
 
         let (dev_id, dev_rev) = (self.device_id, self.device_revision);

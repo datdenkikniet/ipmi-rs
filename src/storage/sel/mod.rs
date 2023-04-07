@@ -218,7 +218,7 @@ impl Entry {
 }
 
 impl Loggable for Entry {
-    fn log(&self, output: LogOutput) {
+    fn log(&self, output: &LogOutput) {
         use crate::log;
         log!(output, "Sel Entry:");
         match self {

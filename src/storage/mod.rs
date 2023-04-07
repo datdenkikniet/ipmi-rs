@@ -72,7 +72,7 @@ impl AllocInfo {
 }
 
 impl Loggable for AllocInfo {
-    fn log(&self, level: LogOutput) {
+    fn log(&self, level: &LogOutput) {
         use crate::log;
 
         let unspecified_if_zero = |v: Option<NonZeroU16>| {

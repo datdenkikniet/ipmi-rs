@@ -41,7 +41,7 @@ impl AllocInfo {
 }
 
 impl Loggable for AllocInfo {
-    fn log(&self, output: LogOutput) {
+    fn log(&self, output: &LogOutput) {
         crate::log!(output, "SDR Repository Allocation Information:");
         self.inner.log(output);
     }

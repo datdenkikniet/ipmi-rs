@@ -29,7 +29,7 @@ impl IpmiMessage {
 }
 
 impl Loggable for IpmiMessage {
-    fn log(&self, level: LogOutput) {
+    fn log(&self, level: &LogOutput) {
         use crate::log;
         log!(level, "  NetFn      = 0x{:02X}", self.netfn);
         log!(level, "  Command    = 0x{:02X}", self.cmd);
@@ -50,7 +50,7 @@ pub struct IpmiRequest {
 }
 
 impl IpmiRequest {
-    pub fn log(&self, level: LogOutput) {
+    pub fn log(&self, level: &LogOutput) {
         crate::log!(level, "  Message ID = 0x{:02X}", self.msg_id);
         self.message.log(level)
     }
@@ -67,7 +67,7 @@ pub struct IpmiRecv {
 }
 
 impl Loggable for IpmiRecv {
-    fn log(&self, level: LogOutput) {
+    fn log(&self, level: &LogOutput) {
         crate::log!(level, "  Type       = 0x{:02X}", self.recv_type);
         crate::log!(level, "  Message ID = 0x{:02X}", self.msg_id);
         self.message.log(level)
@@ -177,7 +177,7 @@ impl super::IpmiConnection for File {
         };
 
         log::debug!("Sending request");
-        request.log(log::Level::Trace.into());
+        request.log(&log::Level::Trace.into());
 
         // SAFETY: we send a mut pointer to an owned struct (`request`),
         // which has the correct layout for this IOCTL call.
@@ -244,7 +244,7 @@ impl super::IpmiConnection for File {
         let result = match ipmi_result {
             Ok(recv) => {
                 log::debug!("Received response after {} ms", duration);
-                recv.log(log::Level::Trace.into());
+                recv.log(&log::Level::Trace.into());
 
                 recv.try_into().map_err(|e| {
                     io::Error::new(

@@ -36,7 +36,7 @@ pub struct EntryInfo {
 }
 
 impl Loggable for EntryInfo {
-    fn log(&self, output: crate::LogOutput) {
+    fn log(&self, output: &LogOutput) {
         self.entry.log(output);
         crate::log!(output, "  Next entry: 0x{:04X}", self.next_entry.value());
     }

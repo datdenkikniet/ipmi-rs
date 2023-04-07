@@ -39,7 +39,7 @@ impl AllocInfo {
 }
 
 impl Loggable for AllocInfo {
-    fn log(&self, output: LogOutput) {
+    fn log(&self, output: &LogOutput) {
         crate::log!(output, "SEL Allocation Information:");
         self.inner.log(output);
     }

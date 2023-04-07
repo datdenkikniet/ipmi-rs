@@ -13,7 +13,7 @@ impl From<log::Level> for LogOutput<'static> {
 }
 
 pub trait Loggable {
-    fn log(&self, output: LogOutput);
+    fn log(&self, output: &LogOutput);
 }
 
 #[macro_export]

@@ -129,7 +129,7 @@ impl RepositoryInfo {
 }
 
 impl Loggable for RepositoryInfo {
-    fn log(&self, output: LogOutput) {
+    fn log(&self, output: &LogOutput) {
         let Self {
             version_major,
             version_minor,

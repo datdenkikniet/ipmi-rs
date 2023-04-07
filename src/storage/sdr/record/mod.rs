@@ -89,7 +89,7 @@ impl SensorKey {
 }
 
 impl SensorKey {
-    fn log(&self, output: LogOutput) {
+    fn log(&self, output: &LogOutput) {
         use crate::log;
 
         let sensor_owner = match self.owner_id {
@@ -840,7 +840,7 @@ impl SensorRecordCommon {
 }
 
 impl Loggable for Record {
-    fn log(&self, output: LogOutput) {
+    fn log(&self, output: &LogOutput) {
         use crate::log;
 
         let full = self.full_sensor();
