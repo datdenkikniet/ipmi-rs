@@ -97,7 +97,7 @@ macro_rules ! unit {
             pub fn display<T>(&self, short: bool, value: T) -> String
                 where T: IsPlural + core::fmt::Display,
             {
-                format!("{} {}", value, self.display_str(short, value.is_plural()))
+                format!("{:.2} {}", value, self.display_str(short, value.is_plural()))
             }
         }
 
