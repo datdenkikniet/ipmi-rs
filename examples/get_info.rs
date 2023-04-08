@@ -45,8 +45,11 @@ fn main() {
     device_id.log(log_output);
 
     log::info!("Getting Device SDR Info");
-    let sdr_info = ipmi.send_recv(GetDeviceSdrInfo::new(SdrCount)).unwrap();
-    sdr_info.log(log_output);
+    if let Ok(sdr_info) = ipmi.send_recv(GetDeviceSdrInfo::new(SdrCount)) {
+        sdr_info.log(log_output);
+    } else {
+        log::warn!("Could not get Device SDR info");
+    }
 
     log::info!("Getting SDR repository info");
     let sdr_info = ipmi.send_recv(GetSdrRepositoryInfo).unwrap();
@@ -86,10 +89,19 @@ fn main() {
 
             let reading: ThresholdReading = (&value).into();
 
-            if let Some(display) = full.display_reading(reading.reading.unwrap()) {
-                log::info!("{}: {}", full.id_string(), display);
-                sensor.log(debug_log_output);
+            if let Some(reading) = reading.reading {
+                if let Some(display) = full.display_reading(reading) {
+                    log::info!("{}: {}", full.id_string(), display);
+                    sensor.log(debug_log_output);
+                }
+            } else {
+                log::warn!("No reading for {}", full.id_string());
             }
+        } else if let RecordContents::CompactSensor(compact) = &sensor.contents {
+            log::info!("Compact sensor {}:", compact.id_string(),);
+            log::info!("  Sensor type: {:?}", compact.common().ty,);
+        } else if let RecordContents::Unknown { ty, .. } = &sensor.contents {
+            log::info!("Unknown record type. Type: 0x{ty:02X}");
         }
     }
 }
