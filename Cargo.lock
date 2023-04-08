@@ -48,21 +48,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "finte"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d836e3a3f87d845a59f069694fbee25441ada25770faccdade16fc3e2ff4aa9b"
-dependencies = [
- "finte-derive",
-]
-
-[[package]]
-name = "finte-derive"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "edab5e6c8dda49c5cd7e40e34e4c17fdb6d76375df7d8e53904f8bb320dd359e"
-
-[[package]]
 name = "hermit-abi"
 version = "0.1.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -85,7 +70,6 @@ name = "ipmi-rs"
 version = "0.1.0"
 dependencies = [
  "bitflags",
- "finte",
  "log",
  "nix",
  "nonmax",
