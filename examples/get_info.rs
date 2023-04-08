@@ -6,8 +6,8 @@ use ipmi_rs::{
     connection::File,
     sensor_event::{GetSensorReading, ThresholdReading},
     storage::{
-        record::RecordContents, GetSdrAllocInfo, GetSdrRepositoryInfo, GetSelAllocInfo,
-        GetSelEntry, GetSelInfo, SdrOperation, SelCommand, SelRecordId,
+        record::RecordContents, GetDeviceSdrInfo, GetSdrAllocInfo, GetSdrRepositoryInfo,
+        GetSelAllocInfo, GetSelEntry, GetSelInfo, SdrCount, SdrOperation, SelCommand, SelRecordId,
     },
     Ipmi, LogOutput, Loggable, SensorRecord,
 };
@@ -35,7 +35,7 @@ fn main() {
     if info.entries > 0 {
         log::info!("Getting first record");
         let first_record = ipmi
-            .send_recv(GetSelEntry::new(None, SelRecordId::FIRST))
+            .send_recv(GetSelEntry::new(None, SelRecordId::LAST))
             .unwrap();
 
         first_record.log(log_output);
@@ -44,6 +44,11 @@ fn main() {
     let device_id = ipmi.send_recv(GetDeviceId).unwrap();
     device_id.log(log_output);
 
+    log::info!("Getting Device SDR Info");
+    let sdr_info = ipmi.send_recv(GetDeviceSdrInfo::new(SdrCount)).unwrap();
+    sdr_info.log(log_output);
+
+    log::info!("Getting SDR repository info");
     let sdr_info = ipmi.send_recv(GetSdrRepositoryInfo).unwrap();
     sdr_info.log(log_output);
 
