@@ -21,8 +21,9 @@ default = [ "time", "unix-file" ]
 unix-file = [ "nix" ]
 
 
-[dev-dependencies.pretty_env_logger]
-version = "0.4"
+[dev-dependencies]
+pretty_env_logger = "0.4"
+indicatif = "0.17"
 
 [[example]]
 name = "get_info"
