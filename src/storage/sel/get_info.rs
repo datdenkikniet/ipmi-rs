@@ -101,6 +101,7 @@ impl Loggable for Info {
         log!(level, "  Bytes free:     {}", self.bytes_free);
         log!(level, "  Last addition:  {}", self.last_add_time);
         log!(level, "  Last erase:     {}", self.last_del_time);
+        log!(level, "  Overflowed:     {}", self.overflow);
 
         let supported_cmds: Vec<_> = self
             .supported_cmds
