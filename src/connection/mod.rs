@@ -16,29 +16,36 @@ mod response;
 pub use response::Response;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct LogicalUnit(u8);
-
-impl LogicalUnit {
-    pub const ZERO: Self = Self(0);
-    pub const ONE: Self = Self(1);
-    pub const TWO: Self = Self(2);
-    pub const THREE: Self = Self(3);
+pub enum LogicalUnit {
+    Zero,
+    One,
+    Two,
+    Three,
 }
 
 impl TryFrom<u8> for LogicalUnit {
     type Error = ();
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
-        match value {
-            0..=3 => Ok(Self(value)),
-            _ => Err(()),
-        }
+        let val = match value {
+            0 => Self::Zero,
+            1 => Self::One,
+            2 => Self::Two,
+            3 => Self::Three,
+            _ => return Err(()),
+        };
+        Ok(val)
     }
 }
 
 impl LogicalUnit {
     pub fn value(&self) -> u8 {
-        self.0
+        match self {
+            LogicalUnit::Zero => 0,
+            LogicalUnit::One => 1,
+            LogicalUnit::Two => 2,
+            LogicalUnit::Three => 3,
+        }
     }
 }
 

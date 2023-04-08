@@ -85,7 +85,7 @@ where
 
         let message = request.into();
         let (message_netfn, message_cmd) = (message.netfn(), message.cmd());
-        let mut request = Request::new(message, LogicalUnit::ONE, seq);
+        let mut request = Request::new(message, LogicalUnit::One, seq);
 
         let response = self.inner.send_recv(&mut request)?;
 
