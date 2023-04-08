@@ -1,7 +1,9 @@
 mod completion_code;
 pub use completion_code::CompletionCode;
 
+#[cfg(feature = "unix-file")]
 mod file;
+#[cfg(feature = "unix-file")]
 pub use file::File;
 
 mod netfn;
