@@ -21,12 +21,12 @@ pub struct FullSensorRecord {
     normal_minimum: Option<u8>,
     max_reading: u8,
     min_reading: u8,
-    pub upper_non_recoverable_threshold: u8,
-    pub upper_critical_threshold: u8,
-    pub upper_non_critical_threshold: u8,
-    pub lower_non_recoverable_threshold: u8,
-    pub lower_critical_threshold: u8,
-    pub lower_non_critical_threshold: u8,
+    upper_non_recoverable_threshold: u8,
+    upper_critical_threshold: u8,
+    upper_non_critical_threshold: u8,
+    lower_non_recoverable_threshold: u8,
+    lower_critical_threshold: u8,
+    lower_non_critical_threshold: u8,
     pub positive_going_threshold_hysteresis_value: Option<NonZeroU8>,
     pub negative_going_threshold_hysteresis_value: Option<NonZeroU8>,
     pub oem_data: u8,
@@ -270,6 +270,30 @@ impl FullSensorRecord {
     pub fn positive_going_hysteresis(&self) -> Option<Value> {
         let value = self.positive_going_threshold_hysteresis_value?;
         self.convert(value.get())
+    }
+
+    pub fn upper_non_recoverable_threshold(&self) -> Option<Value> {
+        self.convert(self.upper_non_recoverable_threshold)
+    }
+
+    pub fn upper_critical_threshold(&self) -> Option<Value> {
+        self.convert(self.upper_critical_threshold)
+    }
+
+    pub fn upper_non_critical_threshold(&self) -> Option<Value> {
+        self.convert(self.upper_non_critical_threshold)
+    }
+
+    pub fn lower_non_recoverable_threshold(&self) -> Option<Value> {
+        self.convert(self.lower_non_recoverable_threshold)
+    }
+
+    pub fn lower_critical_threshold(&self) -> Option<Value> {
+        self.convert(self.lower_critical_threshold)
+    }
+
+    pub fn lower_non_critical_threshold(&self) -> Option<Value> {
+        self.convert(self.lower_non_critical_threshold)
     }
 
     pub fn negative_going_threshold_hysteresis(&self) -> Option<Value> {

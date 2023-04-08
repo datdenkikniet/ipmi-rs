@@ -3,33 +3,10 @@ use crate::{
     storage::record::SensorNumber,
 };
 
-pub struct GetSensorReading {
-    sensor_number: SensorNumber,
-}
+use super::RawSensorReading;
 
-impl GetSensorReading {
-    pub fn new(value: SensorNumber) -> Self {
-        Self {
-            sensor_number: value,
-        }
-    }
-
-    pub fn for_sensor(sensor: SensorNumber) -> Self {
-        Self::new(sensor)
-    }
-}
-
-pub struct SensorReading {
-    pub reading: u8,
-    pub all_event_messages_disabled: bool,
-    pub scanning_disabled: bool,
-    pub reading_or_state_unavailable: bool,
-    pub offset_data_1: Option<u8>,
-    pub offset_data_2: Option<u8>,
-}
-
-impl SensorReading {
-    pub fn parse(data: &[u8]) -> Option<Self> {
+impl RawSensorReading {
+    fn parse(data: &[u8]) -> Option<Self> {
         if data.len() < 2 {
             return None;
         }
@@ -58,6 +35,22 @@ impl SensorReading {
     }
 }
 
+pub struct GetSensorReading {
+    sensor_number: SensorNumber,
+}
+
+impl GetSensorReading {
+    pub fn new(value: SensorNumber) -> Self {
+        Self {
+            sensor_number: value,
+        }
+    }
+
+    pub fn for_sensor(sensor: SensorNumber) -> Self {
+        Self::new(sensor)
+    }
+}
+
 impl From<GetSensorReading> for Message {
     fn from(value: GetSensorReading) -> Self {
         Message::new(
@@ -69,7 +62,7 @@ impl From<GetSensorReading> for Message {
 }
 
 impl IpmiCommand for GetSensorReading {
-    type Output = SensorReading;
+    type Output = RawSensorReading;
 
     type Error = ();
 
@@ -79,6 +72,6 @@ impl IpmiCommand for GetSensorReading {
     ) -> Result<Self::Output, ParseResponseError<Self::Error>> {
         Self::check_cc_success(completion_code)?;
 
-        SensorReading::parse(data).ok_or(ParseResponseError::NotEnoughData)
+        RawSensorReading::parse(data).ok_or(ParseResponseError::NotEnoughData)
     }
 }
