@@ -141,10 +141,16 @@ impl File {
     }
 
     pub fn new(path: impl AsRef<std::path::Path>, recv_timeout: Duration) -> io::Result<Self> {
-        Ok(Self {
+        let me = Ok(Self {
             inner: std::fs::File::open(path)?,
             recv_timeout,
-        })
+        });
+
+        // TODO: figure out why the hell the first command always returns "InvalidInput" if
+        // we don't have a little bit of time after `open`-ing the file...
+        std::thread::sleep(std::time::Duration::from_millis(20));
+
+        me
     }
 }
 
