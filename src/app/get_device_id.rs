@@ -1,6 +1,6 @@
 use crate::{
     connection::{IpmiCommand, Message, NetFn, ParseResponseError},
-    LogOutput, Loggable,
+    log_vec, Loggable,
 };
 
 pub struct GetDeviceId;
@@ -94,9 +94,7 @@ impl DeviceId {
 }
 
 impl Loggable for DeviceId {
-    fn log(&self, level: &LogOutput) {
-        use crate::log;
-
+    fn into_log(&self) -> Vec<crate::fmt::LogItem> {
         let (dev_id, dev_rev) = (self.device_id, self.device_revision);
         let (fw_maj, fw_min) = (self.major_fw_revision, self.minor_fw_revision);
         let (v_maj, v_min) = (self.major_version, self.minor_version);
@@ -112,27 +110,32 @@ impl Loggable for DeviceId {
         let sensor_dev = self.sensor_device_support;
         let sdrs = self.provides_device_sdrs;
 
-        log!(level, "Device ID information:");
-        log!(level, "  Device ID:            0x{:02X}", dev_id);
-        log!(level, "  Device revision:      0x{:02X}", dev_rev);
-        log!(level, "  Manufacturer ID:      0x{:02X}", manf_id);
-        log!(level, "  Product ID:           0x{:02X}", self.product_id);
-        log!(level, "  IPMI Version:         {}.{}", v_maj, v_min);
-        log!(level, "  FW revision:          {}.{}", fw_maj, fw_min);
+        let mut log = log_vec![
+            (0, "Device ID information"),
+            (1, "Device ID", format!("0x{dev_id:02X}")),
+            (1, "Device revision", format!("0x{dev_rev:02X}")),
+            (1, "Manufacturer ID", format!("0x{manf_id:02X}")),
+            (1, "Product ID", format!("0x{:02X}", self.product_id)),
+            (1, "IPMI Version", format!("{v_maj}.{v_min}")),
+            (1, "FW revision", format!("{fw_maj}.{fw_min}")),
+            // Aux revision
+            (1, "Device available", self.device_available),
+            (1, "Provides device SDRs", sdrs),
+            (1, "Chassis support", self.chassis_support),
+            (1, "Bridge support", self.bridge_support),
+            (1, "IPMB Event gen sup", ipmb_event_gen),
+            (1, "IPMB Event recv sup", ipmb_event_recv),
+            (1, "FRU Inventory sup", fru_inv),
+            (1, "SEL Device support", self.sel_device_support),
+            (1, "SDR Repository sup", sdr_rep),
+            (1, "Sensor Device sup", sensor_dev)
+        ];
 
         if let Some(aux_rev) = &self.aux_revision {
-            log!(level, "  Auxiliary Revision:   {:02X?}", aux_rev);
+            let element = (1, "Auxiliary revision", format!("{aux_rev:02X?}")).into();
+            log.insert(7, element);
         }
 
-        log!(level, "  Device available:     {}", self.device_available);
-        log!(level, "  Provides device SDRs: {}", sdrs);
-        log!(level, "  Chassis support:      {}", self.chassis_support);
-        log!(level, "  Bridge support:       {}", self.bridge_support);
-        log!(level, "  IPMB Event gen sup:   {}", ipmb_event_gen);
-        log!(level, "  IPMB Event recv sup:  {}", ipmb_event_recv);
-        log!(level, "  FRU Inventory sup:    {}", fru_inv);
-        log!(level, "  SEL Device support:   {}", self.sel_device_support);
-        log!(level, "  SDR Repository sup:   {}", sdr_rep);
-        log!(level, "  Sensor Device sup :   {}", sensor_dev);
+        log
     }
 }

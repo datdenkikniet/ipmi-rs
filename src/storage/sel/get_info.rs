@@ -1,7 +1,8 @@
 use crate::{
     connection::{IpmiCommand, Message, NetFn, ParseResponseError},
+    log_vec,
     storage::Timestamp,
-    LogOutput, Loggable,
+    Loggable,
 };
 
 pub struct GetInfo;
@@ -91,17 +92,8 @@ impl Info {
 }
 
 impl Loggable for Info {
-    fn log(&self, level: &LogOutput) {
-        use crate::log;
+    fn into_log(&self) -> Vec<crate::fmt::LogItem> {
         let (ver_maj, ver_min) = (self.version_maj, self.version_min);
-
-        log!(level, "SEL information:");
-        log!(level, "  Version:        {}.{}", ver_maj, ver_min);
-        log!(level, "  Entries:        {}", self.entries);
-        log!(level, "  Bytes free:     {}", self.bytes_free);
-        log!(level, "  Last addition:  {}", self.last_add_time);
-        log!(level, "  Last erase:     {}", self.last_del_time);
-        log!(level, "  Overflowed:     {}", self.overflow);
 
         let supported_cmds: Vec<_> = self
             .supported_cmds
@@ -114,6 +106,15 @@ impl Loggable for Info {
             })
             .collect();
 
-        log!(level, "  Supported cmds: {:?}", supported_cmds);
+        log_vec![
+            (0, "SEL information"),
+            (1, "Version", format!("{}.{}", ver_maj, ver_min)),
+            (1, "Entries", self.entries),
+            (1, "Bytes free", self.bytes_free),
+            (1, "Last addition", self.last_add_time),
+            (1, "Last erase", self.last_del_time),
+            (1, "Overflowed", self.overflow),
+            (1, "Supported cmds", format!("{:?}", supported_cmds)),
+        ]
     }
 }

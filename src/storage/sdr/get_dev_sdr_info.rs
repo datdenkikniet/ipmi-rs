@@ -2,7 +2,7 @@ use std::marker::PhantomData;
 
 use crate::{
     connection::{CompletionCode, IpmiCommand, LogicalUnit, Message, NetFn, ParseResponseError},
-    log, LogOutput, Loggable,
+    log_vec, Loggable,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -54,7 +54,7 @@ impl<T> DeviceSdrInfo<T> {
         }
     }
 
-    fn partial_log(&self, output: &LogOutput) {
+    fn partial_log(&self, mut log: Vec<crate::fmt::LogItem>) -> Vec<crate::fmt::LogItem> {
         let mut luns_with_sensors = Vec::new();
         if self.lun_0_has_sensors {
             luns_with_sensors.push(0);
@@ -69,11 +69,13 @@ impl<T> DeviceSdrInfo<T> {
             luns_with_sensors.push(3);
         }
 
-        log!(output, "  LUNs with sensors: {:?}", luns_with_sensors);
+        log.push((1, "LUNs with sensors", format!("{:?}", luns_with_sensors)).into());
 
         if let Some(epoch) = self.sensor_population_epoch {
-            log!(output, "  Sensor pop. epoch: 0x{epoch:04X}");
+            log.push((1, "Sensor pop. epoch", format!("0x{epoch:04X}")).into());
         }
+
+        log
     }
 
     fn parse(data: &[u8]) -> Option<Self>
@@ -113,18 +115,22 @@ impl<T> DeviceSdrInfo<T> {
 }
 
 impl Loggable for DeviceSdrInfo<NumberOfSdrs> {
-    fn log(&self, output: &LogOutput) {
-        log!(output, "Device SDR Info:");
-        log!(output, "  Number of SDRs:    {}", self.operation_value.0);
-        self.partial_log(output);
+    fn into_log(&self) -> Vec<crate::fmt::LogItem> {
+        let log = log_vec![
+            (0, "Device SDR information"),
+            (1, "Number of SDRs", self.operation_value.0)
+        ];
+        self.partial_log(log)
     }
 }
 
 impl Loggable for DeviceSdrInfo<NumberOfSensors> {
-    fn log(&self, output: &LogOutput) {
-        log!(output, "Device SDR Info:");
-        log!(output, "  Number of Sensors: {}", self.operation_value.0);
-        self.partial_log(output);
+    fn into_log(&self) -> Vec<crate::fmt::LogItem> {
+        let log = log_vec![
+            (0, "Device SDR information"),
+            (1, "Number of sensors", self.operation_value.0)
+        ];
+        self.partial_log(log)
     }
 }
 

@@ -9,7 +9,7 @@ use ipmi_rs::{
         record::RecordContents, GetDeviceSdrInfo, GetSdrAllocInfo, GetSdrRepositoryInfo,
         GetSelAllocInfo, GetSelEntry, GetSelInfo, SdrCount, SdrOperation, SelCommand, SelRecordId,
     },
-    Ipmi, LogOutput, Loggable, SensorRecord,
+    Ipmi, LogOutput, SensorRecord,
 };
 
 fn main() {
@@ -22,12 +22,12 @@ fn main() {
 
     log::info!("Getting SEL info");
     let info = ipmi.send_recv(GetSelInfo).unwrap();
-    info.log(log_output);
+    ipmi_rs::Logger::log(log_output, &info);
 
     if info.supported_cmds.contains(&SelCommand::GetAllocInfo) {
         log::info!("Getting SEL Alloc info");
         let alloc_info = ipmi.send_recv(GetSelAllocInfo).unwrap();
-        alloc_info.log(log_output);
+        ipmi_rs::Logger::log(log_output, &alloc_info);
     } else {
         log::info!("Getting SEL Alloc info is not supported");
     }
@@ -38,26 +38,26 @@ fn main() {
             .send_recv(GetSelEntry::new(None, SelRecordId::LAST))
             .unwrap();
 
-        first_record.log(log_output);
+        ipmi_rs::Logger::log(log_output, &first_record);
     }
 
     let device_id = ipmi.send_recv(GetDeviceId).unwrap();
-    device_id.log(log_output);
+    ipmi_rs::Logger::log(log_output, &device_id);
 
     log::info!("Getting Device SDR Info");
     if let Ok(sdr_info) = ipmi.send_recv(GetDeviceSdrInfo::new(SdrCount)) {
-        sdr_info.log(log_output);
+        ipmi_rs::Logger::log(log_output, &sdr_info);
     } else {
         log::warn!("Could not get Device SDR info");
     }
 
     log::info!("Getting SDR repository info");
     let sdr_info = ipmi.send_recv(GetSdrRepositoryInfo).unwrap();
-    sdr_info.log(log_output);
+    ipmi_rs::Logger::log(log_output, &sdr_info);
 
     if sdr_info.supported_ops.contains(&SdrOperation::GetAllocInfo) {
         let sdr_alloc_info = ipmi.send_recv(GetSdrAllocInfo).unwrap();
-        sdr_alloc_info.log(log_output);
+        ipmi_rs::Logger::log(log_output, &sdr_alloc_info);
     };
 
     let template = "[{bar:.green/white}] {prefix} ({pos}/{len})";
@@ -92,13 +92,13 @@ fn main() {
             if let Some(reading) = reading.reading {
                 if let Some(display) = full.display_reading(reading) {
                     log::info!("{}: {}", full.id_string(), display);
-                    sensor.log(debug_log_output);
+                    ipmi_rs::Logger::log(debug_log_output, sensor);
                 }
             } else {
                 log::warn!("No reading for {}", full.id_string());
             }
         } else if let RecordContents::CompactSensor(compact) = &sensor.contents {
-            log::info!("Compact sensor {}:", compact.id_string(),);
+            log::info!("Compact sensor {}", compact.id_string(),);
             log::info!("  Sensor type: {:?}", compact.common().ty,);
         } else if let RecordContents::Unknown { ty, .. } = &sensor.contents {
             log::info!("Unknown record type. Type: 0x{ty:02X}");

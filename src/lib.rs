@@ -9,7 +9,7 @@ pub mod sensor_event;
 
 #[macro_use]
 mod fmt;
-pub use fmt::{LogOutput, Loggable};
+pub use fmt::{LogOutput, Loggable, Logger};
 
 use connection::{IpmiCommand, LogicalUnit, NetFn, ParseResponseError, Request};
 use storage::{sdr::record::Record as SdrRecord, GetDeviceSdr, SdrRecordId};

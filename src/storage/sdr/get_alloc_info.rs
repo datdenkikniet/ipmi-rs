@@ -1,6 +1,6 @@
 use crate::{
     connection::{IpmiCommand, Message, NetFn, ParseResponseError},
-    LogOutput, Loggable,
+    Loggable,
 };
 
 #[derive(Clone, Copy, Debug)]
@@ -41,9 +41,10 @@ impl AllocInfo {
 }
 
 impl Loggable for AllocInfo {
-    fn log(&self, output: &LogOutput) {
-        crate::log!(output, "SDR Repository Allocation Information:");
-        self.inner.log(output);
+    fn into_log(&self) -> Vec<crate::fmt::LogItem> {
+        let mut log = self.inner.into_log();
+        log.insert(0, (0, "SDR Repository Allocation Information").into());
+        log
     }
 }
 

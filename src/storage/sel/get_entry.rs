@@ -4,7 +4,7 @@ use nonmax::NonMaxU8;
 
 use crate::{
     connection::{CompletionCode, IpmiCommand, Message, NetFn, ParseResponseError},
-    LogOutput, Loggable,
+    Loggable,
 };
 
 use super::{Entry, ParseEntryError, RecordId};
@@ -36,9 +36,12 @@ pub struct EntryInfo {
 }
 
 impl Loggable for EntryInfo {
-    fn log(&self, output: &LogOutput) {
-        self.entry.log(output);
-        crate::log!(output, "  Next entry: 0x{:04X}", self.next_entry.value());
+    fn into_log(&self) -> Vec<crate::fmt::LogItem> {
+        let mut log_output = self.entry.into_log();
+
+        let value = format!("0x{:04X}", self.next_entry.value());
+        log_output.push((1, "Next entry", value).into());
+        log_output
     }
 }
 

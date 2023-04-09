@@ -6,7 +6,7 @@ pub use compact_sensor_record::CompactSensorRecord;
 
 use nonmax::NonMaxU8;
 
-use crate::{connection::LogicalUnit, LogOutput, Loggable};
+use crate::{connection::LogicalUnit, Loggable};
 
 use super::{event_reading_type_code::EventReadingTypeCodes, RecordId, SensorType, Unit};
 
@@ -93,17 +93,16 @@ impl SensorKey {
 }
 
 impl SensorKey {
-    fn log(&self, output: &LogOutput) {
-        use crate::log;
-
+    fn log_into(&self, level: usize, log: &mut Vec<crate::fmt::LogItem>) {
         let sensor_owner = match self.owner_id {
             SensorOwner::I2C(addr) => format!("I2C @ 0x{:02X}", addr),
             SensorOwner::System(addr) => format!("System @ 0x{:02X}", addr),
         };
-        log!(output, "  Sensor Owner:    {}", sensor_owner);
-        log!(output, "  Owner channel:   {}", self.owner_channel);
-        log!(output, "  Owner LUN:       {}", self.owner_lun.value());
-        log!(output, "  Sensor Number:   {}", self.sensor_number.get());
+
+        log.push((level, "Sensor owner", sensor_owner).into());
+        log.push((level, "Owner channel", self.owner_channel).into());
+        log.push((level, "Owner LUN", self.owner_lun.value()).into());
+        log.push((level, "Sensor number", self.sensor_number.get()).into());
     }
 }
 
@@ -844,19 +843,19 @@ impl SensorRecordCommon {
 }
 
 impl Loggable for Record {
-    fn log(&self, output: &LogOutput) {
-        use crate::log;
-
+    fn into_log(&self) -> Vec<crate::fmt::LogItem> {
         let full = self.full_sensor();
         let compact = self.compact_sensor();
 
+        let mut log = Vec::new();
+
         if full.is_some() {
-            log!(output, "SDR Record (Full):");
+            log.push((0, "SDR Record (Full)").into());
         } else if compact.is_some() {
-            log!(output, "SDR Record (Compact):");
+            log.push((0, "SDR Record (Compact)").into());
         } else {
-            log!(output, "Cannot log unknown sensor.");
-            return;
+            log.push((0, "Cannot log unknown sensor type").into());
+            return log;
         }
 
         let RecordHeader {
@@ -865,13 +864,11 @@ impl Loggable for Record {
             sdr_version_minor: sdr_v_min,
         } = &self.header;
 
-        log!(output, "  Record ID:       0x{:04X}", id.0);
-        log!(output, "  SDR Version:     {sdr_v_maj}.{sdr_v_min}");
+        log.push((1, "Record ID", format!("0x{:04X}", id.0)).into());
+        log.push((1, "SDR Version", format!("{sdr_v_maj}.{sdr_v_min}")).into());
 
         if let Some(full) = full {
-            full.key_data().log(output);
-            log!(output, "  Sensor ID:       {}", full.id_string());
-            log!(output, "  Entity ID:       {}", full.entity_id());
+            full.key_data().log_into(1, &mut log);
 
             let display = |v: Value| v.display(true);
 
@@ -880,16 +877,19 @@ impl Loggable for Record {
                 .map(display)
                 .unwrap_or("Unknown".into());
 
-            log!(output, "  Nominal reading: {}", nominal_reading);
-
             let max_reading = full.max_reading().map(display).unwrap_or("Unknown".into());
             let min_reading = full.min_reading().map(display).unwrap_or("Unknown".into());
 
-            log!(output, "  Max reading:     {}", max_reading);
-            log!(output, "  Min reading:     {}", min_reading);
+            log.push((1, "Sensor ID", full.id_string()).into());
+            log.push((1, "Entity ID", full.entity_id()).into());
+            log.push((1, "Nominal reading", nominal_reading).into());
+            log.push((1, "Max reading", max_reading).into());
+            log.push((1, "Min reading", min_reading).into());
         } else if let Some(compact) = compact {
-            compact.key_data().log(output);
-            log!(output, "  Sensor ID:       {}", compact.id_string());
+            compact.key_data().log_into(1, &mut log);
+            log.push((1, "Sensor ID", compact.id_string()).into());
         }
+
+        log
     }
 }

@@ -1,4 +1,4 @@
-use crate::{connection::LogicalUnit, LogOutput, Loggable};
+use crate::{connection::LogicalUnit, fmt::LogItem, log_vec, Loggable};
 
 use super::Timestamp;
 
@@ -210,9 +210,7 @@ impl Entry {
 }
 
 impl Loggable for Entry {
-    fn log(&self, output: &LogOutput) {
-        use crate::log;
-        log!(output, "Sel Entry:");
+    fn into_log(&self) -> Vec<LogItem> {
         match self {
             Entry::System {
                 record_id,
@@ -236,16 +234,19 @@ impl Loggable for Entry {
                     EventDirection::Deassert => "Deasserted",
                 };
 
-                log!(output, "  Record type:     System (0x02)");
-                log!(output, "  Record ID:       0x{:04X}", record_id.value());
-                log!(output, "  Time:            {}", timestamp);
-                log!(output, "  Generator:       {:?}", generator_id);
-                log!(output, "  Format revision: {format}");
-                log!(output, "  Sensor type:     0x{:02X}", sensor_type);
-                log!(output, "  Sensor number:   0x{:02X}", sensor_number);
-                log!(output, "  Assertion state: {event_dir}");
-                log!(output, "  Event type:      0x{:02X}", event_type);
-                log!(output, "  Data:            {:02X?}", event_data);
+                log_vec![
+                    (0, "SEL entry"),
+                    (1, "Record type", "System (0x02)"),
+                    (1, "Record ID", format!("0x{:04X}", record_id.value())),
+                    (1, "Time", timestamp),
+                    (1, "Generator", format!("{:?}", generator_id)),
+                    (1, "Format revision", format),
+                    (1, "Sensor type", format!("0x{sensor_type:02X}")),
+                    (1, "Sensor number", format!("0x{sensor_number:02X}")),
+                    (1, "Assertion state", event_dir),
+                    (1, "Event type", format!("0x{event_type:02X}")),
+                    (1, "Data", format!("{event_data:02X?}")),
+                ]
             }
             Entry::OemTimestamped {
                 record_id,
@@ -254,23 +255,28 @@ impl Loggable for Entry {
                 manufacturer_id,
                 data,
             } => {
-                log!(output, "  Record type:     Timestamped OEM (0x{:08X})", ty);
-                log!(output, "  Record ID:       0x{:04X}", record_id.value());
-                log!(output, "  Type:            {:02X}", ty);
-                log!(output, "  Timstamp:        {timestamp}");
-                log!(output, "  Manufacturer ID: {:02X?}", manufacturer_id);
-                log!(output, "  Data:            {:02X?}", data);
+                log_vec![
+                    (0, "SEL entry"),
+                    (1, "Record type", format!("Timestamped OEM (0x{ty:08X})")),
+                    (1, "Record ID", format!("0x{:04X}", record_id.value())),
+                    (1, "Type", format!("{ty:02X}")),
+                    (1, "Timestamp", timestamp),
+                    (1, "Manufacturer ID", format!("{manufacturer_id:02X?}")),
+                    (1, "Data", format!("{data:02X?}")),
+                ]
             }
             Entry::OemNotTimestamped {
                 record_id,
                 ty,
                 data,
             } => {
-                #[rustfmt::skip]
-                log!(output, "  Record type:     Not Timestamped OEM (0x{:08X})", ty);
-                log!(output, "  Record ID: 0x{:04X}", record_id.value());
-                log!(output, "  Type:      0x{:02X}", ty);
-                log!(output, "  Data:      {:02X?}", data);
+                log_vec![
+                    (0, "SEL entry"),
+                    (1, "Record type", format!("Not timestamp OEM (0x{ty:08X}")),
+                    (1, "Record ID", format!("0x{:04X}", record_id.value())),
+                    (1, "Type", format!("0x{ty:02X}")),
+                    (1, "Data", format!("{data:02X?}"))
+                ]
             }
         }
     }

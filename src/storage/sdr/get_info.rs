@@ -1,8 +1,9 @@
 use crate::{
     connection::{IpmiCommand, Message, NetFn, ParseResponseError},
-    log,
+    fmt::LogItem,
+    log_vec,
     storage::Timestamp,
-    LogOutput, Loggable,
+    Loggable,
 };
 
 pub struct GetRepositoryInfo;
@@ -129,7 +130,7 @@ impl RepositoryInfo {
 }
 
 impl Loggable for RepositoryInfo {
-    fn log(&self, output: &LogOutput) {
+    fn into_log(&self) -> Vec<LogItem> {
         let Self {
             version_major,
             version_minor,
@@ -143,13 +144,15 @@ impl Loggable for RepositoryInfo {
 
         let (v_maj, v_min) = (version_major, version_minor);
 
-        log!(output, "SDR Repository Information:");
-        log!(output, "  Version:           {v_maj}.{v_min}");
-        log!(output, "  Record count:      {record_count}");
-        log!(output, "  Free space:        {free_space}");
-        log!(output, "  Most recent add:   {most_recent_addition}");
-        log!(output, "  Most recent erase: {most_recent_erase}");
-        log!(output, "  SDR Overflow:      {overflow}");
-        log!(output, "  Supported ops:     {:?}", supported_ops);
+        log_vec![
+            (0, "SDR Repository Information"),
+            (1, "Version", format!("{v_maj}.{v_min}")),
+            (1, "Record count", record_count),
+            (1, "Free space", free_space),
+            (1, "Most recent add", most_recent_addition),
+            (1, "Most recent erase", most_recent_erase),
+            (1, "SDR Overflow", overflow),
+            (1, "Supported ops", format!("{supported_ops:?}"))
+        ]
     }
 }

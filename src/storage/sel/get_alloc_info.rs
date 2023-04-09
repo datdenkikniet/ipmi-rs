@@ -1,6 +1,6 @@
 use crate::{
     connection::{IpmiCommand, Message, NetFn, ParseResponseError},
-    LogOutput, Loggable,
+    Loggable,
 };
 
 pub struct GetAllocInfo;
@@ -39,9 +39,10 @@ impl AllocInfo {
 }
 
 impl Loggable for AllocInfo {
-    fn log(&self, output: &LogOutput) {
-        crate::log!(output, "SEL Allocation Information:");
-        self.inner.log(output);
+    fn into_log(&self) -> Vec<crate::fmt::LogItem> {
+        let mut alloc_log_output = self.inner.into_log();
+        alloc_log_output.insert(0, (0, "SEL Allocation Information").into());
+        alloc_log_output
     }
 }
 

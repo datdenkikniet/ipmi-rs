@@ -7,7 +7,7 @@ pub use sel::{RecordId as SelRecordId, *};
 pub mod sdr;
 pub use sdr::{RecordId as SdrRecordId, *};
 
-use crate::{LogOutput, Loggable};
+use crate::{fmt::LogItem, log_vec, Loggable};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Timestamp(u32);
@@ -72,9 +72,7 @@ impl AllocInfo {
 }
 
 impl Loggable for AllocInfo {
-    fn log(&self, level: &LogOutput) {
-        use crate::log;
-
+    fn into_log(&self) -> Vec<LogItem> {
         let unspecified_if_zero = |v: Option<NonZeroU16>| {
             if let Some(v) = v {
                 format!("{}", v.get())
@@ -86,10 +84,12 @@ impl Loggable for AllocInfo {
         let num_alloc_units = unspecified_if_zero(self.num_alloc_units);
         let alloc_unit_size = unspecified_if_zero(self.alloc_unit_size);
 
-        log!(level, "  # of units:         {num_alloc_units}");
-        log!(level, "  Unit size:          {alloc_unit_size}");
-        log!(level, "  # free units:       {}", self.num_free_units);
-        log!(level, "  Largest free block: {}", self.largest_free_blk);
-        log!(level, "  Max record size:    {}", self.max_record_size)
+        log_vec!(
+            (1, "# of units", num_alloc_units),
+            (1, "Unit size", alloc_unit_size),
+            (1, "# free units", self.num_free_units),
+            (1, "Largest free block", self.largest_free_blk),
+            (1, "Max record size", self.max_record_size),
+        )
     }
 }
