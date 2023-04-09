@@ -1,9 +1,11 @@
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub enum LogOutput {
     Log(log::Level),
     LogTarget(log::Level, String),
     StdOut,
     StdErr,
+    #[cfg(feature = "log-to-file")]
+    File(std::sync::Arc<parking_lot::Mutex<std::fs::File>>),
 }
 
 impl From<log::Level> for LogOutput {
@@ -21,6 +23,14 @@ impl LogOutput {
             }
             LogOutput::StdOut => println!("{}", msg),
             LogOutput::StdErr => eprintln!("{}", msg),
+            #[cfg(feature = "log-to-file")]
+            LogOutput::File(file) => {
+                use std::io::Write;
+
+                let mut file = file.lock();
+                file.write_all(msg.as_bytes()).ok();
+                file.write_all(b"\n").ok();
+            }
         }
     }
 }
