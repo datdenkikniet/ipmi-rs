@@ -161,7 +161,6 @@ impl super::IpmiConnection for File {
 
     fn send(&mut self, request: &mut Request) -> io::Result<()> {
         let mut bmc_addr = IpmiSysIfaceAddr::bmc(request.lun().value());
-        let bmc_addr_borrow = &mut bmc_addr;
 
         let netfn = request.netfn().request_value();
         let cmd = request.cmd();
@@ -172,8 +171,8 @@ impl super::IpmiConnection for File {
         let ptr = data.as_mut_ptr();
 
         let mut request = IpmiRequest {
-            addr: bmc_addr_borrow as *mut _ as *mut u8,
-            addr_len: core::mem::size_of_val(bmc_addr_borrow) as u32,
+            addr: std::ptr::addr_of_mut!(bmc_addr) as *mut u8,
+            addr_len: core::mem::size_of::<IpmiSysIfaceAddr>() as u32,
             msg_id: seq,
             message: IpmiMessage {
                 netfn,
@@ -205,7 +204,6 @@ impl super::IpmiConnection for File {
         let start = std::time::Instant::now();
 
         let mut bmc_addr = IpmiSysIfaceAddr::bmc(0);
-        let bmc_addr_borrow = &mut bmc_addr;
 
         let mut response_data = [0u8; 1024];
 
@@ -213,8 +211,8 @@ impl super::IpmiConnection for File {
         let response_data_ptr = response_data.as_mut_ptr();
 
         let mut recv = IpmiRecv {
-            addr: bmc_addr_borrow as *mut _ as *mut u8,
-            addr_len: core::mem::size_of_val(bmc_addr_borrow) as u32,
+            addr: std::ptr::addr_of_mut!(bmc_addr) as *mut u8,
+            addr_len: core::mem::size_of::<IpmiSysIfaceAddr>() as u32,
             msg_id: 0,
             recv_type: 0,
             message: IpmiMessage {
