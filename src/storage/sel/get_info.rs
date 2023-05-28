@@ -23,7 +23,7 @@ impl IpmiCommand for GetInfo {
 
 impl From<GetInfo> for Message {
     fn from(_: GetInfo) -> Self {
-        Message::new(NetFn::Storage, 0x40, Vec::new())
+        Message::new_request(NetFn::Storage, 0x40, Vec::new())
     }
 }
 

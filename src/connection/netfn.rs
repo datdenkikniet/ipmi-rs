@@ -16,6 +16,14 @@ macro_rules! netfn {
         }
 
         impl NetFn {
+            pub fn is_response_value(v: u8) -> bool {
+                v % 2 == 0
+            }
+
+            pub fn is_request_value(v: u8) -> bool {
+                !Self::is_response_value(v)
+            }
+
             pub fn request_value(&self) -> u8 {
                 match self {
                     $(Self::$name => $req,)*

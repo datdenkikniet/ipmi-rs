@@ -7,7 +7,7 @@ pub struct GetDeviceId;
 
 impl From<GetDeviceId> for Message {
     fn from(_: GetDeviceId) -> Self {
-        Message::new(NetFn::App, 0x01, Vec::new())
+        Message::new_request(NetFn::App, 0x01, Vec::new())
     }
 }
 

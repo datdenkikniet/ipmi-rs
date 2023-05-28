@@ -22,7 +22,7 @@ impl IpmiCommand for GetAllocInfo {
 
 impl From<GetAllocInfo> for Message {
     fn from(_: GetAllocInfo) -> Self {
-        Message::new(NetFn::Storage, 0x41, Vec::new())
+        Message::new_request(NetFn::Storage, 0x41, Vec::new())
     }
 }
 

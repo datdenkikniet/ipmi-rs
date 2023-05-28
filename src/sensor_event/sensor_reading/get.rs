@@ -53,7 +53,7 @@ impl GetSensorReading {
 
 impl From<GetSensorReading> for Message {
     fn from(value: GetSensorReading) -> Self {
-        Message::new(
+        Message::new_request(
             crate::connection::NetFn::SensorEvent,
             0x2D,
             vec![value.sensor_number.get()],

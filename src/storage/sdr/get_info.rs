@@ -10,7 +10,7 @@ pub struct GetRepositoryInfo;
 
 impl From<GetRepositoryInfo> for Message {
     fn from(_: GetRepositoryInfo) -> Self {
-        Message::new(NetFn::Storage, 0x20, Vec::new())
+        Message::new_request(NetFn::Storage, 0x20, Vec::new())
     }
 }
 

@@ -61,17 +61,37 @@ pub trait IpmiConnection {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Message {
-    netfn: NetFn,
+    netfn: u8,
     cmd: u8,
     data: Vec<u8>,
 }
 
 impl Message {
-    pub fn new(netfn: NetFn, cmd: u8, data: Vec<u8>) -> Self {
+    pub fn new_request(netfn: NetFn, cmd: u8, data: Vec<u8>) -> Self {
+        Self {
+            netfn: netfn.request_value(),
+            cmd,
+            data,
+        }
+    }
+
+    pub fn new_response(netfn: NetFn, cmd: u8, data: Vec<u8>) -> Self {
+        Self {
+            netfn: netfn.response_value(),
+            cmd,
+            data,
+        }
+    }
+
+    pub fn new_raw(netfn: u8, cmd: u8, data: Vec<u8>) -> Self {
         Self { netfn, cmd, data }
     }
 
     pub fn netfn(&self) -> NetFn {
+        NetFn::from(self.netfn)
+    }
+
+    pub fn netfn_raw(&self) -> u8 {
         self.netfn
     }
 

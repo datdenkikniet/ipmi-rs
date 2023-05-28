@@ -8,7 +8,7 @@ pub struct GetAllocInfo;
 
 impl From<GetAllocInfo> for Message {
     fn from(_: GetAllocInfo) -> Self {
-        Message::new(NetFn::Storage, 0x21, Vec::new())
+        Message::new_request(NetFn::Storage, 0x21, Vec::new())
     }
 }
 

@@ -18,7 +18,11 @@ impl Response {
     }
 
     pub fn netfn(&self) -> NetFn {
-        self.message.netfn
+        self.message.netfn()
+    }
+
+    pub fn netfn_raw(&self) -> u8 {
+        self.message.netfn_raw()
     }
 
     pub fn cmd(&self) -> u8 {

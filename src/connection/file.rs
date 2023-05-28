@@ -88,7 +88,7 @@ impl TryFrom<IpmiRecv> for Response {
         let netfn_parsed = NetFn::from(netfn);
 
         if netfn_parsed.response_value() == netfn {
-            let message = Message::new(netfn_parsed, cmd, value.message.data().to_vec());
+            let message = Message::new_raw(netfn, cmd, value.message.data().to_vec());
             let response =
                 Response::new(message, value.msg_id).ok_or(CreateResponseError::NotEnoughData)?;
             Ok(response)
@@ -158,7 +158,7 @@ impl super::IpmiConnection for File {
     fn send(&mut self, request: &mut Request) -> io::Result<()> {
         let mut bmc_addr = IpmiSysIfaceAddr::bmc(request.lun().value());
 
-        let netfn = request.netfn().request_value();
+        let netfn = request.netfn_raw();
         let cmd = request.cmd();
         let seq = request.seq();
         let data = request.data_mut();

@@ -49,7 +49,7 @@ impl From<GetDeviceSdr> for Message {
         data[4] = value.offset;
         data[5] = value.bytes_to_read.map(|v| v.get()).unwrap_or(0xFF);
 
-        Message::new(NetFn::Storage, 0x23, data)
+        Message::new_request(NetFn::Storage, 0x23, data)
     }
 }
 

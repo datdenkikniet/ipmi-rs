@@ -21,6 +21,10 @@ impl Request {
         self.message.netfn()
     }
 
+    pub fn netfn_raw(&self) -> u8 {
+        self.message.netfn_raw()
+    }
+
     pub fn seq(&self) -> i64 {
         self.seq
     }

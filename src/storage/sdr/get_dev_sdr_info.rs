@@ -149,13 +149,13 @@ impl<T> GetDeviceSdrInfo<T> {
 
 impl From<GetDeviceSdrInfo<SdrCount>> for Message {
     fn from(_: GetDeviceSdrInfo<SdrCount>) -> Self {
-        Message::new(NetFn::SensorEvent, 0x20, vec![0x01])
+        Message::new_request(NetFn::SensorEvent, 0x20, vec![0x01])
     }
 }
 
 impl From<GetDeviceSdrInfo<SensorCount>> for Message {
     fn from(_: GetDeviceSdrInfo<SensorCount>) -> Self {
-        Message::new(NetFn::SensorEvent, 0x20, vec![0x01])
+        Message::new_request(NetFn::SensorEvent, 0x20, vec![0x01])
     }
 }
 
