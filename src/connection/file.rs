@@ -114,16 +114,18 @@ mod ioctl {
 pub struct IpmiSysIfaceAddr {
     ty: i32,
     channel: i16,
+    lun: u8,
 }
 
 impl IpmiSysIfaceAddr {
     const IPMI_SYSTEM_INTERFACE_ADDR_TYPE: i32 = 0x0c;
     const IPMI_BMC_CHANNEL: i16 = 0xf;
 
-    pub const fn bmc() -> Self {
+    pub const fn bmc(lun: u8) -> Self {
         Self {
             ty: Self::IPMI_SYSTEM_INTERFACE_ADDR_TYPE,
             channel: Self::IPMI_BMC_CHANNEL,
+            lun,
         }
     }
 }
@@ -158,7 +160,7 @@ impl super::IpmiConnection for File {
     type Error = io::Error;
 
     fn send(&mut self, request: &mut Request) -> io::Result<()> {
-        let mut bmc_addr = IpmiSysIfaceAddr::bmc();
+        let mut bmc_addr = IpmiSysIfaceAddr::bmc(request.lun().value());
         let bmc_addr_borrow = &mut bmc_addr;
 
         let netfn = request.netfn().request_value();
@@ -187,7 +189,7 @@ impl super::IpmiConnection for File {
         // SAFETY: we send a mut pointer to an owned struct (`request`),
         // which has the correct layout for this IOCTL call.
         unsafe {
-            ioctl::ipmi_send_request(self.fd(), &mut request as *mut _)?;
+            ioctl::ipmi_send_request(self.fd(), std::ptr::addr_of_mut!(request))?;
         }
 
         // Ensure that data and bmc_addr live until _after_ the IOCTL completes.
@@ -202,7 +204,7 @@ impl super::IpmiConnection for File {
     fn recv(&mut self) -> io::Result<Response> {
         let start = std::time::Instant::now();
 
-        let mut bmc_addr = IpmiSysIfaceAddr::bmc();
+        let mut bmc_addr = IpmiSysIfaceAddr::bmc(0);
         let bmc_addr_borrow = &mut bmc_addr;
 
         let mut response_data = [0u8; 1024];
@@ -229,7 +231,7 @@ impl super::IpmiConnection for File {
             // SAFETY: we send a mut pointer to a fully owned struct (`recv`),
             // which has the correct layout for this IOCTL call.
             let ioctl_result =
-                unsafe { ioctl::ipmi_recv_msg_trunc(self.fd(), &mut recv as *mut _) };
+                unsafe { ioctl::ipmi_recv_msg_trunc(self.fd(), std::ptr::addr_of_mut!(recv)) };
 
             match ioctl_result {
                 Ok(_) => break Ok(recv),
