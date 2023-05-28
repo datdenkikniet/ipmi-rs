@@ -146,10 +146,6 @@ impl File {
             recv_timeout,
         });
 
-        // TODO: figure out why the hell the first command always returns "InvalidInput" if
-        // we don't have a little bit of time after `open`-ing the file...
-        std::thread::sleep(std::time::Duration::from_millis(20));
-
         me
     }
 }
