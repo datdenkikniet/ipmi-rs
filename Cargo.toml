@@ -2,8 +2,12 @@
 name = "ipmi-rs"
 version = "0.1.0"
 edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+authors = [ "Johannes Cornelis Draaijer <jcdra1@gmail.com>" ]
+license = "MIT OR Apache-2.0"
+keywords = [ "ipmi", "sysadmin", "bmc" ]
+categories = [ "operating-systems" ]
+description = "A pure rust implementation of the IPMI spec"
+repository = "https://github.com/datdenkikniet/ipmi-rs"
 
 [dependencies]
 log = "0.4"
