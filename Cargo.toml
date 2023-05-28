@@ -8,6 +8,7 @@ keywords = [ "ipmi", "sysadmin", "bmc" ]
 categories = [ "operating-systems" ]
 description = "A pure rust implementation of the IPMI spec"
 repository = "https://github.com/datdenkikniet/ipmi-rs"
+documentation = "https://docs.rs/ipmi-rs/latest"
 
 [dependencies]
 log = "0.4"
