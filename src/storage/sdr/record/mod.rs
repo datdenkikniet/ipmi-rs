@@ -692,6 +692,14 @@ pub enum RecordContents {
 }
 
 impl Record {
+    pub fn common_data(&self) -> Option<&SensorRecordCommon> {
+        match &self.contents {
+            RecordContents::FullSensor(s) => Some(s.common()),
+            RecordContents::CompactSensor(s) => Some(s.common()),
+            RecordContents::Unknown { .. } => None,
+        }
+    }
+
     pub fn full_sensor(&self) -> Option<&FullSensorRecord> {
         if let RecordContents::FullSensor(full_sensor) = &self.contents {
             Some(full_sensor)
