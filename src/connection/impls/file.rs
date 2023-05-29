@@ -6,11 +6,9 @@ use std::{
 };
 
 use crate::{
-    connection::{Request, Response},
+    connection::{IpmiConnection, Message, Request, Response},
     NetFn,
 };
-
-use super::Message;
 
 #[repr(C)]
 #[derive(Debug)]
@@ -150,7 +148,7 @@ impl File {
     }
 }
 
-impl super::IpmiConnection for File {
+impl IpmiConnection for File {
     type SendError = io::Error;
     type RecvError = io::Error;
     type Error = io::Error;
