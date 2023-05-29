@@ -1,10 +1,4 @@
-use std::{
-    io::ErrorKind,
-    net::{ToSocketAddrs, UdpSocket},
-    time::Duration,
-};
-
-use crate::connection::IpmiConnection;
+use super::encapsulation::EncapsulatedMessage;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SupportedInteractions {
@@ -139,8 +133,8 @@ impl ASFMessageType {
 #[derive(Clone, Debug, PartialEq)]
 
 pub struct ASFMessage {
-    message_tag: u8,
-    message_type: ASFMessageType,
+    pub message_tag: u8,
+    pub message_type: ASFMessageType,
 }
 
 impl ASFMessage {
@@ -183,7 +177,7 @@ impl ASFMessage {
 pub enum RmcpClass {
     Ack(u8),
     ASF(ASFMessage),
-    IPMI,
+    IPMI(EncapsulatedMessage),
     OEMDefined,
 }
 
@@ -195,7 +189,7 @@ impl RmcpClass {
             // ASF data
             RmcpClass::ASF(message) => message.write_data(buffer),
             // TODO: IPMI data
-            RmcpClass::IPMI => todo!(),
+            RmcpClass::IPMI(message) => message.write_data(buffer),
             // TODO: OEMDefined data
             RmcpClass::OEMDefined => todo!(),
         }
@@ -204,9 +198,9 @@ impl RmcpClass {
 
 #[derive(Clone, Debug)]
 pub struct RmcpMessage {
-    version: u8,
-    sequence_number: u8,
-    class_and_contents: RmcpClass,
+    pub version: u8,
+    pub sequence_number: u8,
+    pub class_and_contents: RmcpClass,
 }
 
 impl RmcpMessage {
@@ -222,11 +216,17 @@ impl RmcpMessage {
         let class = match self.class_and_contents {
             RmcpClass::Ack(value) => value | 0x80,
             RmcpClass::ASF(_) => 0x06,
-            RmcpClass::IPMI => 0x07,
+            RmcpClass::IPMI(_) => 0x07,
             RmcpClass::OEMDefined => 0x08,
         };
 
-        let mut bytes = vec![self.version, 0, self.sequence_number, class];
+        let sequence_number = if matches!(self.class_and_contents, RmcpClass::IPMI(_)) {
+            0xFF
+        } else {
+            self.sequence_number
+        };
+
+        let mut bytes = vec![self.version, 0, sequence_number, class];
 
         self.class_and_contents.write_data(&mut bytes);
 
@@ -242,10 +242,13 @@ impl RmcpMessage {
         let sequence_number = data[2];
         let class = data[3];
 
+        let data = &data[4..];
+
         let class = match class {
-            0x06 => RmcpClass::ASF(ASFMessage::from_bytes(&data[4..])?),
-            0x07 => RmcpClass::IPMI,
+            0x06 => RmcpClass::ASF(ASFMessage::from_bytes(data)?),
+            0x07 => RmcpClass::IPMI(EncapsulatedMessage::from_bytes(data)?),
             0x08 => RmcpClass::OEMDefined,
+            _ if class & 0x80 == 0x80 => RmcpClass::Ack(class & 0x7F),
             _ => {
                 return None;
             }
@@ -257,125 +260,4 @@ impl RmcpMessage {
             class_and_contents: class,
         })
     }
-}
-
-pub struct Rmcp {
-    inner: UdpSocket,
-    supported_interactions: SupportedInteractions,
-}
-
-impl Rmcp {
-    pub fn new<R: ToSocketAddrs>(remote: R) -> std::io::Result<Self> {
-        let addrs: Vec<_> = remote.to_socket_addrs()?.collect();
-
-        if addrs.len() != 1 {
-            return Err(std::io::Error::new(
-                ErrorKind::InvalidInput,
-                "You must provide exactly 1 remote address.",
-            ));
-        }
-
-        let socket = UdpSocket::bind("[::]:0")?;
-        socket.set_read_timeout(Some(Duration::from_secs(2)))?;
-
-        let ping = RmcpMessage::new(
-            0xFF,
-            RmcpClass::ASF(ASFMessage {
-                message_tag: 0x00,
-                message_type: ASFMessageType::Ping,
-            }),
-        );
-
-        socket.connect(addrs[0])?;
-        socket.send(&ping.to_bytes())?;
-
-        let mut buf = [0u8; 1024];
-        let received = socket.recv(&mut buf)?;
-
-        let pong = RmcpMessage::from_bytes(&buf[..received]);
-
-        println!("{pong:#?}");
-
-        let (supported_entities, supported_interactions) = if let Some(RmcpMessage {
-            class_and_contents:
-                RmcpClass::ASF(ASFMessage {
-                    message_type:
-                        ASFMessageType::Pong {
-                            supported_entities,
-                            supported_interactions,
-                            ..
-                        },
-                    ..
-                }),
-            ..
-        }) = pong
-        {
-            (supported_entities, supported_interactions)
-        } else {
-            return Err(std::io::Error::new(
-                ErrorKind::Other,
-                "Invalid response from remote",
-            ));
-        };
-
-        if !supported_entities.ipmi {
-            return Err(std::io::Error::new(
-                ErrorKind::Unsupported,
-                "Remote does not support IPMI entity.",
-            ));
-        }
-
-        Ok(Self {
-            inner: socket,
-            supported_interactions,
-        })
-    }
-}
-
-impl IpmiConnection for Rmcp {
-    type SendError = ();
-
-    type RecvError = ();
-
-    type Error = ();
-
-    fn send(&mut self, request: &mut crate::connection::Request) -> Result<(), Self::SendError> {
-        todo!()
-    }
-
-    fn recv(&mut self) -> Result<crate::connection::Response, Self::RecvError> {
-        todo!()
-    }
-
-    fn send_recv(
-        &mut self,
-        request: &mut crate::connection::Request,
-    ) -> Result<crate::connection::Response, Self::Error> {
-        todo!()
-    }
-}
-
-#[test]
-fn bruh() {
-    let ping = RmcpMessage::new(
-        0xFF,
-        RmcpClass::ASF(ASFMessage {
-            message_tag: 0x00,
-            message_type: ASFMessageType::Ping,
-        }),
-    );
-
-    let data = ping.to_bytes();
-
-    for byte in data {
-        print!("\\x{:02X}", byte);
-    }
-
-    let data = [
-        0x06, 0x00, 0xff, 0x06, 0xbe, 0x11, 0x00, 0x00, 0x40, 0x01, 0x00, 0x10, 0xbe, 0x11, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x81, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    ];
-
-    let parsed = RmcpMessage::from_bytes(&data);
-    panic!("{:#?}", parsed);
 }
