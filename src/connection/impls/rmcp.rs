@@ -1,9 +1,65 @@
 use std::{
     io::ErrorKind,
     net::{ToSocketAddrs, UdpSocket},
+    time::Duration,
 };
 
 use crate::connection::IpmiConnection;
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SupportedInteractions {
+    pub rcmp_security: bool,
+    pub dmtf_dash: bool,
+}
+
+impl TryFrom<u8> for SupportedInteractions {
+    type Error = ();
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        let rcmp_security = (value & 0x80) == 0x80;
+        let dmtf_dash = (value & 0x10) == 0x10;
+
+        // All of these bits must be 0
+        if (value & 0b01011111) != 0 {
+            return Err(());
+        }
+
+        Ok(Self {
+            dmtf_dash,
+            rcmp_security,
+        })
+    }
+}
+
+impl From<SupportedInteractions> for u8 {
+    fn from(value: SupportedInteractions) -> Self {
+        let security = if value.rcmp_security { 0x80 } else { 0x00 };
+        let dmtf_dash = if value.dmtf_dash { 0x10 } else { 0x00 };
+        security | dmtf_dash
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SupportedEntities {
+    pub ipmi: bool,
+}
+
+impl From<u8> for SupportedEntities {
+    fn from(value: u8) -> Self {
+        let ipmi = (value & 0x80) == 0x80;
+        Self { ipmi }
+    }
+}
+
+impl From<SupportedEntities> for u8 {
+    fn from(value: SupportedEntities) -> Self {
+        if value.ipmi {
+            0x80
+        } else {
+            0x00
+        }
+    }
+}
 
 #[derive(Clone, Debug, PartialEq)]
 
@@ -12,8 +68,8 @@ pub enum ASFMessageType {
     Pong {
         enterprise_number: u32,
         oem_data: u32,
-        supported_entities: u8,
-        supported_interactions: u8,
+        supported_entities: SupportedEntities,
+        supported_interactions: SupportedInteractions,
     },
 }
 
@@ -32,15 +88,13 @@ impl ASFMessageType {
 
         let data_len = data[0];
 
-        println!("{:02X}, {}", type_byte, data_len);
-
         let data = match type_byte {
             0x80 if data_len == 0 => Self::Ping,
             0x40 if data_len == 0x10 => {
                 let enterprise_number = u32::from_le_bytes(data[1..5].try_into().unwrap());
                 let oem_data = u32::from_le_bytes(data[5..9].try_into().unwrap());
-                let supported_entities = data[9];
-                let supported_interactions = data[10];
+                let supported_entities = SupportedEntities::from(data[9]);
+                let supported_interactions = SupportedInteractions::try_from(data[10]).ok()?;
 
                 Self::Pong {
                     enterprise_number,
@@ -72,7 +126,10 @@ impl ASFMessageType {
                 buffer.push(0x10);
                 buffer.extend_from_slice(&enterprise_number.to_le_bytes());
                 buffer.extend_from_slice(&oem_data.to_le_bytes());
-                buffer.extend_from_slice(&[*supported_entities, *supported_interactions]);
+                buffer.extend_from_slice(&[
+                    u8::from(*supported_entities),
+                    u8::from(*supported_interactions),
+                ]);
                 buffer.extend(std::iter::repeat(0).take(6));
             }
         }
@@ -204,6 +261,7 @@ impl RmcpMessage {
 
 pub struct Rmcp {
     inner: UdpSocket,
+    supported_interactions: SupportedInteractions,
 }
 
 impl Rmcp {
@@ -218,6 +276,7 @@ impl Rmcp {
         }
 
         let socket = UdpSocket::bind("[::]:0")?;
+        socket.set_read_timeout(Some(Duration::from_secs(2)))?;
 
         let ping = RmcpMessage::new(
             0xFF,
@@ -233,9 +292,43 @@ impl Rmcp {
         let mut buf = [0u8; 1024];
         let received = socket.recv(&mut buf)?;
 
-        println!("{:#?}", RmcpMessage::from_bytes(&buf[..received]));
+        let pong = RmcpMessage::from_bytes(&buf[..received]);
 
-        Ok(Self { inner: socket })
+        println!("{pong:#?}");
+
+        let (supported_entities, supported_interactions) = if let Some(RmcpMessage {
+            class_and_contents:
+                RmcpClass::ASF(ASFMessage {
+                    message_type:
+                        ASFMessageType::Pong {
+                            supported_entities,
+                            supported_interactions,
+                            ..
+                        },
+                    ..
+                }),
+            ..
+        }) = pong
+        {
+            (supported_entities, supported_interactions)
+        } else {
+            return Err(std::io::Error::new(
+                ErrorKind::Other,
+                "Invalid response from remote",
+            ));
+        };
+
+        if !supported_entities.ipmi {
+            return Err(std::io::Error::new(
+                ErrorKind::Unsupported,
+                "Remote does not support IPMI entity.",
+            ));
+        }
+
+        Ok(Self {
+            inner: socket,
+            supported_interactions,
+        })
     }
 }
 
