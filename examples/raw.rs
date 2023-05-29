@@ -28,7 +28,7 @@ fn main() -> Result<(), String> {
 
     let message = try_parse_message(&data)?;
 
-    let mut request: Request = Request::new(message, LogicalUnit::Zero, 0);
+    let mut request: Request = Request::new(message, LogicalUnit::Zero);
 
     let mut file = File::new("/dev/ipmi0", Duration::from_millis(4000)).unwrap();
 

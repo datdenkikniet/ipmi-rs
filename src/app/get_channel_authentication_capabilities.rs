@@ -47,8 +47,8 @@ pub struct ChannelAuthenticationCapabilities {
     pub md2: bool,
     pub none: bool,
     pub kg_status: bool,
-    pub per_message_authentication_disabled: bool,
-    pub user_level_authentication_disabled: bool,
+    pub per_message_authentication_enabled: bool,
+    pub user_level_authentication_enabled: bool,
     pub non_null_usernames_enabled: bool,
     pub null_usernames_enabled: bool,
     pub anonymous_login_enabled: bool,
@@ -108,42 +108,42 @@ impl IpmiCommand for GetChannelAuthenticationCapabilities {
     ) -> Result<Self::Output, crate::connection::ParseResponseError<Self::Error>> {
         Self::check_cc_success(completion_code)?;
 
-        if data.len() < 6 {
+        if data.len() < 7 {
             return Err(crate::connection::ParseResponseError::NotEnoughData);
         }
 
         let channel_number = data[0];
         let ipmi2_ext_cap = (data[1] & 0x80) == 0x80;
 
-        let oem_proprietary = (data[2] & 0x20) == 0x20;
-        let key = (data[2] & 0x10) == 0x10;
-        let md5 = (data[2] & 0x04) == 0x04;
-        let md2 = (data[2] & 0x02) == 0x02;
-        let none = (data[2] & 0x01) == 0x01;
+        let oem_proprietary = (data[1] & 0x20) == 0x20;
+        let key = (data[1] & 0x10) == 0x10;
+        let md5 = (data[1] & 0x04) == 0x04;
+        let md2 = (data[1] & 0x02) == 0x02;
+        let none = (data[1] & 0x01) == 0x01;
 
-        let (kg, pma, ula, nnu, nu, anonymous, v2, v15, oem_id, oem_aux) = if ipmi2_ext_cap {
+        let pma = (data[2] & 0x10) == 0x10;
+        let ula = (data[2] & 0x08) == 0x08;
+        let nnue = (data[2] & 0x04) == 0x04;
+        let nue = (data[2] & 0x02) == 0x02;
+        let ale = (data[2] & 0x01) == 0x01;
+
+        let (kg, v2, v15, oem_id, oem_aux) = if ipmi2_ext_cap {
             if data.len() < 8 {
                 return Err(crate::connection::ParseResponseError::NotEnoughData);
             }
-            let kg = (data[3] & 0x20) == 0x20;
-            let pma = (data[3] & 0x10) == 0x10;
-            let ula = (data[3] & 0x08) == 0x08;
-            let nnue = (data[3] & 0x04) == 0x04;
-            let nue = (data[3] & 0x02) == 0x02;
-            let ale = (data[3] & 0x01) == 0x01;
 
-            let v2 = (data[4] & 0x02) == 0x02;
-            let v15 = (data[4] & 0x01) == 0x01;
+            let kg = (data[2] & 0x20) == 0x20;
 
-            let oem_id = [data[5], data[6], data[7]];
-            let oem_aux = data[8];
-            (kg, pma, ula, nnue, nue, ale, v2, v15, oem_id, oem_aux)
+            let v2 = (data[3] & 0x02) == 0x02;
+            let v15 = (data[3] & 0x01) == 0x01;
+
+            let oem_id = [data[4], data[5], data[6]];
+            let oem_aux = data[7];
+            (kg, v2, v15, oem_id, oem_aux)
         } else {
             let oem_id = [data[3], data[4], data[5]];
             let oem_aux = data[6];
-            (
-                false, false, false, false, false, false, false, false, oem_id, oem_aux,
-            )
+            (false, false, false, oem_id, oem_aux)
         };
 
         Ok(ChannelAuthenticationCapabilities {
@@ -154,11 +154,11 @@ impl IpmiCommand for GetChannelAuthenticationCapabilities {
             md2,
             none,
             kg_status: kg,
-            per_message_authentication_disabled: pma,
-            user_level_authentication_disabled: ula,
-            non_null_usernames_enabled: nnu,
-            null_usernames_enabled: nu,
-            anonymous_login_enabled: anonymous,
+            per_message_authentication_enabled: !pma,
+            user_level_authentication_enabled: !ula,
+            non_null_usernames_enabled: nnue,
+            null_usernames_enabled: nue,
+            anonymous_login_enabled: ale,
             ipmi2_connections_supported: v2,
             ipmi15_connections_supported: v15,
             oem_id: oem_id,

@@ -4,15 +4,13 @@ use super::Message;
 
 pub struct Request {
     lun: LogicalUnit,
-    seq: i64,
     message: Message,
 }
 
 impl Request {
-    pub const fn new(request: Message, lun: LogicalUnit, seq: i64) -> Self {
+    pub const fn new(request: Message, lun: LogicalUnit) -> Self {
         Self {
             lun,
-            seq,
             message: request,
         }
     }
@@ -23,10 +21,6 @@ impl Request {
 
     pub fn netfn_raw(&self) -> u8 {
         self.message.netfn_raw()
-    }
-
-    pub fn seq(&self) -> i64 {
-        self.seq
     }
 
     pub fn lun(&self) -> LogicalUnit {

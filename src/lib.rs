@@ -16,12 +16,11 @@ use storage::{sdr::record::Record as SdrRecord, GetDeviceSdr, SdrRecordId};
 
 pub struct Ipmi<CON> {
     inner: CON,
-    counter: i64,
 }
 
 impl<CON> Ipmi<CON> {
     pub fn new(inner: CON) -> Self {
-        Self { inner, counter: 0 }
+        Self { inner }
     }
 }
 
@@ -34,10 +33,6 @@ impl<CON> From<CON> for Ipmi<CON> {
 #[derive(Clone, Debug, PartialEq)]
 pub enum IpmiError<CON, P> {
     NetFnIsResponse(NetFn),
-    IncorrectResponseSeq {
-        seq_sent: i64,
-        seq_recvd: i64,
-    },
     UnexpectedResponse {
         netfn_sent: NetFn,
         netfn_recvd: NetFn,
@@ -80,21 +75,11 @@ where
     where
         CMD: IpmiCommand,
     {
-        let seq = self.counter;
-        self.counter += 1;
-
         let message = request.into();
         let (message_netfn, message_cmd) = (message.netfn(), message.cmd());
-        let mut request = Request::new(message, LogicalUnit::One, seq);
+        let mut request = Request::new(message, LogicalUnit::Zero);
 
         let response = self.inner.send_recv(&mut request)?;
-
-        if response.seq() != seq {
-            return Err(IpmiError::IncorrectResponseSeq {
-                seq_sent: seq,
-                seq_recvd: response.seq(),
-            });
-        }
 
         if response.netfn() != message_netfn || response.cmd() != message_cmd {
             return Err(IpmiError::UnexpectedResponse {

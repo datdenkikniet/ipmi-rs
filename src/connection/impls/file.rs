@@ -131,6 +131,7 @@ impl IpmiSysIfaceAddr {
 pub struct File {
     inner: std::fs::File,
     recv_timeout: Duration,
+    seq: i64,
 }
 
 impl File {
@@ -142,6 +143,7 @@ impl File {
         let me = Ok(Self {
             inner: std::fs::File::open(path)?,
             recv_timeout,
+            seq: 0,
         });
 
         me
@@ -158,7 +160,7 @@ impl IpmiConnection for File {
 
         let netfn = request.netfn_raw();
         let cmd = request.cmd();
-        let seq = request.seq();
+        let seq = self.seq;
         let data = request.data_mut();
 
         let data_len = data.len() as u16;
@@ -272,6 +274,9 @@ impl IpmiConnection for File {
 
     fn send_recv(&mut self, request: &mut Request) -> io::Result<Response> {
         self.send(request)?;
+
+        // TODO: determine if sequence number is correct
+
         self.recv()
     }
 }
