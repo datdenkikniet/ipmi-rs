@@ -1,3 +1,6 @@
+// LE = least significant byte first = IPMI
+// BE = most significant byte first = RMCP/ASF
+
 use std::{
     io::{Error, ErrorKind},
     iter::FusedIterator,
@@ -7,9 +10,10 @@ use std::{
 
 use crate::{
     app::auth::{
-        self, Channel, GetChannelAuthenticationCapabilities, GetSessionChallenge, PrivilegeLevel,
+        self, ActivateSession, Channel, GetChannelAuthenticationCapabilities, GetSessionChallenge,
+        PrivilegeLevel, SessionChallenge,
     },
-    connection::{IpmiConnection, LogicalUnit, Message, Response},
+    connection::{CompletionCode, IpmiCommand, IpmiConnection, LogicalUnit, Message, Response},
     IpmiCommandError,
 };
 
@@ -23,12 +27,15 @@ use encapsulation::*;
 pub struct Inactive;
 
 pub struct Active {
+    session_id: u32,
+    auth_type: crate::app::auth::AuthType,
+    password: [u8; 16],
     supported_interactions: SupportedInteractions,
+    request_sequence: u32,
 }
 
 pub struct Rmcp<T> {
     inner: UdpSocket,
-    request_sequence: u32,
     ipmb_sequence: u8,
     responder_addr: u8,
     requestor_addr: u8,
@@ -74,7 +81,6 @@ impl<T> Rmcp<T> {
     fn convert<O>(self, new_state: O) -> Rmcp<O> {
         Rmcp {
             inner: self.inner,
-            request_sequence: self.request_sequence,
             ipmb_sequence: self.ipmb_sequence,
             responder_addr: self.responder_addr,
             requestor_addr: self.requestor_addr,
@@ -90,8 +96,11 @@ type CommandError<T> = IpmiCommandError<<Rmcp<Active> as IpmiConnection>::Error,
 pub enum ActivationError {
     Io(Error),
     UsernameTooLong,
+    PasswordTooLong,
+    NoSupportedAuthenticationType,
     GetChannelAuthenticationCapabilities(CommandError<()>),
     GetSessionChallenge(CommandError<()>),
+    ActivateSession(CommandError<()>),
 }
 
 impl From<std::io::Error> for ActivationError {
@@ -117,7 +126,6 @@ impl Rmcp<Inactive> {
 
         Ok(Self {
             inner: socket,
-            request_sequence: 0,
             responder_addr: 0x20,
             requestor_addr: 0x81,
             requestor_lun: LogicalUnit::Zero,
@@ -126,11 +134,19 @@ impl Rmcp<Inactive> {
         })
     }
 
-    pub fn activate(self, username: Option<&str>) -> Result<Rmcp<Active>, ActivationError> {
+    pub fn activate(
+        self,
+        username: Option<&str>,
+        password: &[u8],
+    ) -> Result<Rmcp<Active>, ActivationError> {
         let challenge_command = match GetSessionChallenge::new(auth::AuthType::None, username) {
             Some(v) => v,
             None => return Err(ActivationError::UsernameTooLong),
         };
+
+        if password.len() > 16 {
+            return Err(ActivationError::PasswordTooLong);
+        }
 
         let ping = RmcpMessage::new(
             0xFF,
@@ -140,6 +156,7 @@ impl Rmcp<Inactive> {
             }),
         );
 
+        log::debug!("Starting RMCP activation sequence");
         self.inner.send(&ping.to_bytes())?;
 
         let mut buf = [0u8; 1024];
@@ -174,28 +191,72 @@ impl Rmcp<Inactive> {
             .into());
         }
 
+        let privilege_level = PrivilegeLevel::Administrator;
+
+        let mut password_padded = [0u8; 16];
+        password_padded[..password.len()].copy_from_slice(password);
+
         let activated = self.convert(Active {
+            auth_type: auth::AuthType::None,
+            password: password_padded,
             supported_interactions,
+            session_id: 0,
+            request_sequence: 0,
         });
 
         let mut ipmi = crate::Ipmi::new(activated);
 
-        let output = match ipmi.send_recv(GetChannelAuthenticationCapabilities::new(
+        log::debug!("Obtaining channel authentication capabilitiles");
+
+        let authentication_caps = match ipmi.send_recv(GetChannelAuthenticationCapabilities::new(
             Channel::Current,
-            PrivilegeLevel::Administrator,
+            privilege_level,
         )) {
             Ok(v) => v,
             Err(e) => return Err(ActivationError::GetChannelAuthenticationCapabilities(e)),
         };
 
-        // assert!(output.none);
+        log::trace!("Authentication capabilities: {:?}", authentication_caps);
+
+        log::debug!("Requesting challenge");
 
         let challenge = match ipmi.send_recv(challenge_command) {
             Ok(v) => v,
             Err(e) => return Err(ActivationError::GetSessionChallenge(e)),
         };
 
-        panic!("{challenge:?}");
+        let activation_auth_type = authentication_caps
+            .best_auth()
+            .ok_or(ActivationError::NoSupportedAuthenticationType)?;
+
+        let activate_session: ActivateSession = ActivateSession {
+            auth_type: activation_auth_type,
+            maxiumum_privilege_level: privilege_level,
+            challenge_string: challenge.challenge_string,
+            initial_sequence_number: 0xDEAD_BEEF,
+        };
+
+        ipmi.inner_mut().state.session_id = challenge.temporary_session_id;
+        ipmi.inner_mut().state.auth_type = activation_auth_type;
+
+        log::debug!("Activating session");
+
+        let activation_info = match ipmi.send_recv(activate_session.clone()) {
+            Ok(v) => v,
+            Err(e) => return Err(ActivationError::ActivateSession(e)),
+        };
+
+        log::debug!("Succesfully started a session ({:?})", activation_info);
+
+        let mut me = ipmi.release();
+
+        me.state.request_sequence = activation_info.initial_sequence_number;
+        me.state.session_id = activation_info.session_id;
+
+        // TODO: assert the correct thing here
+        assert_eq!(activate_session.auth_type, activation_auth_type);
+
+        Ok(me)
     }
 }
 
@@ -207,6 +268,8 @@ impl IpmiConnection for Rmcp<Active> {
     type Error = Error;
 
     fn send(&mut self, request: &mut crate::connection::Request) -> Result<(), Self::SendError> {
+        log::trace!("Sending message with auth type {:?}", self.state.auth_type);
+
         let rs_addr = self.responder_addr;
         let netfn_rslun: u8 = (request.netfn().request_value() << 2) | request.lun().value();
 
@@ -227,17 +290,26 @@ impl IpmiConnection for Rmcp<Active> {
 
         let final_data: Vec<_> = first_part.chain(second_part).collect();
 
+        let session_sequence = self.state.request_sequence;
+        self.state.request_sequence = self.state.request_sequence.wrapping_add(1);
+
+        let auth_type = AuthType::calculate(
+            self.state.auth_type,
+            &self.state.password,
+            self.state.session_id,
+            session_sequence,
+            &final_data,
+        );
+
         let message = RmcpMessage::new(
             0xFF,
             RmcpClass::IPMI(EncapsulatedMessage {
-                auth_type: AuthType::None,
-                session_sequence: self.request_sequence,
-                session_id: 0,
+                auth_type,
+                session_sequence,
+                session_id: self.state.session_id,
                 payload: final_data,
             }),
         );
-
-        self.request_sequence = self.request_sequence.wrapping_add(1);
 
         self.inner.send(&message.to_bytes())?;
         Ok(())

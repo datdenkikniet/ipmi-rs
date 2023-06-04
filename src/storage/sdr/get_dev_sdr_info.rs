@@ -97,7 +97,7 @@ impl<T> DeviceSdrInfo<T> {
         let sensor_population_epoch = if dynamic_population && data.len() < 6 {
             return None;
         } else if dynamic_population {
-            Some(u32::from_be_bytes([data[2], data[3], data[4], data[5]]))
+            Some(u32::from_le_bytes([data[2], data[3], data[4], data[5]]))
         } else {
             None
         };

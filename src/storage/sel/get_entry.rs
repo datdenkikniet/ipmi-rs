@@ -77,7 +77,7 @@ impl From<GetEntry> for Message {
 
         let mut data = vec![0u8; 6];
 
-        data[0..2].copy_from_slice(&reservation_id.map(|v| v.get()).unwrap_or(0).to_be_bytes());
+        data[0..2].copy_from_slice(&reservation_id.map(|v| v.get()).unwrap_or(0).to_le_bytes());
         data[2..4].copy_from_slice(&record_id.value().to_le_bytes());
         data[4] = offset;
         data[5] = bytes_to_read.map(|v| v.get()).unwrap_or(0xFF);

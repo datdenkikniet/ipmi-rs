@@ -1,3 +1,5 @@
+use crate::app::auth;
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum AuthType {
     None,
@@ -17,6 +19,30 @@ impl AuthType {
             AuthType::MD2(b) | AuthType::MD5(b) | AuthType::Key(b) => Some(b),
         }
     }
+
+    pub fn calculate(
+        auth_type: auth::AuthType,
+        password: &[u8; 16],
+        session_id: u32,
+        session_seq: u32,
+        data: &[u8],
+    ) -> AuthType {
+        match auth_type {
+            auth::AuthType::None => Self::None,
+            auth::AuthType::MD2 => todo!(),
+            auth::AuthType::MD5 => {
+                let mut context = md5::Context::new();
+                context.consume(password);
+                context.consume(&session_id.to_le_bytes());
+                context.consume(data);
+                context.consume(session_seq.to_le_bytes());
+                context.consume(password);
+
+                Self::MD5(context.compute().0)
+            }
+            auth::AuthType::Key => Self::Key(password.clone()),
+        }
+    }
 }
 
 impl From<AuthType> for u8 {
@@ -25,7 +51,7 @@ impl From<AuthType> for u8 {
             AuthType::None => 0x00,
             AuthType::MD2(_) => 0x01,
             AuthType::MD5(_) => 0x02,
-            AuthType::Key(_) => 0x03,
+            AuthType::Key(_) => 0x04,
         }
     }
 }
@@ -92,8 +118,8 @@ pub struct EncapsulatedMessage {
 impl EncapsulatedMessage {
     pub fn write_data(&self, buffer: &mut Vec<u8>) {
         buffer.push(self.auth_type.into());
-        buffer.extend_from_slice(&self.session_sequence.to_be_bytes());
-        buffer.extend_from_slice(&self.session_id.to_be_bytes());
+        buffer.extend_from_slice(&self.session_sequence.to_le_bytes());
+        buffer.extend_from_slice(&self.session_id.to_le_bytes());
 
         if let Some(auth_code) = self.auth_type.auth_code() {
             buffer.extend_from_slice(auth_code);
@@ -106,16 +132,16 @@ impl EncapsulatedMessage {
         buffer.push(0);
     }
 
-    pub fn from_bytes(data: &[u8]) -> Option<Self> {
+    pub fn from_bytes(data: &[u8]) -> Result<Self, &'static str> {
         if data.len() < 10 {
-            return None;
+            return Err("Not enough data");
         }
 
         let auth_type = match data[0] {
             0x00 => AuthType::None,
             _ => {
                 if data.len() < 26 {
-                    return None;
+                    return Err("Not enough data for authenticated");
                 }
 
                 let auth_code = data[9..25].try_into().unwrap();
@@ -123,14 +149,14 @@ impl EncapsulatedMessage {
                 match data[0] {
                     0x01 => AuthType::MD2(auth_code),
                     0x02 => AuthType::MD5(auth_code),
-                    0x03 => AuthType::Key(auth_code),
-                    _ => return None,
+                    0x04 => AuthType::Key(auth_code),
+                    _ => return Err("Unkonwn auth type"),
                 }
             }
         };
 
-        let session_sequence = u32::from_be_bytes(data[1..5].try_into().unwrap());
-        let session_id = u32::from_be_bytes(data[5..9].try_into().unwrap());
+        let session_sequence = u32::from_le_bytes(data[1..5].try_into().unwrap());
+        let session_id = u32::from_le_bytes(data[5..9].try_into().unwrap());
 
         let data = if auth_type.is_none() {
             &data[9..]
@@ -146,10 +172,10 @@ impl EncapsulatedMessage {
         } else if data.len() == data_len as usize {
             data.iter().map(|v| *v).collect()
         } else {
-            return None;
+            return Err("Payload len is not correct");
         };
 
-        Some(Self {
+        Ok(Self {
             auth_type,
             session_sequence,
             session_id,
@@ -157,7 +183,7 @@ impl EncapsulatedMessage {
         })
     }
 
-    pub fn verify(&self, _checksum: [u8; 16]) -> bool {
+    pub fn _verify(&self, _checksum: [u8; 16]) -> bool {
         todo!()
     }
 }
@@ -182,7 +208,7 @@ mod test {
     test!(
         empty_noauth,
         [0, 0, 0, 0, 1, 0, 0, 0, 2, 0],
-        Some(EncapsulatedMessage {
+        Ok(EncapsulatedMessage {
             auth_type: AuthType::None,
             session_sequence: 1,
             session_id: 2,
@@ -193,7 +219,7 @@ mod test {
     test!(
         nonempty_noauth,
         [0, 0, 0, 0, 1, 0, 0, 0, 2, 5, 1, 2, 3, 4, 5],
-        Some(EncapsulatedMessage {
+        Ok(EncapsulatedMessage {
             auth_type: AuthType::None,
             session_sequence: 1,
             session_id: 2,
@@ -204,13 +230,13 @@ mod test {
     test!(
         nonempty_incorrect_len,
         [0, 0, 0, 0, 1, 0, 0, 0, 2, 5, 1, 2, 3, 4],
-        None
+        Err("Not enough data")
     );
 
     test!(
         empty_md5,
         [2, 0, 0, 0, 1, 0, 0, 0, 2, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0],
-        Some(EncapsulatedMessage {
+        Ok(EncapsulatedMessage {
             auth_type: AuthType::MD5([1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0]),
             session_sequence: 1,
             session_id: 2,
@@ -221,6 +247,6 @@ mod test {
     test!(
         truncated_md5,
         [2, 0, 0, 0, 1, 0, 0, 0, 2, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0,],
-        None
+        Err("Not enough data for authenticated")
     );
 }

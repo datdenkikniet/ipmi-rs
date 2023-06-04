@@ -246,7 +246,7 @@ impl RmcpMessage {
 
         let class = match class {
             0x06 => RmcpClass::ASF(ASFMessage::from_bytes(data)?),
-            0x07 => RmcpClass::IPMI(EncapsulatedMessage::from_bytes(data)?),
+            0x07 => RmcpClass::IPMI(EncapsulatedMessage::from_bytes(data).ok()?),
             0x08 => RmcpClass::OEMDefined,
             _ if class & 0x80 == 0x80 => RmcpClass::Ack(class & 0x7F),
             _ => {

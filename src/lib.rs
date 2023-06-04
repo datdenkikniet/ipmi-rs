@@ -64,6 +64,10 @@ impl<CON> Ipmi<CON>
 where
     CON: connection::IpmiConnection,
 {
+    pub fn inner_mut(&mut self) -> &mut CON {
+        &mut self.inner
+    }
+
     pub fn new(inner: CON) -> Self {
         Self { inner }
     }

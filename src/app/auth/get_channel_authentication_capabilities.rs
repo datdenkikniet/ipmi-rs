@@ -1,42 +1,6 @@
 use crate::connection::{IpmiCommand, Message, NetFn};
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum PrivilegeLevel {
-    Callback,
-    User,
-    Operator,
-    Administrator,
-    OemProperietary,
-}
-
-impl TryFrom<u8> for PrivilegeLevel {
-    type Error = ();
-
-    fn try_from(value: u8) -> Result<Self, Self::Error> {
-        let value = value & 0x0F;
-        let level = match value {
-            1 => Self::Callback,
-            2 => Self::User,
-            3 => Self::Operator,
-            4 => Self::Administrator,
-            5 => Self::OemProperietary,
-            _ => return Err(()),
-        };
-        Ok(level)
-    }
-}
-
-impl From<PrivilegeLevel> for u8 {
-    fn from(value: PrivilegeLevel) -> Self {
-        match value {
-            PrivilegeLevel::Callback => 1,
-            PrivilegeLevel::User => 2,
-            PrivilegeLevel::Operator => 3,
-            PrivilegeLevel::Administrator => 4,
-            PrivilegeLevel::OemProperietary => 5,
-        }
-    }
-}
+use super::{AuthType, PrivilegeLevel};
 
 #[derive(Debug, Clone)]
 pub struct ChannelAuthenticationCapabilities {
@@ -56,6 +20,23 @@ pub struct ChannelAuthenticationCapabilities {
     pub ipmi15_connections_supported: bool,
     pub oem_id: [u8; 3],
     pub oem_auxiliary_data: u8,
+}
+
+impl ChannelAuthenticationCapabilities {
+    pub fn best_auth(&self) -> Option<AuthType> {
+        let auth_type = if self.md5 {
+            AuthType::MD5
+        } else if self.md2 {
+            AuthType::MD2
+        } else if self.key {
+            AuthType::Key
+        } else if self.none {
+            AuthType::None
+        } else {
+            return None;
+        };
+        Some(auth_type)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
