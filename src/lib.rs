@@ -12,19 +12,22 @@ mod fmt;
 pub use fmt::{LogOutput, Loggable, Logger};
 
 use connection::{IpmiCommand, LogicalUnit, NetFn, ParseResponseError, Request};
-use storage::{sdr::record::Record as SdrRecord, GetDeviceSdr, SdrRecordId};
+use storage::sdr::{self, record::Record as SdrRecord};
 
 pub struct Ipmi<CON> {
     inner: CON,
 }
 
 impl<CON> Ipmi<CON> {
-    pub fn new(inner: CON) -> Self {
-        Self { inner }
+    pub fn release(self) -> CON {
+        self.inner
     }
 }
 
-impl<CON> From<CON> for Ipmi<CON> {
+impl<CON> From<CON> for Ipmi<CON>
+where
+    CON: connection::IpmiConnection,
+{
     fn from(value: CON) -> Self {
         Self::new(value)
     }
@@ -49,8 +52,8 @@ pub enum IpmiError<CON, P> {
     Connection(CON),
 }
 
-impl<T, P> From<T> for IpmiError<T, P> {
-    fn from(value: T) -> Self {
+impl<CON, P> From<CON> for IpmiError<CON, P> {
+    fn from(value: CON) -> Self {
         Self::Connection(value)
     }
 }
@@ -61,10 +64,14 @@ impl<CON> Ipmi<CON>
 where
     CON: connection::IpmiConnection,
 {
+    pub fn new(inner: CON) -> Self {
+        Self { inner }
+    }
+
     pub fn sdrs(&mut self) -> impl Iterator<Item = SdrRecord> + '_ {
         SdrIter {
             ipmi: self,
-            next_id: Some(SdrRecordId::FIRST),
+            next_id: Some(sdr::RecordId::FIRST),
         }
     }
 
@@ -104,7 +111,7 @@ where
 
 pub struct SdrIter<'ipmi, CON> {
     ipmi: &'ipmi mut Ipmi<CON>,
-    next_id: Option<SdrRecordId>,
+    next_id: Option<sdr::RecordId>,
 }
 
 impl<T> Iterator for SdrIter<'_, T>
@@ -117,7 +124,7 @@ where
         let next_id = self.next_id?;
         let next_record = self
             .ipmi
-            .send_recv(GetDeviceSdr::new(None, next_id))
+            .send_recv(sdr::GetDeviceSdr::new(None, next_id))
             .map_err(|e| {
                 log::error!("Error occured while iterating SDR records: {e:?}");
             })

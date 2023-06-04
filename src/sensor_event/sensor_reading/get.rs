@@ -1,6 +1,6 @@
 use crate::{
     connection::{CompletionCode, IpmiCommand, Message, ParseResponseError},
-    storage::record::SensorNumber,
+    storage::sdr::record::SensorNumber,
 };
 
 use super::RawSensorReading;

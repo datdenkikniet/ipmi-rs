@@ -5,10 +5,11 @@ use ipmi_rs::{
     app::GetDeviceId,
     connection::File,
     sensor_event::{GetSensorReading, ThresholdReading},
-    storage::{
-        record::RecordContents, GetDeviceSdrInfo, GetSdrAllocInfo, GetSdrRepositoryInfo,
-        GetSelAllocInfo, GetSelEntry, GetSelInfo, SdrCount, SdrOperation, SelCommand, SelRecordId,
+    storage::sdr::{
+        record::RecordContents, GetDeviceSdrInfo, GetSdrAllocInfo, GetSdrRepositoryInfo, SdrCount,
+        SdrOperation,
     },
+    storage::sel::{GetSelAllocInfo, GetSelEntry, GetSelInfo, RecordId as SelRecordId, SelCommand},
     Ipmi, LogOutput, SensorRecord,
 };
 

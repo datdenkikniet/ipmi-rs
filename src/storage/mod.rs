@@ -1,11 +1,8 @@
-mod sel;
+pub mod sel;
 
 use std::num::NonZeroU16;
 
-pub use sel::{RecordId as SelRecordId, *};
-
 pub mod sdr;
-pub use sdr::{RecordId as SdrRecordId, *};
 
 use crate::{fmt::LogItem, log_vec, Loggable};
 

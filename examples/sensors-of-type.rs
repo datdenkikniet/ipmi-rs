@@ -1,4 +1,4 @@
-use ipmi_rs::{connection::File, storage::SensorType, Ipmi};
+use ipmi_rs::{connection::File, storage::sdr::SensorType, Ipmi};
 use log::Level;
 use std::time::Duration;
 

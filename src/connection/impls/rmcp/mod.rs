@@ -1,13 +1,17 @@
-#![allow(unused)]
-
 use std::{
-    io::ErrorKind,
+    io::{Error, ErrorKind},
     iter::FusedIterator,
     net::{ToSocketAddrs, UdpSocket},
     time::Duration,
 };
 
-use crate::connection::{IpmiConnection, LogicalUnit, Message, Response};
+use crate::{
+    app::auth::{
+        self, Channel, GetChannelAuthenticationCapabilities, GetSessionChallenge, PrivilegeLevel,
+    },
+    connection::{IpmiConnection, LogicalUnit, Message, Response},
+    IpmiCommandError,
+};
 
 mod rmcp;
 use rmcp::*;
@@ -15,17 +19,24 @@ use rmcp::*;
 mod encapsulation;
 use encapsulation::*;
 
-pub struct Rmcp {
-    inner: UdpSocket,
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Inactive;
+
+pub struct Active {
     supported_interactions: SupportedInteractions,
+}
+
+pub struct Rmcp<T> {
+    inner: UdpSocket,
     request_sequence: u32,
     ipmb_sequence: u8,
     responder_addr: u8,
     requestor_addr: u8,
     requestor_lun: LogicalUnit,
+    state: T,
 }
 
-impl Rmcp {
+impl<T> Rmcp<T> {
     fn checksum(data: impl IntoIterator<Item = u8>) -> impl Iterator<Item = u8> {
         struct ChecksumIterator<I> {
             checksum: u8,
@@ -60,11 +71,41 @@ impl Rmcp {
         }
     }
 
+    fn convert<O>(self, new_state: O) -> Rmcp<O> {
+        Rmcp {
+            inner: self.inner,
+            request_sequence: self.request_sequence,
+            ipmb_sequence: self.ipmb_sequence,
+            responder_addr: self.responder_addr,
+            requestor_addr: self.requestor_addr,
+            requestor_lun: self.requestor_lun,
+            state: new_state,
+        }
+    }
+}
+
+type CommandError<T> = IpmiCommandError<<Rmcp<Active> as IpmiConnection>::Error, T>;
+
+#[derive(Debug)]
+pub enum ActivationError {
+    Io(Error),
+    UsernameTooLong,
+    GetChannelAuthenticationCapabilities(CommandError<()>),
+    GetSessionChallenge(CommandError<()>),
+}
+
+impl From<std::io::Error> for ActivationError {
+    fn from(value: std::io::Error) -> Self {
+        Self::Io(value)
+    }
+}
+
+impl Rmcp<Inactive> {
     pub fn new<R: ToSocketAddrs>(remote: R) -> std::io::Result<Self> {
         let addrs: Vec<_> = remote.to_socket_addrs()?.collect();
 
         if addrs.len() != 1 {
-            return Err(std::io::Error::new(
+            return Err(Error::new(
                 ErrorKind::InvalidInput,
                 "You must provide exactly 1 remote address.",
             ));
@@ -72,6 +113,24 @@ impl Rmcp {
 
         let socket = UdpSocket::bind("[::]:0")?;
         socket.set_read_timeout(Some(Duration::from_secs(2)))?;
+        socket.connect(addrs[0])?;
+
+        Ok(Self {
+            inner: socket,
+            request_sequence: 0,
+            responder_addr: 0x20,
+            requestor_addr: 0x81,
+            requestor_lun: LogicalUnit::Zero,
+            ipmb_sequence: 0,
+            state: Inactive,
+        })
+    }
+
+    pub fn activate(self, username: Option<&str>) -> Result<Rmcp<Active>, ActivationError> {
+        let challenge_command = match GetSessionChallenge::new(auth::AuthType::None, username) {
+            Some(v) => v,
+            None => return Err(ActivationError::UsernameTooLong),
+        };
 
         let ping = RmcpMessage::new(
             0xFF,
@@ -81,11 +140,10 @@ impl Rmcp {
             }),
         );
 
-        socket.connect(addrs[0])?;
-        socket.send(&ping.to_bytes())?;
+        self.inner.send(&ping.to_bytes())?;
 
         let mut buf = [0u8; 1024];
-        let received = socket.recv(&mut buf)?;
+        let received = self.inner.recv(&mut buf)?;
 
         let pong = RmcpMessage::from_bytes(&buf[..received]);
 
@@ -105,37 +163,48 @@ impl Rmcp {
         {
             (supported_entities, supported_interactions)
         } else {
-            return Err(std::io::Error::new(
-                ErrorKind::Other,
-                "Invalid response from remote",
-            ));
+            return Err(Error::new(ErrorKind::Other, "Invalid response from remote").into());
         };
 
         if !supported_entities.ipmi {
-            return Err(std::io::Error::new(
+            return Err(Error::new(
                 ErrorKind::Unsupported,
                 "Remote does not support IPMI entity.",
-            ));
+            )
+            .into());
         }
 
-        Ok(Self {
-            inner: socket,
+        let activated = self.convert(Active {
             supported_interactions,
-            request_sequence: 0,
-            responder_addr: 0x20,
-            requestor_addr: 0x81,
-            requestor_lun: LogicalUnit::Zero,
-            ipmb_sequence: 0,
-        })
+        });
+
+        let mut ipmi = crate::Ipmi::new(activated);
+
+        let output = match ipmi.send_recv(GetChannelAuthenticationCapabilities::new(
+            Channel::Current,
+            PrivilegeLevel::Administrator,
+        )) {
+            Ok(v) => v,
+            Err(e) => return Err(ActivationError::GetChannelAuthenticationCapabilities(e)),
+        };
+
+        // assert!(output.none);
+
+        let challenge = match ipmi.send_recv(challenge_command) {
+            Ok(v) => v,
+            Err(e) => return Err(ActivationError::GetSessionChallenge(e)),
+        };
+
+        panic!("{challenge:?}");
     }
 }
 
-impl IpmiConnection for Rmcp {
-    type SendError = std::io::Error;
+impl IpmiConnection for Rmcp<Active> {
+    type SendError = Error;
 
-    type RecvError = std::io::Error;
+    type RecvError = Error;
 
-    type Error = std::io::Error;
+    type Error = Error;
 
     fn send(&mut self, request: &mut crate::connection::Request) -> Result<(), Self::SendError> {
         let rs_addr = self.responder_addr;
@@ -148,7 +217,7 @@ impl IpmiConnection for Rmcp {
         let ipmb_sequence = self.ipmb_sequence;
         self.ipmb_sequence = self.ipmb_sequence.wrapping_add(1);
 
-        let reqseq_lun = (self.ipmb_sequence << 2) | self.requestor_lun.value();
+        let reqseq_lun = (ipmb_sequence << 2) | self.requestor_lun.value();
         let cmd = request.cmd();
         let second_part = Self::checksum(
             [req_addr, reqseq_lun, cmd]
@@ -179,15 +248,13 @@ impl IpmiConnection for Rmcp {
         let received_bytes = self.inner.recv(&mut buffer)?;
 
         if received_bytes < 8 {
-            return Err(std::io::Error::new(ErrorKind::Other, "Incomplete response"));
+            return Err(Error::new(ErrorKind::Other, "Incomplete response"));
         }
 
         let data = &buffer[..received_bytes];
 
-        let rcmp_message = RmcpMessage::from_bytes(data).ok_or(std::io::Error::new(
-            ErrorKind::Other,
-            "RMCP response not recognized",
-        ))?;
+        let rcmp_message = RmcpMessage::from_bytes(data)
+            .ok_or(Error::new(ErrorKind::Other, "RMCP response not recognized"))?;
 
         let encapsulated_message = if let RmcpMessage {
             class_and_contents: RmcpClass::IPMI(message),
@@ -196,7 +263,7 @@ impl IpmiConnection for Rmcp {
         {
             message
         } else {
-            return Err(std::io::Error::new(
+            return Err(Error::new(
                 ErrorKind::Other,
                 "RMCP response does not have IPMI class",
             ));
@@ -217,10 +284,7 @@ impl IpmiConnection for Rmcp {
             if let Some(resp) = Response::new(Message::new_raw(netfn, cmd, response_data), 0) {
                 resp
             } else {
-                return Err(std::io::Error::new(
-                    ErrorKind::Other,
-                    "Response data was empty",
-                ));
+                return Err(Error::new(ErrorKind::Other, "Response data was empty"));
             };
 
         Ok(response)
@@ -237,6 +301,6 @@ impl IpmiConnection for Rmcp {
 
 #[test]
 pub fn checksum() {
-    let output: Vec<_> = Rmcp::checksum([0x20, 0x06 << 2]).collect();
+    let output: Vec<_> = Rmcp::<Inactive>::checksum([0x20, 0x06 << 2]).collect();
     panic!("{:02X?}", output);
 }

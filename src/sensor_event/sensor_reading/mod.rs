@@ -1,7 +1,7 @@
 mod get;
 pub use get::GetSensorReading;
 
-use crate::storage::event_reading_type_code::Threshold;
+use crate::storage::sdr::event_reading_type_code::Threshold;
 
 pub trait FromSensorReading {
     type Sensor;

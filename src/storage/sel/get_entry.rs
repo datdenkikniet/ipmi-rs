@@ -61,7 +61,7 @@ impl IpmiCommand for GetEntry {
         }
 
         let next_entry = RecordId::new_raw(u16::from_le_bytes([data[0], data[1]]));
-        let entry = Entry::parse(&data[2..])?;
+        let entry = Entry::parse(&data[2..]).map_err(|e| ParseResponseError::Parse(e))?;
         Ok(EntryInfo { next_entry, entry })
     }
 }
