@@ -24,9 +24,9 @@ This example will, using the `/dev/ipmi0` file:
 - [x] Get SDR repository entries
 - [x] Read sensor data from sensors obtained from SDR repository
 - [x] `ioctl`-based IPMI device file interface support
-- [ ] RMCP
-- [ ] Other IPMI interfaces
+- [x] RMCP
 - [x] Allow running of example with any of the supported IPMI interfaces
+- [ ] Other IPMI interfaces
 - [ ] More?
 
 ## License
