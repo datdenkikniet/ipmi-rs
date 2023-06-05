@@ -2,9 +2,11 @@ mod completion_code;
 pub use completion_code::CompletionCode;
 
 mod impls;
+
 #[cfg(feature = "unix-file")]
 pub use impls::File;
-pub use impls::Rmcp;
+
+pub use impls::rmcp;
 
 mod netfn;
 pub use netfn::NetFn;

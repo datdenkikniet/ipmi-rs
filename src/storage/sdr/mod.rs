@@ -5,6 +5,7 @@ mod get_sdr;
 pub use get_sdr::{GetDeviceSdr, RecordInfo as SdrRecordInfo, *};
 
 pub mod record;
+pub use record::Record;
 
 mod get_info;
 pub use get_info::{

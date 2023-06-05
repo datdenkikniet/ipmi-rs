@@ -28,10 +28,10 @@ log-to-file = [ "parking_lot" ]
 # Connection features
 unix-file = [ "nix" ]
 
-
 [dev-dependencies]
 pretty_env_logger = "0.4"
 indicatif = "0.17"
+clap = { version = "4.3", features = [ "derive" ]}
 
 [[example]]
 name = "get-info"

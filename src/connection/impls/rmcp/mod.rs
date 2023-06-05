@@ -11,9 +11,9 @@ use std::{
 use crate::{
     app::auth::{
         self, ActivateSession, Channel, GetChannelAuthenticationCapabilities, GetSessionChallenge,
-        PrivilegeLevel, SessionChallenge,
+        PrivilegeLevel,
     },
-    connection::{CompletionCode, IpmiCommand, IpmiConnection, LogicalUnit, Message, Response},
+    connection::{IpmiConnection, LogicalUnit, Message, Response},
     IpmiCommandError,
 };
 
@@ -30,7 +30,7 @@ pub struct Active {
     session_id: u32,
     auth_type: crate::app::auth::AuthType,
     password: [u8; 16],
-    supported_interactions: SupportedInteractions,
+    _supported_interactions: SupportedInteractions,
     request_sequence: u32,
 }
 
@@ -110,7 +110,10 @@ impl From<std::io::Error> for ActivationError {
 }
 
 impl Rmcp<Inactive> {
-    pub fn new<R: ToSocketAddrs>(remote: R) -> std::io::Result<Self> {
+    pub fn new<R: ToSocketAddrs + core::fmt::Debug>(
+        remote: R,
+        timeout: Duration,
+    ) -> std::io::Result<Self> {
         let addrs: Vec<_> = remote.to_socket_addrs()?.collect();
 
         if addrs.len() != 1 {
@@ -120,8 +123,11 @@ impl Rmcp<Inactive> {
             ));
         }
 
+        log::debug!("Binding socket...");
         let socket = UdpSocket::bind("[::]:0")?;
-        socket.set_read_timeout(Some(Duration::from_secs(2)))?;
+        socket.set_read_timeout(Some(timeout))?;
+
+        log::debug!("Opening connection");
         socket.connect(addrs[0])?;
 
         Ok(Self {
@@ -199,7 +205,7 @@ impl Rmcp<Inactive> {
         let activated = self.convert(Active {
             auth_type: auth::AuthType::None,
             password: password_padded,
-            supported_interactions,
+            _supported_interactions: supported_interactions,
             session_id: 0,
             request_sequence: 0,
         });

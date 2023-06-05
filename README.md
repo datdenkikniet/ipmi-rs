@@ -26,7 +26,7 @@ This example will, using the `/dev/ipmi0` file:
 - [x] `ioctl`-based IPMI device file interface support
 - [ ] RMCP
 - [ ] Other IPMI interfaces
-- [ ] Allow running of example with any of the supported IPMI interfaces
+- [x] Allow running of example with any of the supported IPMI interfaces
 - [ ] More?
 
 ## License

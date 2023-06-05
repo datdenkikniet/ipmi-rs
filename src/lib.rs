@@ -72,7 +72,7 @@ where
         Self { inner }
     }
 
-    pub fn sdrs(&mut self) -> impl Iterator<Item = SdrRecord> + '_ {
+    pub fn sdrs(&mut self) -> SdrIter<CON> {
         SdrIter {
             ipmi: self,
             next_id: Some(sdr::RecordId::FIRST),

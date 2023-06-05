@@ -1,23 +1,25 @@
-use std::time::Duration;
+mod common;
 
+use clap::Parser;
 use indicatif::{ProgressBar, ProgressStyle};
 use ipmi_rs::{
     app::GetDeviceId,
-    connection::File,
     sensor_event::{GetSensorReading, ThresholdReading},
     storage::sdr::{
         record::RecordContents, GetDeviceSdrInfo, GetSdrAllocInfo, GetSdrRepositoryInfo, SdrCount,
         SdrOperation,
     },
     storage::sel::{GetSelAllocInfo, GetSelEntry, GetSelInfo, RecordId as SelRecordId, SelCommand},
-    Ipmi, LogOutput, SensorRecord,
+    LogOutput, SensorRecord,
 };
 
-fn main() {
+fn main() -> std::io::Result<()> {
     pretty_env_logger::init();
 
-    let file = File::new("/dev/ipmi0", Duration::from_millis(4000)).unwrap();
-    let mut ipmi = Ipmi::new(file);
+    let opts = common::CliOpts::parse();
+
+    let mut ipmi = opts.get_connection()?;
+
     let log_output = &LogOutput::LogTarget(log::Level::Info, "get_info".into());
     let debug_log_output = &LogOutput::LogTarget(log::Level::Debug, "get_info".into());
 
@@ -105,4 +107,6 @@ fn main() {
             log::info!("Unknown record type. Type: 0x{ty:02X}");
         }
     }
+
+    Ok(())
 }
