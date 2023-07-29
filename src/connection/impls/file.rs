@@ -242,6 +242,7 @@ impl IpmiConnection for File {
         // Ensure that response_data and bmc_addr live until _after_ the
         // IOCTL completes.
         #[allow(clippy::drop_copy)]
+        #[allow(dropping_copy_types)]
         drop(response_data);
         #[allow(clippy::drop_non_drop)]
         drop(bmc_addr);
