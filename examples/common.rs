@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 use std::{io::ErrorKind, time::Duration};
 
 use clap::{Args, Parser};
