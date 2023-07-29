@@ -1,12 +1,28 @@
+use clap::Parser;
+use common::CommonOpts;
 use ipmi_rs::{
-    connection::{File, Message},
+    connection::Message,
     connection::{IpmiConnection, LogicalUnit, Request},
 };
-use std::time::Duration;
 
-fn try_parse_message(input: &[u8]) -> Result<Message, String> {
+mod common;
+
+#[derive(Parser)]
+pub struct Command {
+    #[clap(flatten)]
+    common: CommonOpts,
+
+    #[clap(required = true)]
+    message: Vec<String>,
+}
+
+fn try_parse_message(input: &[u8]) -> std::io::Result<Message> {
     if input.len() < 2 {
-        return Err("Need at least 2 bytes of input".to_string());
+        let err = std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "Need at least 2 bytes of input".to_string(),
+        );
+        return Err(err);
     }
 
     let cmd = input[1];
@@ -16,15 +32,22 @@ fn try_parse_message(input: &[u8]) -> Result<Message, String> {
     Ok(Message::new_raw(input[0], cmd, data))
 }
 
-fn main() -> Result<(), String> {
+fn main() -> std::io::Result<()> {
     pretty_env_logger::formatted_builder()
         .parse_filters(&std::env::var("RUST_LOG").unwrap_or("info".to_string()))
         .init();
 
+    let command = Command::parse();
+
     let mut data = Vec::new();
-    for arg in std::env::args().skip(1) {
-        let u8_value = u8::from_str_radix(&arg, 16)
-            .map_err(|_| format!("Could not parse '{arg}' as hex integer"))?;
+    for arg in command.message {
+        let u8_value = u8::from_str_radix(&arg, 16).map_err(|_| {
+            let err = std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                format!("Could not parse '{arg}' as hex integer"),
+            );
+            err
+        })?;
         data.push(u8_value);
     }
 
@@ -32,9 +55,12 @@ fn main() -> Result<(), String> {
 
     let mut request: Request = Request::new(message, LogicalUnit::Zero);
 
-    let mut file = File::new("/dev/ipmi0", Duration::from_millis(4000)).unwrap();
+    let ipmi = command.common.get_connection()?;
 
-    let result = file.send_recv(&mut request).map_err(|e| format!("{e}"))?;
+    let result = match ipmi {
+        common::IpmiConnectionEnum::Rmcp(mut r) => r.inner_mut().send_recv(&mut request)?,
+        common::IpmiConnectionEnum::File(mut f) => f.inner_mut().send_recv(&mut request)?,
+    };
 
     println!("Response:");
     println!("Completion code: 0x{:02X}", result.cc());
