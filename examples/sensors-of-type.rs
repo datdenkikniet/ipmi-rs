@@ -1,28 +1,42 @@
-use ipmi_rs::{connection::File, storage::sdr::SensorType, Ipmi};
+use clap::Parser;
+use ipmi_rs::storage::sdr::SensorType;
 use log::Level;
-use std::time::Duration;
 
-fn main() -> Result<(), String> {
+mod common;
+
+#[derive(Parser)]
+pub struct Command {
+    #[clap(flatten)]
+    common: common::CommonOpts,
+
+    #[clap(required = true)]
+    types: Vec<String>,
+}
+
+fn main() -> std::io::Result<()> {
     pretty_env_logger::init();
 
-    let args: Vec<_> = std::env::args().skip(1).collect();
+    let args = Command::parse();
 
-    if args.len() != 1 {
-        return Err(format!("Expected 1 argument, got {}", args.len()));
+    let mut sensor_types = Vec::new();
+
+    for ty in args.types {
+        if let Ok(ty) = SensorType::try_from(ty.as_str()) {
+            sensor_types.push(ty);
+        } else {
+            let err = std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                format!("Unknown sensor type '{}'", ty),
+            );
+            return Err(err);
+        };
     }
 
-    let sensor_type = if let Ok(ty) = SensorType::try_from(args[0].as_str()) {
-        ty
-    } else {
-        return Err(format!("Unknown sensor type '{}'", args[0]));
-    };
-
-    let file = File::new("/dev/ipmi0", Duration::from_millis(4000)).unwrap();
-    let mut ipmi = Ipmi::new(file);
+    let mut ipmi = args.common.get_connection()?;
 
     let sdrs_of_type = ipmi.sdrs().filter(|s| {
         s.common_data()
-            .map(|c| c.ty == sensor_type)
+            .map(|c| sensor_types.contains(&c.ty))
             .unwrap_or(false)
     });
 

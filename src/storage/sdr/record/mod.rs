@@ -875,6 +875,10 @@ impl Loggable for Record {
         log.push((1, "Record ID", format!("0x{:04X}", id.0)).into());
         log.push((1, "SDR Version", format!("{sdr_v_maj}.{sdr_v_min}")).into());
 
+        if let Some(common) = self.common_data() {
+            log.push((1, "Sensor Type", format!("{:?}", common.ty)).into());
+        }
+
         if let Some(full) = full {
             full.key_data().log_into(1, &mut log);
 
