@@ -14,7 +14,9 @@ use ipmi_rs::{
 };
 
 fn main() -> std::io::Result<()> {
-    pretty_env_logger::init();
+    pretty_env_logger::formatted_builder()
+        .parse_filters(&std::env::var("RUST_LOG").unwrap_or("info".to_string()))
+        .init();
 
     let opts = common::CliOpts::parse();
 
@@ -75,9 +77,8 @@ fn main() -> std::io::Result<()> {
 
     let sensors = ipmi
         .sdrs()
-        .enumerate()
-        .map(|(idx, v)| {
-            progress_bar.set_position(idx as u64 + 1);
+        .map(|v| {
+            progress_bar.inc(1);
             v
         })
         .collect::<Vec<_>>();

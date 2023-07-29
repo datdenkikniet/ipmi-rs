@@ -14,7 +14,9 @@ pub struct Command {
 }
 
 fn main() -> std::io::Result<()> {
-    pretty_env_logger::init();
+    pretty_env_logger::formatted_builder()
+        .parse_filters(&std::env::var("RUST_LOG").unwrap_or("info".to_string()))
+        .init();
 
     let args = Command::parse();
 

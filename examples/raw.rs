@@ -17,7 +17,9 @@ fn try_parse_message(input: &[u8]) -> Result<Message, String> {
 }
 
 fn main() -> Result<(), String> {
-    pretty_env_logger::init();
+    pretty_env_logger::formatted_builder()
+        .parse_filters(&std::env::var("RUST_LOG").unwrap_or("info".to_string()))
+        .init();
 
     let mut data = Vec::new();
     for arg in std::env::args().skip(1) {
