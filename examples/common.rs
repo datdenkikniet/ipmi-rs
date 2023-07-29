@@ -1,6 +1,6 @@
 use std::{io::ErrorKind, time::Duration};
 
-use clap::Parser;
+use clap::{Args, Parser};
 use ipmi_rs::{
     connection::{
         rmcp::{Active, Rmcp},
@@ -58,6 +58,18 @@ impl IpmiConnectionEnum {
 
 #[derive(Parser)]
 pub struct CliOpts {
+    #[clap(flatten)]
+    pub common: CommonOpts,
+}
+
+impl CliOpts {
+    pub fn get_connection(&self) -> std::io::Result<IpmiConnectionEnum> {
+        self.common.get_connection()
+    }
+}
+
+#[derive(Args)]
+pub struct CommonOpts {
     /// The connection URI to use
     #[clap(default_value = "file:///dev/ipmi0", long, short)]
     connection_uri: String,
@@ -73,7 +85,7 @@ where
     std::io::Error::new(ErrorKind::Other, val)
 }
 
-impl CliOpts {
+impl CommonOpts {
     pub fn get_connection(&self) -> std::io::Result<IpmiConnectionEnum> {
         let timeout = Duration::from_millis(self.timeout_ms);
 
