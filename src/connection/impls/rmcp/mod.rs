@@ -5,6 +5,7 @@ use std::{
     io::{Error, ErrorKind},
     iter::FusedIterator,
     net::{ToSocketAddrs, UdpSocket},
+    num::NonZeroU32,
     time::Duration,
 };
 
@@ -27,7 +28,7 @@ use encapsulation::*;
 pub struct Inactive;
 
 pub struct Active {
-    session_id: u32,
+    session_id: Option<NonZeroU32>,
     auth_type: crate::app::auth::AuthType,
     password: [u8; 16],
     _supported_interactions: SupportedInteractions,
@@ -206,7 +207,7 @@ impl Rmcp<Inactive> {
             auth_type: auth::AuthType::None,
             password: password_padded,
             _supported_interactions: supported_interactions,
-            session_id: 0,
+            session_id: None,
             request_sequence: 0,
         });
 
@@ -242,7 +243,7 @@ impl Rmcp<Inactive> {
             initial_sequence_number: 0xDEAD_BEEF,
         };
 
-        ipmi.inner_mut().state.session_id = challenge.temporary_session_id;
+        ipmi.inner_mut().state.session_id = Some(challenge.temporary_session_id);
         ipmi.inner_mut().state.auth_type = activation_auth_type;
 
         log::debug!("Activating session");
@@ -257,7 +258,7 @@ impl Rmcp<Inactive> {
         let mut me = ipmi.release();
 
         me.state.request_sequence = activation_info.initial_sequence_number;
-        me.state.session_id = activation_info.session_id;
+        me.state.session_id = Some(activation_info.session_id);
 
         // TODO: assert the correct thing here
         assert_eq!(activate_session.auth_type, activation_auth_type);
@@ -297,7 +298,12 @@ impl IpmiConnection for Rmcp<Active> {
         let final_data: Vec<_> = first_part.chain(second_part).collect();
 
         let session_sequence = self.state.request_sequence;
-        self.state.request_sequence = self.state.request_sequence.wrapping_add(1);
+
+        // Only increment the request sequence once a session has been established
+        // succesfully.
+        if self.state.session_id.is_some() {
+            self.state.request_sequence = self.state.request_sequence.wrapping_add(1);
+        }
 
         let auth_type = AuthType::calculate(
             self.state.auth_type,
@@ -312,7 +318,7 @@ impl IpmiConnection for Rmcp<Active> {
             RmcpClass::IPMI(EncapsulatedMessage {
                 auth_type,
                 session_sequence,
-                session_id: self.state.session_id,
+                session_id: self.state.session_id.map(|v| v.get()).unwrap_or(0),
                 payload: final_data,
             }),
         );

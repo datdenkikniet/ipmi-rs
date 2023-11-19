@@ -1,3 +1,5 @@
+use std::num::NonZeroU32;
+
 use crate::connection::{IpmiCommand, Message, NetFn, ParseResponseError};
 
 use super::{AuthType, PrivilegeLevel};
@@ -13,7 +15,7 @@ pub struct ActivateSession {
 #[derive(Debug, Clone)]
 pub struct BeginSessionInfo {
     pub auth_type: AuthType,
-    pub session_id: u32,
+    pub session_id: NonZeroU32,
     pub initial_sequence_number: u32,
     pub maximum_privilege_level: PrivilegeLevel,
 }
@@ -47,7 +49,8 @@ impl IpmiCommand for ActivateSession {
         }
 
         let auth_type = data[0].try_into().map_err(|_| ())?;
-        let session_id = u32::from_le_bytes(data[1..5].try_into().unwrap());
+        let session_id = NonZeroU32::try_from(u32::from_le_bytes(data[1..5].try_into().unwrap()))
+            .map_err(|_| ())?;
         let initial_sequence_number = u32::from_le_bytes(data[5..9].try_into().unwrap());
         let maximum_privilege_level = data[9].try_into().map_err(|_| ())?;
 

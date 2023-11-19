@@ -1,3 +1,5 @@
+use std::num::NonZeroU32;
+
 use crate::app::auth;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -23,7 +25,7 @@ impl AuthType {
     pub fn calculate(
         auth_type: auth::AuthType,
         password: &[u8; 16],
-        session_id: u32,
+        session_id: Option<NonZeroU32>,
         session_seq: u32,
         data: &[u8],
     ) -> AuthType {
@@ -33,7 +35,7 @@ impl AuthType {
             auth::AuthType::MD5 => {
                 let mut context = md5::Context::new();
                 context.consume(password);
-                context.consume(&session_id.to_le_bytes());
+                context.consume(&session_id.map(|v| v.get()).unwrap_or(0).to_le_bytes());
                 context.consume(data);
                 context.consume(session_seq.to_le_bytes());
                 context.consume(password);
