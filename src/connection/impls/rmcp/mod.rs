@@ -3,31 +3,31 @@
 
 use std::{
     io::{Error, ErrorKind},
-    iter::FusedIterator,
     net::{ToSocketAddrs, UdpSocket},
+    num::NonZeroU32,
     time::Duration,
 };
 
 use crate::{
     app::auth::{
-        self, ActivateSession, Channel, GetChannelAuthenticationCapabilities, GetSessionChallenge,
-        PrivilegeLevel,
+        self, ActivateSession, AuthError, Channel, GetChannelAuthenticationCapabilities,
+        GetSessionChallenge, PrivilegeLevel,
     },
-    connection::{IpmiConnection, LogicalUnit, Message, Response},
+    connection::{IpmiConnection, LogicalUnit, Response},
     IpmiCommandError,
 };
 
 mod rmcp;
+mod wire;
 use rmcp::*;
 
 mod encapsulation;
-use encapsulation::*;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Inactive;
 
 pub struct Active {
-    session_id: u32,
+    session_id: Option<NonZeroU32>,
     auth_type: crate::app::auth::AuthType,
     password: [u8; 16],
     _supported_interactions: SupportedInteractions,
@@ -44,40 +44,6 @@ pub struct Rmcp<T> {
 }
 
 impl<T> Rmcp<T> {
-    fn checksum(data: impl IntoIterator<Item = u8>) -> impl Iterator<Item = u8> {
-        struct ChecksumIterator<I> {
-            checksum: u8,
-            yielded_checksum: bool,
-            inner: I,
-        }
-
-        impl<I: Iterator<Item = u8>> Iterator for ChecksumIterator<I> {
-            type Item = u8;
-
-            fn next(&mut self) -> Option<Self::Item> {
-                if let Some(value) = self.inner.next() {
-                    self.checksum = self.checksum.wrapping_add(value);
-                    Some(value)
-                } else if !self.yielded_checksum {
-                    self.yielded_checksum = true;
-                    self.checksum = !self.checksum;
-                    self.checksum = self.checksum.wrapping_add(1);
-                    Some(self.checksum)
-                } else {
-                    None
-                }
-            }
-        }
-
-        impl<I: Iterator<Item = u8>> FusedIterator for ChecksumIterator<I> {}
-
-        ChecksumIterator {
-            checksum: 0,
-            yielded_checksum: false,
-            inner: data.into_iter(),
-        }
-    }
-
     fn convert<O>(self, new_state: O) -> Rmcp<O> {
         Rmcp {
             inner: self.inner,
@@ -99,8 +65,8 @@ pub enum ActivationError {
     PasswordTooLong,
     NoSupportedAuthenticationType,
     GetChannelAuthenticationCapabilities(CommandError<()>),
-    GetSessionChallenge(CommandError<()>),
-    ActivateSession(CommandError<()>),
+    GetSessionChallenge(CommandError<AuthError>),
+    ActivateSession(CommandError<AuthError>),
 }
 
 impl From<std::io::Error> for ActivationError {
@@ -206,7 +172,7 @@ impl Rmcp<Inactive> {
             auth_type: auth::AuthType::None,
             password: password_padded,
             _supported_interactions: supported_interactions,
-            session_id: 0,
+            session_id: None,
             request_sequence: 0,
         });
 
@@ -242,7 +208,7 @@ impl Rmcp<Inactive> {
             initial_sequence_number: 0xDEAD_BEEF,
         };
 
-        ipmi.inner_mut().state.session_id = challenge.temporary_session_id;
+        ipmi.inner_mut().state.session_id = Some(challenge.temporary_session_id);
         ipmi.inner_mut().state.auth_type = activation_auth_type;
 
         log::debug!("Activating session");
@@ -257,7 +223,7 @@ impl Rmcp<Inactive> {
         let mut me = ipmi.release();
 
         me.state.request_sequence = activation_info.initial_sequence_number;
-        me.state.session_id = activation_info.session_id;
+        me.state.session_id = Some(activation_info.session_id);
 
         // TODO: assert the correct thing here
         assert_eq!(activate_session.auth_type, activation_auth_type);
@@ -274,98 +240,23 @@ impl IpmiConnection for Rmcp<Active> {
     type Error = Error;
 
     fn send(&mut self, request: &mut crate::connection::Request) -> Result<(), Self::SendError> {
-        log::trace!("Sending message with auth type {:?}", self.state.auth_type);
-
-        let rs_addr = self.responder_addr;
-        let netfn_rslun: u8 = (request.netfn().request_value() << 2) | request.lun().value();
-
-        let first_part = Self::checksum([rs_addr, netfn_rslun]);
-
-        let req_addr = self.requestor_addr;
-
-        let ipmb_sequence = self.ipmb_sequence;
-        self.ipmb_sequence = self.ipmb_sequence.wrapping_add(1);
-
-        let reqseq_lun = (ipmb_sequence << 2) | self.requestor_lun.value();
-        let cmd = request.cmd();
-        let second_part = Self::checksum(
-            [req_addr, reqseq_lun, cmd]
-                .into_iter()
-                .chain(request.data().iter().map(|v| *v)),
-        );
-
-        let final_data: Vec<_> = first_part.chain(second_part).collect();
-
-        let session_sequence = self.state.request_sequence;
-        self.state.request_sequence = self.state.request_sequence.wrapping_add(1);
-
-        let auth_type = AuthType::calculate(
+        wire::send(
+            &mut self.inner,
             self.state.auth_type,
-            &self.state.password,
+            self.requestor_addr,
+            self.responder_addr,
+            &mut self.ipmb_sequence,
+            self.requestor_lun,
+            &mut self.state.request_sequence,
             self.state.session_id,
-            session_sequence,
-            &final_data,
-        );
-
-        let message = RmcpMessage::new(
-            0xFF,
-            RmcpClass::IPMI(EncapsulatedMessage {
-                auth_type,
-                session_sequence,
-                session_id: self.state.session_id,
-                payload: final_data,
-            }),
-        );
-
-        self.inner.send(&message.to_bytes())?;
-        Ok(())
+            &self.state.password,
+            request,
+        )
+        .map(|_| ())
     }
 
     fn recv(&mut self) -> Result<Response, Self::RecvError> {
-        let mut buffer = [0u8; 1024];
-        let received_bytes = self.inner.recv(&mut buffer)?;
-
-        if received_bytes < 8 {
-            return Err(Error::new(ErrorKind::Other, "Incomplete response"));
-        }
-
-        let data = &buffer[..received_bytes];
-
-        let rcmp_message = RmcpMessage::from_bytes(data)
-            .ok_or(Error::new(ErrorKind::Other, "RMCP response not recognized"))?;
-
-        let encapsulated_message = if let RmcpMessage {
-            class_and_contents: RmcpClass::IPMI(message),
-            ..
-        } = rcmp_message
-        {
-            message
-        } else {
-            return Err(Error::new(
-                ErrorKind::Other,
-                "RMCP response does not have IPMI class",
-            ));
-        };
-
-        let data = encapsulated_message.payload;
-
-        let _req_addr = data[0];
-        let netfn = data[1] >> 2;
-        let _checksum1 = data[2];
-        let _rs_addr = data[3];
-        let _rqseq = data[4];
-        let cmd = data[5];
-        let response_data: Vec<_> = data[6..data.len() - 1].iter().map(|v| *v).collect();
-        let _checksum2 = data[data.len() - 1];
-
-        let response =
-            if let Some(resp) = Response::new(Message::new_raw(netfn, cmd, response_data), 0) {
-                resp
-            } else {
-                return Err(Error::new(ErrorKind::Other, "Response data was empty"));
-            };
-
-        Ok(response)
+        wire::recv(&mut self.inner)
     }
 
     fn send_recv(
@@ -375,10 +266,4 @@ impl IpmiConnection for Rmcp<Active> {
         self.send(request)?;
         self.recv()
     }
-}
-
-#[test]
-pub fn checksum() {
-    let output: Vec<_> = Rmcp::<Inactive>::checksum([0x20, 0x06 << 2]).collect();
-    panic!("{:02X?}", output);
 }

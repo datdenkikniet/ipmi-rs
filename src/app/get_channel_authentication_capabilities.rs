@@ -161,7 +161,7 @@ impl IpmiCommand for GetChannelAuthenticationCapabilities {
             anonymous_login_enabled: ale,
             ipmi2_connections_supported: v2,
             ipmi15_connections_supported: v15,
-            oem_id: oem_id,
+            oem_id,
             oem_auxiliary_data: oem_aux,
         })
     }

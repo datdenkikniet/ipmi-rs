@@ -1,10 +1,12 @@
+use std::num::NonZeroU32;
+
 use crate::connection::{CompletionCode, IpmiCommand, Message, NetFn, ParseResponseError};
 
-use super::AuthType;
+use super::{AuthError, AuthType};
 
 #[derive(Debug, Clone, Copy)]
 pub struct SessionChallenge {
-    pub temporary_session_id: u32,
+    pub temporary_session_id: NonZeroU32,
     pub challenge_string: [u8; 16],
 }
 
@@ -57,7 +59,7 @@ impl Into<Message> for GetSessionChallenge {
 impl IpmiCommand for GetSessionChallenge {
     type Output = SessionChallenge;
 
-    type Error = ();
+    type Error = AuthError;
 
     fn parse_response(
         completion_code: CompletionCode,
@@ -69,7 +71,9 @@ impl IpmiCommand for GetSessionChallenge {
             return Err(ParseResponseError::NotEnoughData);
         }
 
-        let temporary_session_id = u32::from_le_bytes(data[0..4].try_into().unwrap());
+        let temporary_session_id =
+            NonZeroU32::try_from(u32::from_le_bytes(data[0..4].try_into().unwrap()))
+                .map_err(|_| AuthError::InvalidZeroSession)?;
 
         let challenge_string = data[4..20].try_into().unwrap();
 

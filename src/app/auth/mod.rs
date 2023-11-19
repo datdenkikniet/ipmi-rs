@@ -11,6 +11,17 @@ pub use get_session_challenge::{GetSessionChallenge, SessionChallenge};
 mod activate_session;
 pub use activate_session::{ActivateSession, BeginSessionInfo};
 
+#[derive(Debug, Clone)]
+pub enum AuthError {
+    /// A non-zero session ID was received at a stage where
+    /// non-zero session numbers are not allowed.
+    InvalidZeroSession,
+    /// An invalid auth type was encountered.
+    InvalidAuthType(u8),
+    /// An unknown privilege level was encountered.
+    InvalidPrivilegeLevel(u8),
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum AuthType {
     None,

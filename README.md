@@ -48,3 +48,8 @@ at your option.
 Unless you explicitly state otherwise, any contribution intentionally submitted
 for inclusion in the work by you, as defined in the Apache-2.0 license, shall be
 licensed as above, without any additional terms or conditions.
+
+This project aims to conform to [Conventional Commits]. If you make contributions,
+please be so kind to stick to that format :)
+
+[Conventional Commits]: https://www.conventionalcommits.org/en/v1.0.0/#summary
