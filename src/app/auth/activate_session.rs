@@ -2,7 +2,7 @@ use std::num::NonZeroU32;
 
 use crate::connection::{IpmiCommand, Message, NetFn, ParseResponseError};
 
-use super::{AuthType, PrivilegeLevel};
+use super::{AuthError, AuthType, PrivilegeLevel};
 
 #[derive(Debug, Clone)]
 pub struct ActivateSession {
@@ -36,7 +36,7 @@ impl Into<Message> for ActivateSession {
 impl IpmiCommand for ActivateSession {
     type Output = BeginSessionInfo;
 
-    type Error = ();
+    type Error = AuthError;
 
     fn parse_response(
         completion_code: crate::connection::CompletionCode,
@@ -48,11 +48,16 @@ impl IpmiCommand for ActivateSession {
             return Err(ParseResponseError::NotEnoughData);
         }
 
-        let auth_type = data[0].try_into().map_err(|_| ())?;
+        let auth_type = data[0]
+            .try_into()
+            .map_err(|_| AuthError::InvalidAuthType(data[0]))?;
+
         let session_id = NonZeroU32::try_from(u32::from_le_bytes(data[1..5].try_into().unwrap()))
-            .map_err(|_| ())?;
+            .map_err(|_| AuthError::InvalidZeroSession)?;
         let initial_sequence_number = u32::from_le_bytes(data[5..9].try_into().unwrap());
-        let maximum_privilege_level = data[9].try_into().map_err(|_| ())?;
+        let maximum_privilege_level = data[9]
+            .try_into()
+            .map_err(|_| AuthError::InvalidPrivilegeLevel(data[9]))?;
 
         Ok(BeginSessionInfo {
             auth_type,

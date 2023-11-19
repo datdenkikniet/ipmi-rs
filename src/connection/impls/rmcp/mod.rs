@@ -11,8 +11,8 @@ use std::{
 
 use crate::{
     app::auth::{
-        self, ActivateSession, Channel, GetChannelAuthenticationCapabilities, GetSessionChallenge,
-        PrivilegeLevel,
+        self, ActivateSession, AuthError, Channel, GetChannelAuthenticationCapabilities,
+        GetSessionChallenge, PrivilegeLevel,
     },
     connection::{IpmiConnection, LogicalUnit, Message, Response},
     IpmiCommandError,
@@ -100,8 +100,8 @@ pub enum ActivationError {
     PasswordTooLong,
     NoSupportedAuthenticationType,
     GetChannelAuthenticationCapabilities(CommandError<()>),
-    GetSessionChallenge(CommandError<()>),
-    ActivateSession(CommandError<()>),
+    GetSessionChallenge(CommandError<AuthError>),
+    ActivateSession(CommandError<AuthError>),
 }
 
 impl From<std::io::Error> for ActivationError {
