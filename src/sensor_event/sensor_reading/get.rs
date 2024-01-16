@@ -6,7 +6,7 @@ use crate::{
 use super::RawSensorReading;
 
 impl RawSensorReading {
-    fn parse(data: &[u8]) -> Option<Self> {
+    pub(crate) fn parse(data: &[u8]) -> Option<Self> {
         if data.len() < 2 {
             return None;
         }
