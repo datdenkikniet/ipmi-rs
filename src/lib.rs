@@ -9,6 +9,9 @@ pub mod sensor_event;
 
 #[macro_use]
 mod fmt;
+#[cfg(test)]
+mod tests;
+
 pub use fmt::{LogOutput, Loggable, Logger};
 
 use connection::{IpmiCommand, LogicalUnit, NetFn, ParseResponseError, Request};

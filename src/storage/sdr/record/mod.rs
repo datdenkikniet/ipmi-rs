@@ -633,7 +633,7 @@ impl<'a> From<TypeLengthRaw<'a>> for SensorId {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum SensorId {
     Unicode(String),
     BCDPlus(Vec<u8>),
