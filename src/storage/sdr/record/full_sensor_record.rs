@@ -92,7 +92,7 @@ impl FullSensorRecord {
         let b_lsb = record_data[3];
         let b_msb_accuracy_lsb = record_data[4];
 
-        let b_sign = if b_msb_accuracy_lsb & 1 == 1 {
+        let b_sign = if b_msb_accuracy_lsb & 0x80 == 0x80 {
             0b11111100
         } else {
             0
