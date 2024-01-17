@@ -116,6 +116,28 @@ pub struct IpmiSysIfaceAddr {
     lun: u8,
 }
 
+#[repr(C)]
+#[derive(Clone, Debug, PartialEq)]
+pub struct IpmiIpmbAddr {
+    ty: i32,
+    channel: i16,
+    target_addr: u8,
+    lun: u8,
+}
+
+impl IpmiIpmbAddr {
+    const IPMI_IPMB_ADDR_TYPE: i32 = 0x01;
+
+    pub const fn new(channel: i16, target_addr: u8, lun: u8) -> Self {
+        Self {
+            ty: Self::IPMI_IPMB_ADDR_TYPE,
+            channel,
+            target_addr,
+            lun,
+        }
+    }
+}
+
 impl IpmiSysIfaceAddr {
     const IPMI_SYSTEM_INTERFACE_ADDR_TYPE: i32 = 0x0c;
     const IPMI_BMC_CHANNEL: i16 = 0xf;
@@ -188,6 +210,17 @@ impl IpmiConnection for File {
 
     fn send(&mut self, request: &mut Request) -> io::Result<()> {
         let mut bmc_addr = IpmiSysIfaceAddr::bmc(request.lun().value());
+        let mut ipmb_addr = IpmiIpmbAddr::new(0, 0, request.lun().value());
+        let use_ipmb = if let Some((target_addr, channel)) =
+            request.bridge_target_address_and_channel(self.my_addr_to_use())
+        {
+            ipmb_addr.channel = channel as i16;
+            ipmb_addr.target_addr = target_addr;
+            ipmb_addr.lun = request.lun().value();
+            true
+        } else {
+            false
+        };
 
         let netfn = request.netfn_raw();
         let cmd = request.cmd();
@@ -197,16 +230,26 @@ impl IpmiConnection for File {
         let data_len = data.len() as u16;
         let ptr = data.as_mut_ptr();
 
-        let mut request = IpmiRequest {
-            addr: std::ptr::addr_of_mut!(bmc_addr) as *mut u8,
-            addr_len: core::mem::size_of::<IpmiSysIfaceAddr>() as u32,
-            msg_id: seq,
-            message: IpmiMessage {
-                netfn,
-                cmd,
-                data_len,
-                data: ptr,
-            },
+        let ipmi_message = IpmiMessage {
+            netfn,
+            cmd,
+            data_len,
+            data: ptr,
+        };
+        let mut request = if use_ipmb {
+            IpmiRequest {
+                addr: std::ptr::addr_of_mut!(ipmb_addr) as *mut u8,
+                addr_len: core::mem::size_of::<IpmiIpmbAddr>() as u32,
+                msg_id: seq,
+                message: ipmi_message,
+            }
+        } else {
+            IpmiRequest {
+                addr: std::ptr::addr_of_mut!(bmc_addr) as *mut u8,
+                addr_len: core::mem::size_of::<IpmiSysIfaceAddr>() as u32,
+                msg_id: seq,
+                message: ipmi_message,
+            }
         };
 
         log::debug!("Sending request (netfn: 0x{netfn:02X}, cmd: 0x{cmd:02X})");
@@ -223,6 +266,8 @@ impl IpmiConnection for File {
         drop(request);
         #[allow(clippy::drop_non_drop)]
         drop(bmc_addr);
+        #[allow(clippy::drop_non_drop)]
+        drop(ipmb_addr);
 
         Ok(())
     }

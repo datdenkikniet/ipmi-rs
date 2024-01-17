@@ -5,13 +5,19 @@ use super::Message;
 pub struct Request {
     lun: LogicalUnit,
     message: Message,
+    address_and_channel: Option<(u8, u8)>,
 }
 
 impl Request {
-    pub const fn new(request: Message, lun: LogicalUnit) -> Self {
+    pub const fn new(
+        request: Message,
+        lun: LogicalUnit,
+        address_and_channel: Option<(u8, u8)>,
+    ) -> Self {
         Self {
             lun,
             message: request,
+            address_and_channel,
         }
     }
 
@@ -37,5 +43,18 @@ impl Request {
 
     pub fn data_mut(&mut self) -> &mut [u8] {
         self.message.data_mut()
+    }
+
+    pub fn bridge_target_address_and_channel(&self, my_addr: u8) -> Option<(u8, u8)> {
+        match self.address_and_channel {
+            Some((addr, channel)) => {
+                if addr != my_addr {
+                    Some((addr, channel))
+                } else {
+                    None
+                }
+            }
+            None => None,
+        }
     }
 }

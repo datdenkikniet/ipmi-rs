@@ -53,7 +53,7 @@ fn main() -> std::io::Result<()> {
 
     let message = try_parse_message(&data)?;
 
-    let mut request: Request = Request::new(message, LogicalUnit::Zero);
+    let mut request: Request = Request::new(message, LogicalUnit::Zero, None);
 
     let ipmi = command.common.get_connection()?;
 

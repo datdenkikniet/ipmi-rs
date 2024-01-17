@@ -139,4 +139,8 @@ pub trait IpmiCommand: Into<Message> {
             Err(ParseResponseError::Failed(cc))
         }
     }
+
+    fn address_and_channel(&self) -> Option<(u8, u8)> {
+        None
+    }
 }

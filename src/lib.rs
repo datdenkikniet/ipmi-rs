@@ -89,9 +89,10 @@ where
     where
         CMD: IpmiCommand,
     {
+        let address_and_channel = request.address_and_channel();
         let message = request.into();
         let (message_netfn, message_cmd) = (message.netfn(), message.cmd());
-        let mut request = Request::new(message, LogicalUnit::Zero);
+        let mut request = Request::new(message, LogicalUnit::Zero, address_and_channel);
 
         let response = self.inner.send_recv(&mut request)?;
 
