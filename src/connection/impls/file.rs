@@ -105,6 +105,7 @@ mod ioctl {
 
     ioctl_readwrite!(ipmi_recv_msg_trunc, IPMI_IOC_MAGIC, 11, IpmiRecv);
     ioctl_read!(ipmi_send_request, IPMI_IOC_MAGIC, 13, IpmiRequest);
+    ioctl_read!(ipmi_get_my_address, IPMI_IOC_MAGIC, 18, u32);
 }
 
 #[repr(C)]
@@ -132,6 +133,7 @@ pub struct File {
     inner: std::fs::File,
     recv_timeout: Duration,
     seq: i64,
+    my_addr: Option<u8>,
 }
 
 impl File {
@@ -144,9 +146,38 @@ impl File {
             inner: std::fs::File::open(path)?,
             recv_timeout,
             seq: 0,
+            my_addr: None,
         });
 
         me
+    }
+
+    pub fn get_my_address(&mut self) -> io::Result<u8> {
+        let mut my_addr: u32 = 8;
+        unsafe { ioctl::ipmi_get_my_address(self.fd(), std::ptr::addr_of_mut!(my_addr))? };
+        if my_addr > (u8::MAX as u32) {
+            Err(io::Error::new(
+                io::ErrorKind::Other,
+                format!("Got invalid address {}", my_addr),
+            ))
+        } else {
+            Ok(my_addr as u8)
+        }
+    }
+
+    pub fn my_addr_to_use(&mut self) -> u8 {
+        if self.my_addr.is_none() {
+            match self.get_my_address() {
+                Ok(addr) => {
+                    self.my_addr = Some(addr);
+                }
+                Err(e) => {
+                    log::warn!("Failed to get local address, defaulting to 0x20: {:?}", e);
+                    self.my_addr = Some(0x20);
+                }
+            }
+        }
+        self.my_addr.unwrap()
     }
 }
 
