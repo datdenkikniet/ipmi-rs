@@ -124,6 +124,15 @@ impl From<u8> for SensorOwner {
     }
 }
 
+impl Into<u8> for SensorOwner {
+    fn into(self) -> u8 {
+        match self {
+            Self::I2C(id) => (id << 1) & 0xFE,
+            Self::System(id) => ((id << 1) & 0xFE) | 1,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub enum EntityRelativeTo {
     System,
@@ -903,5 +912,19 @@ impl Loggable for Record {
         }
 
         log
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_sensor_owner_round_trip() {
+        for x in 0u8..=255u8 {
+            let o = SensorOwner::from(x);
+            let value: u8 = o.into();
+            assert_eq!(x, value);
+        }
     }
 }
