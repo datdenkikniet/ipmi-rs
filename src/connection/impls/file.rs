@@ -155,7 +155,7 @@ pub struct File {
     inner: std::fs::File,
     recv_timeout: Duration,
     seq: i64,
-    my_addr: Option<u8>,
+    my_addr: u8,
 }
 
 impl File {
@@ -164,42 +164,36 @@ impl File {
     }
 
     pub fn new(path: impl AsRef<std::path::Path>, recv_timeout: Duration) -> io::Result<Self> {
+        let mut inner = std::fs::File::open(path)?;
+
+        let my_addr = match Self::load_my_address_from_file(&mut inner) {
+            Ok(addr) => addr,
+            Err(e) => {
+                log::warn!("Failed to get local address, defaulting to 0x20: {:?}", e);
+                0x20
+            }
+        };
         let me = Ok(Self {
-            inner: std::fs::File::open(path)?,
+            inner,
             recv_timeout,
             seq: 0,
-            my_addr: None,
+            my_addr,
         });
 
         me
     }
 
-    pub fn get_my_address(&mut self) -> io::Result<u8> {
+    fn load_my_address_from_file(file: &mut std::fs::File) -> io::Result<u8> {
         let mut my_addr: u32 = 8;
-        unsafe { ioctl::ipmi_get_my_address(self.fd(), std::ptr::addr_of_mut!(my_addr))? };
-        if my_addr > (u8::MAX as u32) {
+        unsafe { ioctl::ipmi_get_my_address(file.as_raw_fd(), std::ptr::addr_of_mut!(my_addr))? };
+        if let Ok(addr) = u8::try_from(my_addr) {
+            Ok(addr)
+        } else {
             Err(io::Error::new(
                 io::ErrorKind::Other,
-                format!("Got invalid address {}", my_addr),
+                format!("ipmi_get_my_address returned non-u8 address: {}", my_addr),
             ))
-        } else {
-            Ok(my_addr as u8)
         }
-    }
-
-    pub fn my_addr_to_use(&mut self) -> u8 {
-        if self.my_addr.is_none() {
-            match self.get_my_address() {
-                Ok(addr) => {
-                    self.my_addr = Some(addr);
-                }
-                Err(e) => {
-                    log::warn!("Failed to get local address, defaulting to 0x20: {:?}", e);
-                    self.my_addr = Some(0x20);
-                }
-            }
-        }
-        self.my_addr.unwrap()
     }
 }
 
@@ -212,7 +206,7 @@ impl IpmiConnection for File {
         let mut bmc_addr = IpmiSysIfaceAddr::bmc(request.lun().value());
         let mut ipmb_addr = IpmiIpmbAddr::new(0, 0, request.lun().value());
         let use_ipmb = if let Some((target_addr, channel)) =
-            request.bridge_target_address_and_channel(self.my_addr_to_use())
+            request.bridge_target_address_and_channel(self.my_addr)
         {
             ipmb_addr.channel = channel as i16;
             ipmb_addr.target_addr = target_addr;
