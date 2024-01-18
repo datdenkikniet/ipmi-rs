@@ -2,10 +2,13 @@ mod full_sensor_record;
 pub use full_sensor_record::FullSensorRecord;
 
 mod compact_sensor_record;
+mod fru_device_locator;
+
 pub use compact_sensor_record::CompactSensorRecord;
 
 use nonmax::NonMaxU8;
 
+use crate::storage::sdr::record::fru_device_locator::FruDeviceLocator;
 use crate::{connection::LogicalUnit, Loggable};
 
 use super::{event_reading_type_code::EventReadingTypeCodes, RecordId, SensorType, Unit};
@@ -697,6 +700,7 @@ pub struct Record {
 pub enum RecordContents {
     FullSensor(FullSensorRecord),
     CompactSensor(CompactSensorRecord),
+    FruDeviceLocator(FruDeviceLocator),
     Unknown { ty: u8, data: Vec<u8> },
 }
 
@@ -705,6 +709,7 @@ impl Record {
         match &self.contents {
             RecordContents::FullSensor(s) => Some(s.common()),
             RecordContents::CompactSensor(s) => Some(s.common()),
+            RecordContents::FruDeviceLocator(_) => None,
             RecordContents::Unknown { .. } => None,
         }
     }
@@ -745,6 +750,8 @@ impl Record {
             RecordContents::FullSensor(FullSensorRecord::parse(record_data).ok()?)
         } else if record_type == 0x02 {
             RecordContents::CompactSensor(CompactSensorRecord::parse(record_data)?)
+        } else if record_type == 0x11 {
+            RecordContents::FruDeviceLocator(FruDeviceLocator::parse(record_data)?)
         } else {
             RecordContents::Unknown {
                 ty: record_type,
@@ -766,6 +773,7 @@ impl Record {
         match &self.contents {
             RecordContents::FullSensor(full) => Some(full.id_string()),
             RecordContents::CompactSensor(compact) => Some(compact.id_string()),
+            RecordContents::FruDeviceLocator(fru) => Some(&fru.id_string),
             RecordContents::Unknown { .. } => None,
         }
     }
@@ -774,6 +782,7 @@ impl Record {
         match &self.contents {
             RecordContents::FullSensor(full) => Some(full.sensor_number()),
             RecordContents::CompactSensor(compact) => Some(compact.sensor_number()),
+            RecordContents::FruDeviceLocator(_) => None,
             RecordContents::Unknown { .. } => None,
         }
     }
