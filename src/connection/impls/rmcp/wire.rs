@@ -67,7 +67,7 @@ pub fn send(
     log::trace!("Sending message with auth type {:?}", auth_type);
 
     let rs_addr = responder_addr;
-    let netfn_rslun: u8 = (request.netfn().request_value() << 2) | request.lun().value();
+    let netfn_rslun: u8 = (request.netfn().request_value() << 2) | request.target().lun().value();
 
     let first_part = checksum([rs_addr, netfn_rslun]);
 

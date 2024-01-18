@@ -12,7 +12,7 @@ mod netfn;
 pub use netfn::NetFn;
 
 mod request;
-pub use request::Request;
+pub use request::{Address, Channel, Request, RequestTargetAddress};
 
 mod response;
 pub use response::Response;
@@ -49,17 +49,6 @@ impl LogicalUnit {
             LogicalUnit::Three => 3,
         }
     }
-}
-
-#[derive(Copy, Clone, Debug, PartialEq)]
-pub struct Address(pub u8);
-#[derive(Copy, Clone, Debug, PartialEq)]
-pub struct Channel(pub u8);
-
-#[derive(Copy, Clone, Debug, PartialEq)]
-pub enum RequestTargetAddress {
-    Bmc(LogicalUnit),
-    BmcOrIpmb(Address, Channel, LogicalUnit),
 }
 
 pub trait IpmiConnection {

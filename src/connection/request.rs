@@ -1,4 +1,4 @@
-use crate::connection::{LogicalUnit, NetFn, RequestTargetAddress};
+use crate::connection::{LogicalUnit, NetFn};
 
 use super::Message;
 
@@ -23,13 +23,6 @@ impl Request {
         self.message.netfn_raw()
     }
 
-    pub fn lun(&self) -> LogicalUnit {
-        match self.target {
-            RequestTargetAddress::Bmc(lun) => lun,
-            RequestTargetAddress::BmcOrIpmb(_, _, lun) => lun,
-        }
-    }
-
     pub fn cmd(&self) -> u8 {
         self.message.cmd
     }
@@ -44,5 +37,26 @@ impl Request {
 
     pub fn target(&self) -> RequestTargetAddress {
         self.target
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub struct Address(pub u8);
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub struct Channel(pub u8);
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum RequestTargetAddress {
+    Bmc(LogicalUnit),
+    BmcOrIpmb(Address, Channel, LogicalUnit),
+}
+
+impl RequestTargetAddress {
+    pub fn lun(&self) -> LogicalUnit {
+        match self {
+            RequestTargetAddress::Bmc(lun) | RequestTargetAddress::BmcOrIpmb(_, _, lun) => {
+                lun.clone()
+            }
+        }
     }
 }
