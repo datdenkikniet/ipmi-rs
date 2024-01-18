@@ -1,5 +1,6 @@
 use clap::Parser;
 use common::CommonOpts;
+use ipmi_rs::connection::RequestTargetAddress;
 use ipmi_rs::{
     connection::Message,
     connection::{IpmiConnection, LogicalUnit, Request},
@@ -53,7 +54,7 @@ fn main() -> std::io::Result<()> {
 
     let message = try_parse_message(&data)?;
 
-    let mut request: Request = Request::new(message, LogicalUnit::Zero, None);
+    let mut request: Request = Request::new(message, RequestTargetAddress::Bmc(LogicalUnit::Zero));
 
     let ipmi = command.common.get_connection()?;
 
