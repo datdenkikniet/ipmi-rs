@@ -6,7 +6,7 @@ use std::{
 };
 
 use crate::{
-    connection::{IpmiConnection, Message, Request, Response},
+    connection::{Address, IpmiConnection, Message, Request, RequestTargetAddress, Response},
     NetFn,
 };
 
@@ -155,7 +155,7 @@ pub struct File {
     inner: std::fs::File,
     recv_timeout: Duration,
     seq: i64,
-    my_addr: u8,
+    my_addr: Address,
 }
 
 impl File {
@@ -170,7 +170,7 @@ impl File {
             Ok(addr) => addr,
             Err(e) => {
                 log::warn!("Failed to get local address, defaulting to 0x20: {:?}", e);
-                0x20
+                Address(0x20)
             }
         };
         let me = Ok(Self {
@@ -183,11 +183,11 @@ impl File {
         me
     }
 
-    fn load_my_address_from_file(file: &mut std::fs::File) -> io::Result<u8> {
+    fn load_my_address_from_file(file: &mut std::fs::File) -> io::Result<Address> {
         let mut my_addr: u32 = 8;
         unsafe { ioctl::ipmi_get_my_address(file.as_raw_fd(), std::ptr::addr_of_mut!(my_addr))? };
         if let Ok(addr) = u8::try_from(my_addr) {
-            Ok(addr)
+            Ok(Address(addr))
         } else {
             Err(io::Error::new(
                 io::ErrorKind::Other,
@@ -203,17 +203,19 @@ impl IpmiConnection for File {
     type Error = io::Error;
 
     fn send(&mut self, request: &mut Request) -> io::Result<()> {
-        let mut bmc_addr = IpmiSysIfaceAddr::bmc(request.lun().value());
-        let mut ipmb_addr = IpmiIpmbAddr::new(0, 0, request.lun().value());
-        let use_ipmb = if let Some((target_addr, channel)) =
-            request.bridge_target_address_and_channel(self.my_addr)
-        {
-            ipmb_addr.channel = channel as i16;
-            ipmb_addr.target_addr = target_addr;
-            ipmb_addr.lun = request.lun().value();
-            true
-        } else {
-            false
+        let mut bmc_addr = IpmiSysIfaceAddr::bmc(0);
+        let mut ipmb_addr = IpmiIpmbAddr::new(0, 0, 0);
+        let use_ipmb = match request.bridge_target_address_and_channel(self.my_addr) {
+            RequestTargetAddress::Bmc(lun) => {
+                bmc_addr.lun = lun.value();
+                false
+            }
+            RequestTargetAddress::BmcOrIpmb(addr, channel, lun) => {
+                ipmb_addr.channel = channel.0 as i16;
+                ipmb_addr.target_addr = addr.0;
+                ipmb_addr.lun = lun.value();
+                true
+            }
         };
 
         let netfn = request.netfn_raw();

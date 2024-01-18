@@ -51,6 +51,17 @@ impl LogicalUnit {
     }
 }
 
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub struct Address(pub u8);
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub struct Channel(pub u8);
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum RequestTargetAddress {
+    Bmc(LogicalUnit),
+    BmcOrIpmb(Address, Channel, LogicalUnit),
+}
+
 pub trait IpmiConnection {
     type SendError: core::fmt::Debug;
     type RecvError: core::fmt::Debug;
@@ -140,7 +151,7 @@ pub trait IpmiCommand: Into<Message> {
         }
     }
 
-    fn address_and_channel(&self) -> Option<(u8, u8)> {
+    fn target(&self) -> Option<(Address, Channel)> {
         None
     }
 }

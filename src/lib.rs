@@ -14,7 +14,9 @@ mod tests;
 
 pub use fmt::{LogOutput, Loggable, Logger};
 
-use connection::{IpmiCommand, LogicalUnit, NetFn, ParseResponseError, Request};
+use connection::{
+    IpmiCommand, LogicalUnit, NetFn, ParseResponseError, Request, RequestTargetAddress,
+};
 use storage::sdr::{self, record::Record as SdrRecord};
 
 pub struct Ipmi<CON> {
@@ -89,10 +91,13 @@ where
     where
         CMD: IpmiCommand,
     {
-        let address_and_channel = request.address_and_channel();
+        let target_address = match request.target() {
+            Some((a, c)) => RequestTargetAddress::BmcOrIpmb(a, c, LogicalUnit::Zero),
+            None => RequestTargetAddress::Bmc(LogicalUnit::Zero),
+        };
         let message = request.into();
         let (message_netfn, message_cmd) = (message.netfn(), message.cmd());
-        let mut request = Request::new(message, LogicalUnit::Zero, address_and_channel);
+        let mut request = Request::new(message, target_address);
 
         let response = self.inner.send_recv(&mut request)?;
 

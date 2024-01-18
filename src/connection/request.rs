@@ -1,23 +1,17 @@
-use crate::connection::{LogicalUnit, NetFn};
+use crate::connection::{Address, LogicalUnit, NetFn, RequestTargetAddress};
 
 use super::Message;
 
 pub struct Request {
-    lun: LogicalUnit,
+    target: RequestTargetAddress,
     message: Message,
-    address_and_channel: Option<(u8, u8)>,
 }
 
 impl Request {
-    pub const fn new(
-        request: Message,
-        lun: LogicalUnit,
-        address_and_channel: Option<(u8, u8)>,
-    ) -> Self {
+    pub const fn new(request: Message, target: RequestTargetAddress) -> Self {
         Self {
-            lun,
+            target,
             message: request,
-            address_and_channel,
         }
     }
 
@@ -30,7 +24,10 @@ impl Request {
     }
 
     pub fn lun(&self) -> LogicalUnit {
-        self.lun
+        match self.target {
+            RequestTargetAddress::Bmc(lun) => lun,
+            RequestTargetAddress::BmcOrIpmb(_, _, lun) => lun,
+        }
     }
 
     pub fn cmd(&self) -> u8 {
@@ -45,16 +42,12 @@ impl Request {
         self.message.data_mut()
     }
 
-    pub fn bridge_target_address_and_channel(&self, my_addr: u8) -> Option<(u8, u8)> {
-        match self.address_and_channel {
-            Some((addr, channel)) => {
-                if addr != my_addr {
-                    Some((addr, channel))
-                } else {
-                    None
-                }
+    pub fn bridge_target_address_and_channel(&self, my_addr: Address) -> RequestTargetAddress {
+        match self.target {
+            RequestTargetAddress::BmcOrIpmb(a, _, lun) if a == my_addr => {
+                RequestTargetAddress::Bmc(lun)
             }
-            None => None,
+            x => x,
         }
     }
 }
