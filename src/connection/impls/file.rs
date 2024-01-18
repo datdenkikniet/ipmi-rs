@@ -255,9 +255,13 @@ impl IpmiConnection for File {
     type Error = io::Error;
 
     fn send(&mut self, request: &mut Request) -> io::Result<()> {
-        let mut addr: IpmiAddr = request
-            .bridge_target_address_and_channel(self.my_addr)
-            .into();
+        let mut addr: IpmiAddr = match request.target() {
+            RequestTargetAddress::BmcOrIpmb(a, _, lun) if a == self.my_addr => {
+                RequestTargetAddress::Bmc(lun)
+            }
+            x => x,
+        }
+        .into();
 
         let netfn = request.netfn_raw();
         let cmd = request.cmd();

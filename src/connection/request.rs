@@ -1,4 +1,4 @@
-use crate::connection::{Address, LogicalUnit, NetFn, RequestTargetAddress};
+use crate::connection::{LogicalUnit, NetFn, RequestTargetAddress};
 
 use super::Message;
 
@@ -42,12 +42,7 @@ impl Request {
         self.message.data_mut()
     }
 
-    pub fn bridge_target_address_and_channel(&self, my_addr: Address) -> RequestTargetAddress {
-        match self.target {
-            RequestTargetAddress::BmcOrIpmb(a, _, lun) if a == my_addr => {
-                RequestTargetAddress::Bmc(lun)
-            }
-            x => x,
-        }
+    pub fn target(&self) -> RequestTargetAddress {
+        self.target
     }
 }
