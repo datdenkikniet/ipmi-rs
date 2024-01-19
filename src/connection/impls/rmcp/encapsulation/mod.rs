@@ -1,62 +1,9 @@
-use std::num::NonZeroU32;
+use crate::app::auth::AuthType;
 
-use crate::app::auth;
+mod auth;
+use auth::AuthExt;
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum AuthType {
-    None,
-    MD2([u8; 16]),
-    MD5([u8; 16]),
-    Key([u8; 16]),
-}
-
-impl AuthType {
-    pub fn is_none(&self) -> bool {
-        matches!(self, Self::None)
-    }
-
-    pub fn auth_code(&self) -> Option<&[u8; 16]> {
-        match self {
-            AuthType::None => None,
-            AuthType::MD2(b) | AuthType::MD5(b) | AuthType::Key(b) => Some(b),
-        }
-    }
-
-    pub fn calculate(
-        auth_type: auth::AuthType,
-        password: &[u8; 16],
-        session_id: Option<NonZeroU32>,
-        session_seq: u32,
-        data: &[u8],
-    ) -> AuthType {
-        match auth_type {
-            auth::AuthType::None => Self::None,
-            auth::AuthType::MD2 => todo!(),
-            auth::AuthType::MD5 => {
-                let mut context = md5::Context::new();
-                context.consume(password);
-                context.consume(session_id.map(|v| v.get()).unwrap_or(0).to_le_bytes());
-                context.consume(data);
-                context.consume(session_seq.to_le_bytes());
-                context.consume(password);
-
-                Self::MD5(context.compute().0)
-            }
-            auth::AuthType::Key => Self::Key(*password),
-        }
-    }
-}
-
-impl From<AuthType> for u8 {
-    fn from(value: AuthType) -> Self {
-        match value {
-            AuthType::None => 0x00,
-            AuthType::MD2(_) => 0x01,
-            AuthType::MD5(_) => 0x02,
-            AuthType::Key(_) => 0x04,
-        }
-    }
-}
+pub use self::auth::CalculateAuthCodeError;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum PayloadType {
@@ -109,6 +56,19 @@ impl From<PayloadType> for u8 {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum UnwrapEncapsulationError {
+    /// There is not enough data in the packet to form a valid [`EncapsulatedMessage`].
+    NotEnoughData,
+    /// The auth type provided is not supported.
+    UnsupportedAuthType(u8),
+    /// There is a mismatch between the payload length field and the
+    /// actual length of the payload.
+    IncorrectPayloadLen,
+    /// The auth code of the message is not correct.
+    AuthcodeError,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct EncapsulatedMessage {
     pub auth_type: AuthType,
@@ -118,13 +78,24 @@ pub struct EncapsulatedMessage {
 }
 
 impl EncapsulatedMessage {
-    pub fn write_data(&self, buffer: &mut Vec<u8>) {
+    pub fn write_data(
+        &self,
+        password: Option<&[u8; 16]>,
+        buffer: &mut Vec<u8>,
+    ) -> Result<(), CalculateAuthCodeError> {
+        let auth_type = self.auth_type.calculate(
+            password,
+            self.session_id,
+            self.session_sequence,
+            &self.payload,
+        )?;
+
         buffer.push(self.auth_type.into());
         buffer.extend_from_slice(&self.session_sequence.to_le_bytes());
         buffer.extend_from_slice(&self.session_id.to_le_bytes());
 
-        if let Some(auth_code) = self.auth_type.auth_code() {
-            buffer.extend_from_slice(auth_code);
+        if let Some(auth_code) = auth_type {
+            buffer.extend_from_slice(auth_code.as_slice());
         }
 
         buffer.push(self.payload.len() as u8);
@@ -132,38 +103,43 @@ impl EncapsulatedMessage {
 
         // Legacy PAD
         buffer.push(0);
+
+        Ok(())
     }
 
-    pub fn from_bytes(data: &[u8]) -> Result<Self, &'static str> {
+    pub fn from_bytes(
+        data: &[u8],
+        password: Option<&[u8; 16]>,
+    ) -> Result<Self, UnwrapEncapsulationError> {
         if data.len() < 10 {
-            return Err("Not enough data");
+            return Err(UnwrapEncapsulationError::NotEnoughData);
         }
-
-        let auth_type = match data[0] {
-            0x00 => AuthType::None,
-            _ => {
-                if data.len() < 26 {
-                    return Err("Not enough data for authenticated");
-                }
-
-                let auth_code = data[9..25].try_into().unwrap();
-
-                match data[0] {
-                    0x01 => AuthType::MD2(auth_code),
-                    0x02 => AuthType::MD5(auth_code),
-                    0x04 => AuthType::Key(auth_code),
-                    _ => return Err("Unkonwn auth type"),
-                }
-            }
-        };
 
         let session_sequence = u32::from_le_bytes(data[1..5].try_into().unwrap());
         let session_id = u32::from_le_bytes(data[5..9].try_into().unwrap());
 
-        let data = if auth_type.is_none() {
-            &data[9..]
-        } else {
-            &data[25..]
+        let (auth_type, data) = match data[0] {
+            0x00 => (AuthType::None, &data[9..]),
+            _ => {
+                if data.len() < 26 {
+                    return Err(UnwrapEncapsulationError::NotEnoughData);
+                }
+
+                let auth_code: [u8; 16] = data[9..25].try_into().unwrap();
+
+                let auth_type = match data[0] {
+                    0x01 => AuthType::MD2,
+                    0x02 => AuthType::MD5,
+                    0x04 => AuthType::Key,
+                    v => return Err(UnwrapEncapsulationError::UnsupportedAuthType(v)),
+                };
+
+                if !auth_type.verify(auth_code, password, session_id, session_sequence, data) {
+                    return Err(UnwrapEncapsulationError::AuthcodeError);
+                }
+
+                (auth_type, &data[25..])
+            }
         };
 
         let data_len = data[0];
@@ -174,19 +150,17 @@ impl EncapsulatedMessage {
         } else if data.len() == data_len as usize {
             data.to_vec()
         } else {
-            return Err("Payload len is not correct");
+            return Err(UnwrapEncapsulationError::IncorrectPayloadLen);
         };
 
-        Ok(Self {
+        let me = Self {
             auth_type,
             session_sequence,
             session_id,
             payload,
-        })
-    }
+        };
 
-    pub fn _verify(&self, _checksum: [u8; 16]) -> bool {
-        todo!()
+        Ok(me)
     }
 }
 
@@ -200,7 +174,8 @@ mod test {
             pub fn $name() {
                 let data = $data;
 
-                let encapsulated = EncapsulatedMessage::from_bytes(&data);
+                let encapsulated =
+                    EncapsulatedMessage::from_bytes(&data, Some(b"password\0\0\0\0\0\0\0\0"));
 
                 assert_eq!(encapsulated, $then);
             }
@@ -232,14 +207,17 @@ mod test {
     test!(
         nonempty_incorrect_len,
         [0, 1, 0, 0, 0, 2, 0, 0, 0, 5, 1, 2, 3, 4],
-        Err("Payload len is not correct")
+        Err(UnwrapEncapsulationError::IncorrectPayloadLen)
     );
 
     test!(
         empty_md5,
-        [2, 1, 0, 0, 0, 2, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0],
+        [
+            2, 1, 0, 0, 0, 2, 0, 0, 0, 7, 160, 164, 43, 148, 8, 192, 45, 157, 45, 51, 53, 86, 32,
+            148, 162, 0
+        ],
         Ok(EncapsulatedMessage {
-            auth_type: AuthType::MD5([1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0]),
+            auth_type: AuthType::MD5,
             session_sequence: 1,
             session_id: 2,
             payload: vec![]
@@ -249,6 +227,6 @@ mod test {
     test!(
         truncated_md5,
         [2, 0, 0, 0, 1, 0, 0, 0, 2, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0,],
-        Err("Not enough data for authenticated")
+        Err(UnwrapEncapsulationError::NotEnoughData)
     );
 }

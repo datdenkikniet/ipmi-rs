@@ -17,20 +17,47 @@ use crate::{
     IpmiCommandError,
 };
 
-mod wire;
-
 mod protocol;
 use protocol::*;
 
+mod wire;
+pub use wire::RmcpReceiveError;
+
 mod encapsulation;
+pub use encapsulation::{CalculateAuthCodeError, UnwrapEncapsulationError};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Inactive;
 
+#[derive(Debug)]
+pub enum RmcpError {
+    Io(std::io::Error),
+    Receive(RmcpReceiveError),
+    Send(CalculateAuthCodeError),
+}
+
+impl From<RmcpReceiveError> for RmcpError {
+    fn from(value: RmcpReceiveError) -> Self {
+        Self::Receive(value)
+    }
+}
+
+impl From<CalculateAuthCodeError> for RmcpError {
+    fn from(value: CalculateAuthCodeError) -> Self {
+        Self::Send(value)
+    }
+}
+
+impl From<std::io::Error> for RmcpError {
+    fn from(value: std::io::Error) -> Self {
+        Self::Io(value)
+    }
+}
+
 pub struct Active {
     session_id: Option<NonZeroU32>,
     auth_type: crate::app::auth::AuthType,
-    password: [u8; 16],
+    password: Option<[u8; 16]>,
     _supported_interactions: SupportedInteractions,
     request_sequence: u32,
 }
@@ -66,8 +93,10 @@ pub enum ActivationError {
     PasswordTooLong,
     NoSupportedAuthenticationType,
     GetChannelAuthenticationCapabilities(CommandError<()>),
+    CalculateAuthCode,
     GetSessionChallenge(CommandError<AuthError>),
     ActivateSession(CommandError<AuthError>),
+    RmcpError(RmcpUnwrapError),
 }
 
 impl From<std::io::Error> for ActivationError {
@@ -110,16 +139,24 @@ impl Rmcp<Inactive> {
     pub fn activate(
         self,
         username: Option<&str>,
-        password: &[u8],
+        password: Option<&[u8]>,
     ) -> Result<Rmcp<Active>, ActivationError> {
         let challenge_command = match GetSessionChallenge::new(auth::AuthType::None, username) {
             Some(v) => v,
             None => return Err(ActivationError::UsernameTooLong),
         };
 
-        if password.len() > 16 {
-            return Err(ActivationError::PasswordTooLong);
-        }
+        let password = if let Some(password) = password {
+            if password.len() > 16 {
+                return Err(ActivationError::PasswordTooLong);
+            } else {
+                let mut padded = [0u8; 16];
+                padded[..password.len()].copy_from_slice(password);
+                Some(padded)
+            }
+        } else {
+            None
+        };
 
         let ping = RmcpMessage::new(
             0xFF,
@@ -130,14 +167,17 @@ impl Rmcp<Inactive> {
         );
 
         log::debug!("Starting RMCP activation sequence");
-        self.inner.send(&ping.to_bytes())?;
+
+        // NOTE(unwrap): Messages with `RmcpClass::ASF`` never require a password.
+        self.inner
+            .send(ping.to_bytes(password.as_ref()).unwrap().as_ref())?;
 
         let mut buf = [0u8; 1024];
         let received = self.inner.recv(&mut buf)?;
 
-        let pong = RmcpMessage::from_bytes(&buf[..received]);
+        let pong = RmcpMessage::from_bytes(password.as_ref(), &buf[..received]);
 
-        let (supported_entities, supported_interactions) = if let Some(RmcpMessage {
+        let (supported_entities, supported_interactions) = if let Ok(RmcpMessage {
             class_and_contents:
                 RmcpClass::Asf(ASFMessage {
                     message_type:
@@ -166,12 +206,9 @@ impl Rmcp<Inactive> {
 
         let privilege_level = PrivilegeLevel::Administrator;
 
-        let mut password_padded = [0u8; 16];
-        password_padded[..password.len()].copy_from_slice(password);
-
         let activated = self.convert(Active {
             auth_type: auth::AuthType::None,
-            password: password_padded,
+            password,
             _supported_interactions: supported_interactions,
             session_id: None,
             request_sequence: 0,
@@ -234,11 +271,11 @@ impl Rmcp<Inactive> {
 }
 
 impl IpmiConnection for Rmcp<Active> {
-    type SendError = Error;
+    type SendError = RmcpError;
 
-    type RecvError = Error;
+    type RecvError = RmcpError;
 
-    type Error = Error;
+    type Error = RmcpError;
 
     fn send(&mut self, request: &mut crate::connection::Request) -> Result<(), Self::SendError> {
         wire::send(
@@ -250,14 +287,14 @@ impl IpmiConnection for Rmcp<Active> {
             self.requestor_lun,
             &mut self.state.request_sequence,
             self.state.session_id,
-            &self.state.password,
+            self.state.password.as_ref(),
             request,
         )
         .map(|_| ())
     }
 
     fn recv(&mut self) -> Result<Response, Self::RecvError> {
-        wire::recv(&mut self.inner)
+        wire::recv(self.state.password.as_ref(), &mut self.inner)
     }
 
     fn send_recv(

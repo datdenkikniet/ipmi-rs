@@ -63,6 +63,42 @@ impl<CON, P> From<CON> for IpmiError<CON, P> {
     }
 }
 
+impl<CON, P> IpmiError<CON, P> {
+    pub fn map<CON2, F>(self, f: F) -> IpmiError<CON2, P>
+    where
+        F: FnOnce(CON) -> CON2,
+    {
+        match self {
+            IpmiError::NetFnIsResponse(v) => IpmiError::NetFnIsResponse(v),
+            IpmiError::UnexpectedResponse {
+                netfn_sent,
+                netfn_recvd,
+                cmd_sent,
+                cmd_recvd,
+            } => IpmiError::UnexpectedResponse {
+                netfn_sent,
+                netfn_recvd,
+                cmd_sent,
+                cmd_recvd,
+            },
+            IpmiError::ParsingFailed {
+                error,
+                netfn,
+                cmd,
+                completion_code,
+                data,
+            } => IpmiError::ParsingFailed {
+                error,
+                netfn,
+                cmd,
+                completion_code,
+                data,
+            },
+            IpmiError::Connection(e) => IpmiError::Connection(f(e)),
+        }
+    }
+}
+
 pub type IpmiCommandError<T, E> = IpmiError<T, ParseResponseError<E>>;
 
 impl<CON> Ipmi<CON>
