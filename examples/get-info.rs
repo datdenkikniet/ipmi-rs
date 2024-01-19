@@ -110,6 +110,8 @@ fn main() -> std::io::Result<()> {
         } else if let RecordContents::FruDeviceLocator(fru_device_locator) = &sensor.contents {
             log::info!("FRU Device Locator {}", fru_device_locator.id_string());
             log::info!("  Device type: {}", fru_device_locator.device_type);
+        } else if let RecordContents::McDeviceLocator(mc_device_locator) = &sensor.contents {
+            log::info!("MC Device Locator {}", mc_device_locator.id_string());
         } else if let RecordContents::Unknown { ty, .. } = &sensor.contents {
             log::info!("Unknown record type. Type: 0x{ty:02X}");
         }
