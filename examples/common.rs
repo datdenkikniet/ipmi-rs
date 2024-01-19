@@ -9,7 +9,7 @@ use ipmi_rs::{
         File, IpmiCommand,
     },
     storage::sdr,
-    Ipmi, IpmiCommandError, SdrIter,
+    Ipmi, IpmiCommandError, IpmiError, SdrIter,
 };
 
 #[allow(unused)]
@@ -45,7 +45,20 @@ impl IpmiConnectionEnum {
         CMD: IpmiCommand,
     {
         match self {
-            IpmiConnectionEnum::Rmcp(rmcp) => rmcp.send_recv(request),
+            IpmiConnectionEnum::Rmcp(rmcp) => match rmcp.send_recv(request) {
+                Ok(v) => Ok(v),
+                Err(e) => {
+                    let mapped = e.map(|e| match e {
+                        ipmi_rs::connection::rmcp::RmcpError::Io(io) => return io,
+                        e => {
+                            log::error!("RMCP command failed: {e:?}");
+                            std::io::Error::new(ErrorKind::Other, format!("{e:?}"))
+                        }
+                    });
+
+                    Err(mapped)
+                }
+            },
             IpmiConnectionEnum::File(file) => file.send_recv(request),
         }
     }
@@ -113,7 +126,7 @@ impl CommonOpts {
 
             let rmcp = Rmcp::new(address, timeout)?;
             let activated = rmcp
-                .activate(Some(username), password.as_bytes())
+                .activate(Some(username), Some(password.as_bytes()))
                 .map_err(|e| error(format!("RMCP activation error: {:?}", e)))?;
 
             let ipmi = Ipmi::new(activated);
