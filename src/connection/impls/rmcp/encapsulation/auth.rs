@@ -17,62 +17,41 @@ pub enum CalculateAuthCodeError {
     MissingPassword,
 }
 
-pub(crate) trait AuthExt {
-    fn calculate(
-        &self,
-        password: Option<&[u8; 16]>,
-        session_id: u32,
-        session_seq: u32,
-        data: &[u8],
-    ) -> Result<Option<[u8; 16]>, CalculateAuthCodeError>;
-
-    fn verify(
-        &self,
-        digest: [u8; 16],
-        password: Option<&[u8; 16]>,
-        session_id: u32,
-        session_seq: u32,
-        data: &[u8],
-    ) -> bool;
+pub fn calculate(
+    ty: &AuthType,
+    password: Option<&[u8; 16]>,
+    session_id: u32,
+    session_seq: u32,
+    data: &[u8],
+) -> Result<Option<[u8; 16]>, CalculateAuthCodeError> {
+    match (ty, password) {
+        (AuthType::None, _) => Ok(None),
+        (AuthType::MD2, Some(_)) => todo!(),
+        (AuthType::MD5, Some(password)) => {
+            Ok(Some(calculate_md5(password, session_id, session_seq, data)))
+        }
+        (AuthType::Key, Some(password)) => Ok(Some(*password)),
+        _ => Err(CalculateAuthCodeError::MissingPassword),
+    }
 }
 
-impl AuthExt for AuthType {
-    fn calculate(
-        &self,
-        password: Option<&[u8; 16]>,
-        session_id: u32,
-        session_seq: u32,
-        data: &[u8],
-    ) -> Result<Option<[u8; 16]>, CalculateAuthCodeError> {
-        match (self, password) {
-            (AuthType::None, _) => Ok(None),
-            (AuthType::MD2, Some(_)) => todo!(),
-            (AuthType::MD5, Some(password)) => {
-                Ok(Some(calculate_md5(password, session_id, session_seq, data)))
-            }
-            (AuthType::Key, Some(password)) => Ok(Some(password.clone())),
-            _ => Err(CalculateAuthCodeError::MissingPassword),
-        }
-    }
+pub fn verify(
+    ty: &AuthType,
+    digest: [u8; 16],
+    password: Option<&[u8; 16]>,
+    session_id: u32,
+    session_seq: u32,
+    data: &[u8],
+) -> bool {
+    match (ty, password) {
+        (AuthType::None, _) => true,
+        (AuthType::MD2, Some(_)) => todo!(),
+        (AuthType::MD5, Some(password)) => {
+            let calc_digest = calculate_md5(password, session_id, session_seq, data);
 
-    fn verify(
-        &self,
-        digest: [u8; 16],
-        password: Option<&[u8; 16]>,
-        session_id: u32,
-        session_seq: u32,
-        data: &[u8],
-    ) -> bool {
-        match (self, password) {
-            (AuthType::None, _) => true,
-            (AuthType::MD2, Some(_)) => todo!(),
-            (AuthType::MD5, Some(password)) => {
-                let calc_digest = calculate_md5(password, session_id, session_seq, data);
-
-                calc_digest == digest
-            }
-            (AuthType::Key, Some(password)) => password == &digest,
-            _ => false,
+            calc_digest == digest
         }
+        (AuthType::Key, Some(password)) => password == &digest,
+        _ => false,
     }
 }
