@@ -1,6 +1,6 @@
 use crate::{
-    connection::{CompletionCode, IpmiCommand, Message, ParseResponseError},
-    storage::sdr::record::SensorNumber,
+    connection::{Address, Channel, CompletionCode, IpmiCommand, Message, ParseResponseError},
+    storage::sdr::record::{SensorKey, SensorNumber},
 };
 
 use super::RawSensorReading;
@@ -37,17 +37,25 @@ impl RawSensorReading {
 
 pub struct GetSensorReading {
     sensor_number: SensorNumber,
+    address: Address,
+    channel: Channel,
 }
 
 impl GetSensorReading {
-    pub fn new(value: SensorNumber) -> Self {
+    pub fn new(sensor_number: SensorNumber, address: Address, channel: Channel) -> Self {
         Self {
-            sensor_number: value,
+            sensor_number,
+            address,
+            channel,
         }
     }
 
-    pub fn for_sensor(sensor: SensorNumber) -> Self {
-        Self::new(sensor)
+    pub fn for_sensor_key(value: &SensorKey) -> Self {
+        Self {
+            sensor_number: value.sensor_number,
+            address: Address(value.owner_id.into()),
+            channel: Channel(value.owner_channel),
+        }
     }
 }
 
@@ -73,5 +81,9 @@ impl IpmiCommand for GetSensorReading {
         Self::check_cc_success(completion_code)?;
 
         RawSensorReading::parse(data).ok_or(ParseResponseError::NotEnoughData)
+    }
+
+    fn target(&self) -> Option<(Address, Channel)> {
+        Some((self.address, self.channel))
     }
 }

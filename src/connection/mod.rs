@@ -12,7 +12,7 @@ mod netfn;
 pub use netfn::NetFn;
 
 mod request;
-pub use request::Request;
+pub use request::{Address, Channel, Request, RequestTargetAddress};
 
 mod response;
 pub use response::Response;
@@ -138,5 +138,9 @@ pub trait IpmiCommand: Into<Message> {
         } else {
             Err(ParseResponseError::Failed(cc))
         }
+    }
+
+    fn target(&self) -> Option<(Address, Channel)> {
+        None
     }
 }

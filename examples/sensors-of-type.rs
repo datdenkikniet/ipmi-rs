@@ -58,7 +58,7 @@ fn main() -> std::io::Result<()> {
         if let RecordContents::FullSensor(full) = sdr.contents {
             if args.reading {
                 let value = ipmi
-                    .send_recv(GetSensorReading::for_sensor(full.sensor_number()))
+                    .send_recv(GetSensorReading::for_sensor_key(full.key_data()))
                     .unwrap();
 
                 let reading: ThresholdReading = (&value).into();
