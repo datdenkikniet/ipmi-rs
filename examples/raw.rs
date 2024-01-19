@@ -1,3 +1,5 @@
+use std::io::ErrorKind;
+
 use clap::Parser;
 use common::CommonOpts;
 use ipmi_rs::connection::RequestTargetAddress;
@@ -59,7 +61,15 @@ fn main() -> std::io::Result<()> {
     let ipmi = command.common.get_connection()?;
 
     let result = match ipmi {
-        common::IpmiConnectionEnum::Rmcp(mut r) => r.inner_mut().send_recv(&mut request)?,
+        common::IpmiConnectionEnum::Rmcp(mut r) => {
+            r.inner_mut().send_recv(&mut request).map_err(|e| match e {
+                ipmi_rs::connection::rmcp::RmcpError::Io(io) => return io,
+                e => {
+                    log::error!("RMCP command failed: {e:?}");
+                    std::io::Error::new(ErrorKind::Other, format!("{e:?}"))
+                }
+            })?
+        }
         common::IpmiConnectionEnum::File(mut f) => f.inner_mut().send_recv(&mut request)?,
     };
 
