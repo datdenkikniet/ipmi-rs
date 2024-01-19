@@ -4,6 +4,7 @@ pub use full_sensor_record::FullSensorRecord;
 mod compact_sensor_record;
 mod event_only_sensor_record;
 mod fru_device_locator;
+mod mc_device_locator;
 
 pub use compact_sensor_record::CompactSensorRecord;
 
@@ -11,6 +12,7 @@ use nonmax::NonMaxU8;
 
 use crate::storage::sdr::record::event_only_sensor_record::EventOnlySensorRecord;
 use crate::storage::sdr::record::fru_device_locator::FruDeviceLocator;
+use crate::storage::sdr::record::mc_device_locator::McDeviceLocatorRecord;
 use crate::{connection::LogicalUnit, Loggable};
 
 use super::{event_reading_type_code::EventReadingTypeCodes, RecordId, SensorType, Unit};
@@ -704,6 +706,7 @@ pub enum RecordContents {
     CompactSensor(CompactSensorRecord),
     EventOnlySensor(EventOnlySensorRecord),
     FruDeviceLocator(FruDeviceLocator),
+    McDeviceLocator(McDeviceLocatorRecord),
     Unknown { ty: u8, data: Vec<u8> },
 }
 
@@ -714,6 +717,7 @@ impl Record {
             RecordContents::CompactSensor(s) => Some(s.common()),
             RecordContents::EventOnlySensor(_) => None,
             RecordContents::FruDeviceLocator(_) => None,
+            RecordContents::McDeviceLocator(_) => None,
             RecordContents::Unknown { .. } => None,
         }
     }
@@ -758,6 +762,8 @@ impl Record {
             RecordContents::EventOnlySensor(EventOnlySensorRecord::parse(record_data)?)
         } else if record_type == 0x11 {
             RecordContents::FruDeviceLocator(FruDeviceLocator::parse(record_data)?)
+        } else if record_type == 0x12 {
+            RecordContents::McDeviceLocator(McDeviceLocatorRecord::parse(record_data)?)
         } else {
             RecordContents::Unknown {
                 ty: record_type,
@@ -781,6 +787,7 @@ impl Record {
             RecordContents::CompactSensor(compact) => Some(compact.id_string()),
             RecordContents::EventOnlySensor(event) => Some(&event.id_string),
             RecordContents::FruDeviceLocator(fru) => Some(&fru.id_string),
+            RecordContents::McDeviceLocator(mc) => Some(&mc.id_string),
             RecordContents::Unknown { .. } => None,
         }
     }
@@ -790,7 +797,7 @@ impl Record {
             RecordContents::FullSensor(full) => Some(full.sensor_number()),
             RecordContents::CompactSensor(compact) => Some(compact.sensor_number()),
             RecordContents::EventOnlySensor(event) => Some(event.key.sensor_number),
-            RecordContents::FruDeviceLocator(_) => None,
+            RecordContents::FruDeviceLocator(_) | RecordContents::McDeviceLocator(_) => None,
             RecordContents::Unknown { .. } => None,
         }
     }
