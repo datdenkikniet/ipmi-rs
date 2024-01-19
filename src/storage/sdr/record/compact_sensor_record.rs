@@ -48,7 +48,7 @@ impl CompactSensorRecord {
         let direction = Direction::try_from((direction_sharing_1 & 0xC) >> 6).unwrap();
         let id_string_instance_modifier = match (direction_sharing_1 & 0x30) >> 4 {
             0b00 => IdStringModifier::Numeric,
-            0b01 => IdStringModifier::Numeric,
+            0b01 => IdStringModifier::Alpha,
             _ => panic!("Invalid ID string modifier, no fallback available."),
         };
 
