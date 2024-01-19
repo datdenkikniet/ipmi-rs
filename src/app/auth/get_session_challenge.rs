@@ -45,12 +45,12 @@ impl GetSessionChallenge {
     }
 }
 
-impl Into<Message> for GetSessionChallenge {
-    fn into(self) -> Message {
+impl From<GetSessionChallenge> for Message {
+    fn from(value: GetSessionChallenge) -> Message {
         let mut data = vec![0u8; 17];
 
-        data[0] = self.auth_type.into();
-        data[1..].copy_from_slice(&self.username);
+        data[0] = value.auth_type.into();
+        data[1..].copy_from_slice(&value.username);
 
         Message::new_request(NetFn::App, 0x39, data)
     }

@@ -76,7 +76,7 @@ impl ASFMessageType {
     }
 
     fn from_type_byte_and_data(type_byte: u8, data: &[u8]) -> Option<Self> {
-        if data.len() < 1 {
+        if data.is_empty() {
             return None;
         }
 
@@ -176,9 +176,9 @@ impl ASFMessage {
 #[derive(Clone, Debug, PartialEq)]
 pub enum RmcpClass {
     Ack(u8),
-    ASF(ASFMessage),
-    IPMI(EncapsulatedMessage),
-    OEMDefined,
+    Asf(ASFMessage),
+    Ipmi(EncapsulatedMessage),
+    OemDefined,
 }
 
 impl RmcpClass {
@@ -187,11 +187,11 @@ impl RmcpClass {
             // No data
             RmcpClass::Ack(_) => {}
             // ASF data
-            RmcpClass::ASF(message) => message.write_data(buffer),
+            RmcpClass::Asf(message) => message.write_data(buffer),
             // TODO: IPMI data
-            RmcpClass::IPMI(message) => message.write_data(buffer),
+            RmcpClass::Ipmi(message) => message.write_data(buffer),
             // TODO: OEMDefined data
-            RmcpClass::OEMDefined => todo!(),
+            RmcpClass::OemDefined => todo!(),
         }
     }
 }
@@ -215,12 +215,12 @@ impl RmcpMessage {
     pub fn to_bytes(&self) -> Vec<u8> {
         let class = match self.class_and_contents {
             RmcpClass::Ack(value) => value | 0x80,
-            RmcpClass::ASF(_) => 0x06,
-            RmcpClass::IPMI(_) => 0x07,
-            RmcpClass::OEMDefined => 0x08,
+            RmcpClass::Asf(_) => 0x06,
+            RmcpClass::Ipmi(_) => 0x07,
+            RmcpClass::OemDefined => 0x08,
         };
 
-        let sequence_number = if matches!(self.class_and_contents, RmcpClass::IPMI(_)) {
+        let sequence_number = if matches!(self.class_and_contents, RmcpClass::Ipmi(_)) {
             0xFF
         } else {
             self.sequence_number
@@ -245,9 +245,9 @@ impl RmcpMessage {
         let data = &data[4..];
 
         let class = match class {
-            0x06 => RmcpClass::ASF(ASFMessage::from_bytes(data)?),
-            0x07 => RmcpClass::IPMI(EncapsulatedMessage::from_bytes(data).ok()?),
-            0x08 => RmcpClass::OEMDefined,
+            0x06 => RmcpClass::Asf(ASFMessage::from_bytes(data)?),
+            0x07 => RmcpClass::Ipmi(EncapsulatedMessage::from_bytes(data).ok()?),
+            0x08 => RmcpClass::OemDefined,
             _ if class & 0x80 == 0x80 => RmcpClass::Ack(class & 0x7F),
             _ => {
                 return None;

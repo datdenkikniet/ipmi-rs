@@ -142,7 +142,7 @@ pub struct GetDeviceSdrInfo<T> {
 impl<T> GetDeviceSdrInfo<T> {
     pub fn new(_: T) -> Self {
         Self {
-            _phantom: PhantomData::default(),
+            _phantom: PhantomData,
         }
     }
 }

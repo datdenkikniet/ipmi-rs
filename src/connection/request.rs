@@ -54,9 +54,7 @@ pub enum RequestTargetAddress {
 impl RequestTargetAddress {
     pub fn lun(&self) -> LogicalUnit {
         match self {
-            RequestTargetAddress::Bmc(lun) | RequestTargetAddress::BmcOrIpmb(_, _, lun) => {
-                lun.clone()
-            }
+            RequestTargetAddress::Bmc(lun) | RequestTargetAddress::BmcOrIpmb(_, _, lun) => *lun,
         }
     }
 }

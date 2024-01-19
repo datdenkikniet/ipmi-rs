@@ -20,14 +20,14 @@ pub struct BeginSessionInfo {
     pub maximum_privilege_level: PrivilegeLevel,
 }
 
-impl Into<Message> for ActivateSession {
-    fn into(self) -> Message {
+impl From<ActivateSession> for Message {
+    fn from(value: ActivateSession) -> Self {
         let mut data = vec![0u8; 22];
 
-        data[0] = self.auth_type.into();
-        data[1] = self.maxiumum_privilege_level.into();
-        data[2..18].copy_from_slice(&self.challenge_string);
-        data[18..22].copy_from_slice(&self.initial_sequence_number.to_le_bytes());
+        data[0] = value.auth_type.into();
+        data[1] = value.maxiumum_privilege_level.into();
+        data[2..18].copy_from_slice(&value.challenge_string);
+        data[18..22].copy_from_slice(&value.initial_sequence_number.to_le_bytes());
 
         Message::new_request(NetFn::App, 0x3A, data)
     }

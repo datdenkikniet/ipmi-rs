@@ -225,14 +225,13 @@ impl File {
                 Address(0x20)
             }
         };
-        let me = Ok(Self {
+
+        Ok(Self {
             inner,
             recv_timeout,
             seq: -1,
             my_addr,
-        });
-
-        me
+        })
     }
 
     fn load_my_address_from_file(file: &mut std::fs::File) -> io::Result<Address> {
@@ -349,7 +348,6 @@ impl IpmiConnection for File {
 
         // Ensure that response_data and bmc_addr live until _after_ the
         // IOCTL completes.
-        #[allow(clippy::drop_copy)]
         #[allow(dropping_copy_types)]
         drop(response_data);
         #[allow(clippy::drop_non_drop)]

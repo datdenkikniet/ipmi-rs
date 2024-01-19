@@ -10,7 +10,7 @@ use crate::{
     connection::{
         rmcp::{
             encapsulation::EncapsulatedMessage,
-            rmcp::{RmcpClass, RmcpMessage},
+            protocol::{RmcpClass, RmcpMessage},
         },
         LogicalUnit, Message, Request, Response,
     },
@@ -52,6 +52,7 @@ pub fn checksum(data: impl IntoIterator<Item = u8>) -> impl Iterator<Item = u8> 
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn send(
     inner: &mut UdpSocket,
     auth_type: auth::AuthType,
@@ -82,7 +83,7 @@ pub fn send(
     let second_part = checksum(
         [req_addr, reqseq_lun, cmd]
             .into_iter()
-            .chain(request.data().iter().map(|v| *v)),
+            .chain(request.data().iter().copied()),
     );
 
     let final_data: Vec<_> = first_part.chain(second_part).collect();
@@ -105,7 +106,7 @@ pub fn send(
 
     let message = RmcpMessage::new(
         0xFF,
-        RmcpClass::IPMI(EncapsulatedMessage {
+        RmcpClass::Ipmi(EncapsulatedMessage {
             auth_type,
             session_sequence,
             session_id: session_id.map(|v| v.get()).unwrap_or(0),
@@ -130,7 +131,7 @@ pub fn recv(inner: &mut UdpSocket) -> Result<Response, Error> {
         .ok_or(Error::new(ErrorKind::Other, "RMCP response not recognized"))?;
 
     let encapsulated_message = if let RmcpMessage {
-        class_and_contents: RmcpClass::IPMI(message),
+        class_and_contents: RmcpClass::Ipmi(message),
         ..
     } = rcmp_message
     {
@@ -150,7 +151,7 @@ pub fn recv(inner: &mut UdpSocket) -> Result<Response, Error> {
     let _rs_addr = data[3];
     let _rqseq = data[4];
     let cmd = data[5];
-    let response_data: Vec<_> = data[6..data.len() - 1].iter().map(|v| *v).collect();
+    let response_data: Vec<_> = data[6..data.len() - 1].to_vec();
     let _checksum2 = data[data.len() - 1];
 
     // TODO: validate sequence, checksums, etc.

@@ -31,38 +31,51 @@ pub enum AuthType {
 }
 
 impl AuthType {
-    pub fn compare_strength(me: &&Self, other: &&Self) -> Ordering {
-        if me == other {
+    pub fn compare_strength(&self, other: &Self) -> Ordering {
+        if self == other {
             Ordering::Equal
+        } else if self == &AuthType::None {
+            Ordering::Less
+        } else if other == &AuthType::None {
+            Ordering::Greater
+        } else if self == &AuthType::Key {
+            Ordering::Less
+        } else if other == &AuthType::Key {
+            Ordering::Greater
+        } else if self == &AuthType::MD2 {
+            Ordering::Less
         } else {
-            if me == &&AuthType::None {
-                Ordering::Less
-            } else if other == &&AuthType::None {
-                Ordering::Greater
-            } else if me == &&AuthType::Key {
-                Ordering::Less
-            } else if other == &&AuthType::Key {
-                Ordering::Greater
-            } else if me == &&AuthType::MD2 {
-                Ordering::Less
-            } else if other == &&AuthType::MD5 {
-                Ordering::Greater
-            } else {
-                Ordering::Greater
-            }
+            Ordering::Greater
         }
     }
 }
 
 #[test]
-pub fn strenght_ordering() {
+pub fn strength_ordering_individual() {
+    let gt_pairs = [
+        (AuthType::Key, AuthType::None),
+        (AuthType::MD2, AuthType::None),
+        (AuthType::MD5, AuthType::None),
+        (AuthType::MD2, AuthType::Key),
+        (AuthType::MD5, AuthType::Key),
+        (AuthType::MD5, AuthType::MD2),
+    ];
+
+    for (greater, lesser) in gt_pairs {
+        assert_eq!(greater.compare_strength(&lesser), Ordering::Greater);
+        assert_eq!(lesser.compare_strength(&greater), Ordering::Less);
+    }
+}
+
+#[test]
+pub fn strength_ordering() {
     let types = [AuthType::None, AuthType::MD2, AuthType::MD5, AuthType::Key];
 
-    let max = types.iter().max_by(AuthType::compare_strength);
-    let min = types.iter().min_by(AuthType::compare_strength);
+    let max = types.into_iter().max_by(AuthType::compare_strength);
+    let min = types.into_iter().min_by(AuthType::compare_strength);
 
-    assert_eq!(max, Some(&AuthType::MD5));
-    assert_eq!(min, Some(&AuthType::None));
+    assert_eq!(max, Some(AuthType::MD5));
+    assert_eq!(min, Some(AuthType::None));
 }
 
 impl TryFrom<u8> for AuthType {
