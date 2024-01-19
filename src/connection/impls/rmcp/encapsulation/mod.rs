@@ -1,7 +1,6 @@
 use crate::app::auth::AuthType;
 
 mod auth;
-use auth::AuthExt;
 
 pub use self::auth::CalculateAuthCodeError;
 
@@ -83,7 +82,8 @@ impl EncapsulatedMessage {
         password: Option<&[u8; 16]>,
         buffer: &mut Vec<u8>,
     ) -> Result<(), CalculateAuthCodeError> {
-        let auth_type = self.auth_type.calculate(
+        let auth_code = auth::calculate(
+            &self.auth_type,
             password,
             self.session_id,
             self.session_sequence,
@@ -94,7 +94,7 @@ impl EncapsulatedMessage {
         buffer.extend_from_slice(&self.session_sequence.to_le_bytes());
         buffer.extend_from_slice(&self.session_id.to_le_bytes());
 
-        if let Some(auth_code) = auth_type {
+        if let Some(auth_code) = auth_code {
             buffer.extend_from_slice(auth_code.as_slice());
         }
 
@@ -134,7 +134,14 @@ impl EncapsulatedMessage {
                     v => return Err(UnwrapEncapsulationError::UnsupportedAuthType(v)),
                 };
 
-                if !auth_type.verify(auth_code, password, session_id, session_sequence, data) {
+                if !auth::verify(
+                    &auth_type,
+                    auth_code,
+                    password,
+                    session_id,
+                    session_sequence,
+                    data,
+                ) {
                     return Err(UnwrapEncapsulationError::AuthcodeError);
                 }
 
