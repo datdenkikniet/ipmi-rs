@@ -1,4 +1,4 @@
-use super::encapsulation::EncapsulatedMessage;
+use super::encapsulation::{CalculateAuthCodeError, EncapsulatedMessage, UnwrapEncapsulationError};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SupportedInteractions {
@@ -182,17 +182,43 @@ pub enum RmcpClass {
 }
 
 impl RmcpClass {
-    fn write_data(&self, buffer: &mut Vec<u8>) {
+    fn write_data(
+        &self,
+        password: Option<&[u8; 16]>,
+        buffer: &mut Vec<u8>,
+    ) -> Result<(), CalculateAuthCodeError> {
         match self {
-            // No data
-            RmcpClass::Ack(_) => {}
-            // ASF data
-            RmcpClass::Asf(message) => message.write_data(buffer),
-            // TODO: IPMI data
-            RmcpClass::Ipmi(message) => message.write_data(buffer),
+            RmcpClass::Ack(_) => {
+                log::trace!("Received RMCP ACK, but do not know how to validate sequence number.");
+                Ok(())
+            }
+            RmcpClass::Asf(message) => {
+                message.write_data(buffer);
+                Ok(())
+            }
+            RmcpClass::Ipmi(message) => message.write_data(password, buffer),
             // TODO: OEMDefined data
             RmcpClass::OemDefined => todo!(),
         }
+    }
+}
+
+#[derive(Debug)]
+pub enum RmcpUnwrapError {
+    /// There was not enough data in the packet to parse a valid RMCP message.
+    NotEnoughData,
+    /// An error occurred while trying to unwrap the encapsulated RMCP
+    /// message.
+    UnwrapEncapsulation(UnwrapEncapsulationError),
+    /// The RMCP packet contained an invalid ASF message.
+    InvalidASFMessage,
+    /// The class of the RMCP packet was not valid.
+    InvalidRmcpClass,
+}
+
+impl From<UnwrapEncapsulationError> for RmcpUnwrapError {
+    fn from(value: UnwrapEncapsulationError) -> Self {
+        Self::UnwrapEncapsulation(value)
     }
 }
 
@@ -212,7 +238,7 @@ impl RmcpMessage {
         }
     }
 
-    pub fn to_bytes(&self) -> Vec<u8> {
+    pub fn to_bytes(&self, password: Option<&[u8; 16]>) -> Result<Vec<u8>, CalculateAuthCodeError> {
         let class = match self.class_and_contents {
             RmcpClass::Ack(value) => value | 0x80,
             RmcpClass::Asf(_) => 0x06,
@@ -228,14 +254,14 @@ impl RmcpMessage {
 
         let mut bytes = vec![self.version, 0, sequence_number, class];
 
-        self.class_and_contents.write_data(&mut bytes);
+        self.class_and_contents.write_data(password, &mut bytes)?;
 
-        bytes
+        Ok(bytes)
     }
 
-    pub fn from_bytes(data: &[u8]) -> Option<Self> {
+    pub fn from_bytes(password: Option<&[u8; 16]>, data: &[u8]) -> Result<Self, RmcpUnwrapError> {
         if data.len() < 4 {
-            return None;
+            return Err(RmcpUnwrapError::NotEnoughData);
         }
 
         let version = data[0];
@@ -245,16 +271,18 @@ impl RmcpMessage {
         let data = &data[4..];
 
         let class = match class {
-            0x06 => RmcpClass::Asf(ASFMessage::from_bytes(data)?),
-            0x07 => RmcpClass::Ipmi(EncapsulatedMessage::from_bytes(data).ok()?),
+            0x06 => RmcpClass::Asf(
+                ASFMessage::from_bytes(data).ok_or(RmcpUnwrapError::InvalidASFMessage)?,
+            ),
+            0x07 => RmcpClass::Ipmi(EncapsulatedMessage::from_bytes(data, password)?),
             0x08 => RmcpClass::OemDefined,
             _ if class & 0x80 == 0x80 => RmcpClass::Ack(class & 0x7F),
             _ => {
-                return None;
+                return Err(RmcpUnwrapError::InvalidRmcpClass);
             }
         };
 
-        Some(Self {
+        Ok(Self {
             version,
             sequence_number,
             class_and_contents: class,

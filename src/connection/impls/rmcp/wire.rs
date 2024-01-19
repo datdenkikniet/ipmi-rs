@@ -16,7 +16,7 @@ use crate::{
     },
 };
 
-use super::encapsulation::AuthType;
+use super::{RmcpError, RmcpUnwrapError};
 
 pub fn checksum(data: impl IntoIterator<Item = u8>) -> impl Iterator<Item = u8> + FusedIterator {
     struct ChecksumIterator<I> {
@@ -62,9 +62,9 @@ pub fn send(
     requestor_lun: LogicalUnit,
     request_sequence: &mut u32,
     session_id: Option<NonZeroU32>,
-    password: &[u8; 16],
+    password: Option<&[u8; 16]>,
     request: &mut Request,
-) -> std::io::Result<usize> {
+) -> Result<usize, RmcpError> {
     log::trace!("Sending message with auth type {:?}", auth_type);
 
     let rs_addr = responder_addr;
@@ -96,14 +96,6 @@ pub fn send(
         *request_sequence = request_sequence.wrapping_add(1);
     }
 
-    let auth_type = AuthType::calculate(
-        auth_type,
-        password,
-        session_id,
-        session_sequence,
-        &final_data,
-    );
-
     let message = RmcpMessage::new(
         0xFF,
         RmcpClass::Ipmi(EncapsulatedMessage {
@@ -114,21 +106,26 @@ pub fn send(
         }),
     );
 
-    inner.send(&message.to_bytes())
+    let send_bytes = message.to_bytes(password)?;
+
+    inner.send(&send_bytes).map_err(Into::into)
 }
 
-pub fn recv(inner: &mut UdpSocket) -> Result<Response, Error> {
+#[derive(Debug)]
+pub enum RmcpReceiveError {
+    /// An RMCP error occured.
+    Rmcp(RmcpUnwrapError),
+    /// The packet did not contain enough data to form a valid RMCP message.
+    NotEnoughData,
+}
+
+pub fn recv(password: Option<&[u8; 16]>, inner: &mut UdpSocket) -> Result<Response, RmcpError> {
     let mut buffer = [0u8; 1024];
     let received_bytes = inner.recv(&mut buffer)?;
 
-    if received_bytes < 8 {
-        return Err(Error::new(ErrorKind::Other, "Incomplete response"));
-    }
-
     let data = &buffer[..received_bytes];
 
-    let rcmp_message = RmcpMessage::from_bytes(data)
-        .ok_or(Error::new(ErrorKind::Other, "RMCP response not recognized"))?;
+    let rcmp_message = RmcpMessage::from_bytes(password, data).map_err(RmcpReceiveError::Rmcp)?;
 
     let encapsulated_message = if let RmcpMessage {
         class_and_contents: RmcpClass::Ipmi(message),
@@ -137,13 +134,14 @@ pub fn recv(inner: &mut UdpSocket) -> Result<Response, Error> {
     {
         message
     } else {
-        return Err(Error::new(
-            ErrorKind::Other,
-            "RMCP response does not have IPMI class",
-        ));
+        return Err(Error::new(ErrorKind::Other, "RMCP response does not have IPMI class").into());
     };
 
     let data = encapsulated_message.payload;
+
+    if data.len() < 7 {
+        return Err(RmcpReceiveError::NotEnoughData.into());
+    }
 
     let _req_addr = data[0];
     let netfn = data[1] >> 2;
@@ -160,7 +158,8 @@ pub fn recv(inner: &mut UdpSocket) -> Result<Response, Error> {
     {
         resp
     } else {
-        return Err(Error::new(ErrorKind::Other, "Response data was empty"));
+        // TODO: need better message here :)
+        return Err(Error::new(ErrorKind::Other, "Response data was empty").into());
     };
 
     Ok(response)
