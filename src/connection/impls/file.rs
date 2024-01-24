@@ -228,7 +228,7 @@ impl File {
         let me = Ok(Self {
             inner,
             recv_timeout,
-            seq: 0,
+            seq: -1,
             my_addr,
         });
 
@@ -262,6 +262,8 @@ impl IpmiConnection for File {
             x => x,
         }
         .into();
+
+        self.seq += 1;
 
         let netfn = request.netfn_raw();
         let cmd = request.cmd();
@@ -361,12 +363,26 @@ impl IpmiConnection for File {
                 log::debug!("Received response after {} ms", duration);
                 recv.log(log::Level::Trace);
 
-                recv.try_into().map_err(|e| {
-                    io::Error::new(
+                match Response::try_from(recv) {
+                    Ok(response) => {
+                        if response.seq() == self.seq {
+                            Ok(response)
+                        } else {
+                            Err(io::Error::new(
+                                io::ErrorKind::Other,
+                                format!(
+                                    "Invalid sequence number on response. Expected {}, got {}",
+                                    self.seq,
+                                    response.seq()
+                                ),
+                            ))
+                        }
+                    }
+                    Err(e) => Err(io::Error::new(
                         io::ErrorKind::Other,
                         format!("Error while creating response. {:?}", e),
-                    )
-                })
+                    )),
+                }
             }
             Err(e) => {
                 log::warn!(
@@ -381,8 +397,6 @@ impl IpmiConnection for File {
 
     fn send_recv(&mut self, request: &mut Request) -> io::Result<Response> {
         self.send(request)?;
-
-        // TODO: determine if sequence number is correct
 
         self.recv()
     }
