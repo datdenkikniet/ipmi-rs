@@ -36,8 +36,8 @@ pub struct EntryInfo {
 }
 
 impl Loggable for EntryInfo {
-    fn into_log(&self) -> Vec<crate::fmt::LogItem> {
-        let mut log_output = self.entry.into_log();
+    fn as_log(&self) -> Vec<crate::fmt::LogItem> {
+        let mut log_output = self.entry.as_log();
 
         let value = format!("0x{:04X}", self.next_entry.value());
         log_output.push((1, "Next entry", value).into());

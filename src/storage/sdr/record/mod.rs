@@ -860,7 +860,7 @@ impl SensorRecordCommon {
 }
 
 impl Loggable for Record {
-    fn into_log(&self) -> Vec<crate::fmt::LogItem> {
+    fn as_log(&self) -> Vec<crate::fmt::LogItem> {
         let full = self.full_sensor();
         let compact = self.compact_sensor();
 

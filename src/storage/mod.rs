@@ -69,7 +69,7 @@ impl AllocInfo {
 }
 
 impl Loggable for AllocInfo {
-    fn into_log(&self) -> Vec<LogItem> {
+    fn as_log(&self) -> Vec<LogItem> {
         let unspecified_if_zero = |v: Option<NonZeroU16>| {
             if let Some(v) = v {
                 format!("{}", v.get())

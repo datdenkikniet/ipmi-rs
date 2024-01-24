@@ -39,8 +39,8 @@ impl AllocInfo {
 }
 
 impl Loggable for AllocInfo {
-    fn into_log(&self) -> Vec<crate::fmt::LogItem> {
-        let mut alloc_log_output = self.inner.into_log();
+    fn as_log(&self) -> Vec<crate::fmt::LogItem> {
+        let mut alloc_log_output = self.inner.as_log();
         alloc_log_output.insert(0, (0, "SEL Allocation Information").into());
         alloc_log_output
     }

@@ -41,8 +41,8 @@ impl AllocInfo {
 }
 
 impl Loggable for AllocInfo {
-    fn into_log(&self) -> Vec<crate::fmt::LogItem> {
-        let mut log = self.inner.into_log();
+    fn as_log(&self) -> Vec<crate::fmt::LogItem> {
+        let mut log = self.inner.as_log();
         log.insert(0, (0, "SDR Repository Allocation Information").into());
         log
     }

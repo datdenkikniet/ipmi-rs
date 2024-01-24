@@ -210,7 +210,7 @@ impl Entry {
 }
 
 impl Loggable for Entry {
-    fn into_log(&self) -> Vec<LogItem> {
+    fn as_log(&self) -> Vec<LogItem> {
         match self {
             Entry::System {
                 record_id,

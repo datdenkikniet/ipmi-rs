@@ -71,7 +71,7 @@ impl Logger {
     where
         T: Loggable,
     {
-        Self::log_impl(output, &loggable.into_log())
+        Self::log_impl(output, &loggable.as_log())
     }
 
     fn log_impl(output: &LogOutput, items: &[LogItem]) {
@@ -110,7 +110,7 @@ impl Logger {
 }
 
 pub trait Loggable {
-    fn into_log(&self) -> Vec<LogItem>;
+    fn as_log(&self) -> Vec<LogItem>;
 }
 
 #[macro_export]
