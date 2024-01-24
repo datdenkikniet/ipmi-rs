@@ -3,10 +3,12 @@
   interface for File-based connections. `GetSensorReading::new()` and `GetSensorReading::for_sensor()`
   have been replaced with`GetSensorReading::for_sensor_key()` which now takes a `&Sensorkey`. ([#6])
 * Fix parsing ID String modifier in `CompactSensorRecord` ([#7])
+* Validate sequence numbers for `File` connections. ([#11])
 
 
 [#6]: https://github.com/datdenkikniet/ipmi-rs/pull/6
 [#7]: https://github.com/datdenkikniet/ipmi-rs/pull/7
+[#11]: https://github.com/datdenkikniet/ipmi-rs/pull/11
 
 # [0.2.1](https://github.com/datdenkikniet/ipmi-rs/tree/v0.2.1)
 
