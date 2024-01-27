@@ -17,9 +17,10 @@ use crate::{
     IpmiCommandError,
 };
 
-mod rmcp;
 mod wire;
-use rmcp::*;
+
+mod protocol;
+use protocol::*;
 
 mod encapsulation;
 
@@ -122,7 +123,7 @@ impl Rmcp<Inactive> {
 
         let ping = RmcpMessage::new(
             0xFF,
-            RmcpClass::ASF(ASFMessage {
+            RmcpClass::Asf(ASFMessage {
                 message_tag: 0x00,
                 message_type: ASFMessageType::Ping,
             }),
@@ -138,7 +139,7 @@ impl Rmcp<Inactive> {
 
         let (supported_entities, supported_interactions) = if let Some(RmcpMessage {
             class_and_contents:
-                RmcpClass::ASF(ASFMessage {
+                RmcpClass::Asf(ASFMessage {
                     message_type:
                         ASFMessageType::Pong {
                             supported_entities,

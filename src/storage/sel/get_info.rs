@@ -92,7 +92,7 @@ impl Info {
 }
 
 impl Loggable for Info {
-    fn into_log(&self) -> Vec<crate::fmt::LogItem> {
+    fn as_log(&self) -> Vec<crate::fmt::LogItem> {
         let (ver_maj, ver_min) = (self.version_maj, self.version_min);
 
         let supported_cmds: Vec<_> = self

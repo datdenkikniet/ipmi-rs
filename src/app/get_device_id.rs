@@ -94,7 +94,7 @@ impl DeviceId {
 }
 
 impl Loggable for DeviceId {
-    fn into_log(&self) -> Vec<crate::fmt::LogItem> {
+    fn as_log(&self) -> Vec<crate::fmt::LogItem> {
         let (dev_id, dev_rev) = (self.device_id, self.device_revision);
         let (fw_maj, fw_min) = (self.major_fw_revision, self.minor_fw_revision);
         let (v_maj, v_min) = (self.major_version, self.minor_version);

@@ -84,14 +84,14 @@ impl GetChannelAuthenticationCapabilities {
     }
 }
 
-impl Into<Message> for GetChannelAuthenticationCapabilities {
-    fn into(self) -> Message {
+impl From<GetChannelAuthenticationCapabilities> for Message {
+    fn from(value: GetChannelAuthenticationCapabilities) -> Message {
         Message::new_request(
             NetFn::App,
             0x38,
             vec![
-                0x80 | (self.channel_number & 0x0F),
-                self.privilege_level.into(),
+                0x80 | (value.channel_number & 0x0F),
+                value.privilege_level.into(),
             ],
         )
     }

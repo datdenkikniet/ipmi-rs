@@ -36,8 +36,8 @@ pub struct EntryInfo {
 }
 
 impl Loggable for EntryInfo {
-    fn into_log(&self) -> Vec<crate::fmt::LogItem> {
-        let mut log_output = self.entry.into_log();
+    fn as_log(&self) -> Vec<crate::fmt::LogItem> {
+        let mut log_output = self.entry.as_log();
 
         let value = format!("0x{:04X}", self.next_entry.value());
         log_output.push((1, "Next entry", value).into());
@@ -61,7 +61,7 @@ impl IpmiCommand for GetEntry {
         }
 
         let next_entry = RecordId::new_raw(u16::from_le_bytes([data[0], data[1]]));
-        let entry = Entry::parse(&data[2..]).map_err(|e| ParseResponseError::Parse(e))?;
+        let entry = Entry::parse(&data[2..]).map_err(ParseResponseError::Parse)?;
         Ok(EntryInfo { next_entry, entry })
     }
 }

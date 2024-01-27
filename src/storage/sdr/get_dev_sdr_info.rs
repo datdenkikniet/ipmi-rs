@@ -115,7 +115,7 @@ impl<T> DeviceSdrInfo<T> {
 }
 
 impl Loggable for DeviceSdrInfo<NumberOfSdrs> {
-    fn into_log(&self) -> Vec<crate::fmt::LogItem> {
+    fn as_log(&self) -> Vec<crate::fmt::LogItem> {
         let log = log_vec![
             (0, "Device SDR information"),
             (1, "Number of SDRs", self.operation_value.0)
@@ -125,7 +125,7 @@ impl Loggable for DeviceSdrInfo<NumberOfSdrs> {
 }
 
 impl Loggable for DeviceSdrInfo<NumberOfSensors> {
-    fn into_log(&self) -> Vec<crate::fmt::LogItem> {
+    fn as_log(&self) -> Vec<crate::fmt::LogItem> {
         let log = log_vec![
             (0, "Device SDR information"),
             (1, "Number of sensors", self.operation_value.0)
@@ -142,7 +142,7 @@ pub struct GetDeviceSdrInfo<T> {
 impl<T> GetDeviceSdrInfo<T> {
     pub fn new(_: T) -> Self {
         Self {
-            _phantom: PhantomData::default(),
+            _phantom: PhantomData,
         }
     }
 }

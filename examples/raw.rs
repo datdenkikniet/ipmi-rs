@@ -28,7 +28,7 @@ fn try_parse_message(input: &[u8]) -> std::io::Result<Message> {
 
     let cmd = input[1];
 
-    let data: Vec<u8> = input[2..].iter().map(|v| *v).collect();
+    let data = input[2..].to_vec();
 
     Ok(Message::new_raw(input[0], cmd, data))
 }

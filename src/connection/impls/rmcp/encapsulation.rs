@@ -35,14 +35,14 @@ impl AuthType {
             auth::AuthType::MD5 => {
                 let mut context = md5::Context::new();
                 context.consume(password);
-                context.consume(&session_id.map(|v| v.get()).unwrap_or(0).to_le_bytes());
+                context.consume(session_id.map(|v| v.get()).unwrap_or(0).to_le_bytes());
                 context.consume(data);
                 context.consume(session_seq.to_le_bytes());
                 context.consume(password);
 
                 Self::MD5(context.compute().0)
             }
-            auth::AuthType::Key => Self::Key(password.clone()),
+            auth::AuthType::Key => Self::Key(*password),
         }
     }
 }
@@ -169,10 +169,10 @@ impl EncapsulatedMessage {
         let data_len = data[0];
         let data = &data[1..];
 
-        let payload = if data_len == 0 && data.len() == 0 {
+        let payload = if data_len == 0 && data.is_empty() {
             Vec::new()
         } else if data.len() == data_len as usize {
-            data.iter().map(|v| *v).collect()
+            data.to_vec()
         } else {
             return Err("Payload len is not correct");
         };

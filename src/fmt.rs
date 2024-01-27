@@ -17,9 +17,9 @@ impl From<log::Level> for LogOutput {
 impl LogOutput {
     fn print(&self, msg: &str) {
         match self {
-            LogOutput::Log(level) => log::log!(level.clone(), "{}", msg),
+            LogOutput::Log(level) => log::log!(*level, "{}", msg),
             LogOutput::LogTarget(level, target) => {
-                log::log!(target: target, level.clone(), "{}", msg)
+                log::log!(target: target, *level, "{}", msg)
             }
             LogOutput::StdOut => println!("{}", msg),
             LogOutput::StdErr => eprintln!("{}", msg),
@@ -71,12 +71,14 @@ impl Logger {
     where
         T: Loggable,
     {
-        Self::log_impl(output, &loggable.into_log())
+        Self::log_impl(output, &loggable.as_log())
     }
 
     fn log_impl(output: &LogOutput, items: &[LogItem]) {
         // TODO: support log items with more than 2 steps of log levels
-        items.iter().next().map(|v| output.print(&v.title));
+        if let Some(v) = items.first() {
+            output.print(&v.title)
+        }
 
         let right_align = items
             .iter()
@@ -108,13 +110,13 @@ impl Logger {
 }
 
 pub trait Loggable {
-    fn into_log(&self) -> Vec<LogItem>;
+    fn as_log(&self) -> Vec<LogItem>;
 }
 
 #[macro_export]
 macro_rules ! log_vec {
     [$($msg:tt)*] => {
-        crate::to_log!(vec: $($msg)*)
+        $crate::to_log!(vec: $($msg)*)
     }
 }
 
@@ -125,22 +127,22 @@ macro_rules! to_log {
     };
 
     ([$($array:tt)*], ($level:literal, $title:expr, $value:expr)) => {
-        crate::to_log!([$($array)* ($level, $title, $value).into(),],)
+        $crate::to_log!([$($array)* ($level, $title, $value).into(),],)
     };
 
     ([$($array:tt)*], ($level:literal, $title:expr)) => {
-        crate::to_log!([$($array)* ($level, $title, "").into(),],)
+        $crate::to_log!([$($array)* ($level, $title, "").into(),],)
     };
 
     ([$($array:tt)*], ($level:literal, $title:expr, $value:expr), $($msg:tt)*) => {
-        crate::to_log!([$($array)* ($level, $title, $value).into(),], $($msg)*)
+        $crate::to_log!([$($array)* ($level, $title, $value).into(),], $($msg)*)
     };
 
     ([$($array:tt)*], ($level:literal, $title:expr), $($msg:tt)*) => {
-        crate::to_log!([$($array)* ($level, $title, "").into(),], $($msg)*)
+        $crate::to_log!([$($array)* ($level, $title, "").into(),], $($msg)*)
     };
 
     (vec: $($msg:tt)*) => {
-        crate::to_log!([], $($msg)*)
+        $crate::to_log!([], $($msg)*)
     };
 }

@@ -130,7 +130,7 @@ impl RepositoryInfo {
 }
 
 impl Loggable for RepositoryInfo {
-    fn into_log(&self) -> Vec<LogItem> {
+    fn as_log(&self) -> Vec<LogItem> {
         let Self {
             version_major,
             version_minor,

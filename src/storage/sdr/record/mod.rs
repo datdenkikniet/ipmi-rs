@@ -124,11 +124,11 @@ impl From<u8> for SensorOwner {
     }
 }
 
-impl Into<u8> for SensorOwner {
-    fn into(self) -> u8 {
-        match self {
-            Self::I2C(id) => (id << 1) & 0xFE,
-            Self::System(id) => ((id << 1) & 0xFE) | 1,
+impl From<SensorOwner> for u8 {
+    fn from(value: SensorOwner) -> u8 {
+        match value {
+            SensorOwner::I2C(id) => (id << 1) & 0xFE,
+            SensorOwner::System(id) => ((id << 1) & 0xFE) | 1,
         }
     }
 }
@@ -860,7 +860,7 @@ impl SensorRecordCommon {
 }
 
 impl Loggable for Record {
-    fn into_log(&self) -> Vec<crate::fmt::LogItem> {
+    fn as_log(&self) -> Vec<crate::fmt::LogItem> {
         let full = self.full_sensor();
         let compact = self.compact_sensor();
 
