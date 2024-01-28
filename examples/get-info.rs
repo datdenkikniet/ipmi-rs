@@ -104,6 +104,14 @@ fn main() -> std::io::Result<()> {
         } else if let RecordContents::CompactSensor(compact) = &sensor.contents {
             log::info!("Compact sensor {}", compact.id_string(),);
             log::info!("  Sensor type: {:?}", compact.common().ty,);
+        } else if let RecordContents::EventOnlySensor(event) = &sensor.contents {
+            log::info!("Event-only sensor {}", event.id_string,);
+            log::info!("  Sensor type: {:?}", event.ty,);
+        } else if let RecordContents::FruDeviceLocator(fru_device_locator) = &sensor.contents {
+            log::info!("FRU Device Locator {}", fru_device_locator.id_string());
+            log::info!("  Device type: {}", fru_device_locator.device_type);
+        } else if let RecordContents::McDeviceLocator(mc_device_locator) = &sensor.contents {
+            log::info!("MC Device Locator {}", mc_device_locator.id_string());
         } else if let RecordContents::Unknown { ty, .. } = &sensor.contents {
             log::info!("Unknown record type. Type: 0x{ty:02X}");
         }
