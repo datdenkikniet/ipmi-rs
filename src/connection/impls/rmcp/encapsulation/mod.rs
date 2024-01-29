@@ -116,6 +116,9 @@ impl EncapsulatedMessage {
             return Err(UnwrapEncapsulationError::NotEnoughData);
         }
 
+        // Strip legacy PAD
+        let data = &data[..data.len() - 1];
+
         let session_sequence = u32::from_le_bytes(data[1..5].try_into().unwrap());
         let session_id = u32::from_le_bytes(data[5..9].try_into().unwrap());
 
@@ -135,6 +138,8 @@ impl EncapsulatedMessage {
                     v => return Err(UnwrapEncapsulationError::UnsupportedAuthType(v)),
                 };
 
+                let data = &data[25..];
+
                 if !auth::verify(
                     &auth_type,
                     auth_code,
@@ -146,7 +151,7 @@ impl EncapsulatedMessage {
                     return Err(UnwrapEncapsulationError::AuthcodeError);
                 }
 
-                (auth_type, &data[25..])
+                (auth_type, data)
             }
         };
 
@@ -192,7 +197,7 @@ mod test {
 
     test!(
         empty_noauth,
-        [0, 1, 0, 0, 0, 2, 0, 0, 0, 0],
+        [0, 1, 0, 0, 0, 2, 0, 0, 0, 0, 0],
         Ok(EncapsulatedMessage {
             auth_type: AuthType::None,
             session_sequence: 1,
@@ -203,7 +208,7 @@ mod test {
 
     test!(
         nonempty_noauth,
-        [0, 1, 0, 0, 0, 2, 0, 0, 0, 5, 1, 2, 3, 4, 5],
+        [0, 1, 0, 0, 0, 2, 0, 0, 0, 5, 1, 2, 3, 4, 5, 0],
         Ok(EncapsulatedMessage {
             auth_type: AuthType::None,
             session_sequence: 1,
@@ -214,15 +219,15 @@ mod test {
 
     test!(
         nonempty_incorrect_len,
-        [0, 1, 0, 0, 0, 2, 0, 0, 0, 5, 1, 2, 3, 4],
+        [0, 1, 0, 0, 0, 2, 0, 0, 0, 5, 1, 2, 3, 4, 0],
         Err(UnwrapEncapsulationError::IncorrectPayloadLen)
     );
 
     test!(
         empty_md5,
         [
-            2, 1, 0, 0, 0, 2, 0, 0, 0, 7, 160, 164, 43, 148, 8, 192, 45, 157, 45, 51, 53, 86, 32,
-            148, 162, 0
+            2, 1, 0, 0, 0, 2, 0, 0, 0, 152, 54, 135, 85, 190, 228, 38, 149, 133, 51, 201, 23, 232,
+            140, 18, 211, 0, 0
         ],
         Ok(EncapsulatedMessage {
             auth_type: AuthType::MD5,
@@ -234,7 +239,7 @@ mod test {
 
     test!(
         truncated_md5,
-        [2, 0, 0, 0, 1, 0, 0, 0, 2, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0,],
+        [2, 0, 0, 0, 1, 0, 0, 0, 2, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0],
         Err(UnwrapEncapsulationError::NotEnoughData)
     );
 }
