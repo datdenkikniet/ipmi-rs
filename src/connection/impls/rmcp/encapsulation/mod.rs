@@ -1,6 +1,7 @@
 use crate::app::auth::AuthType;
 
 mod auth;
+mod md2;
 
 pub use self::auth::CalculateAuthCodeError;
 

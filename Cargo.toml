@@ -32,6 +32,7 @@ unix-file = [ "nix" ]
 pretty_env_logger = "0.4"
 indicatif = "0.17"
 clap = { version = "4.3", features = [ "derive" ]}
+hex = "0.4.3"
 
 [[example]]
 name = "get-info"
