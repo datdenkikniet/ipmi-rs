@@ -26,6 +26,8 @@ pub use wire::RmcpReceiveError;
 mod encapsulation;
 pub use encapsulation::{CalculateAuthCodeError, UnwrapEncapsulationError};
 
+mod plus;
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Inactive;
 
@@ -123,7 +125,7 @@ impl Rmcp<Inactive> {
         let socket = UdpSocket::bind("[::]:0")?;
         socket.set_read_timeout(Some(timeout))?;
 
-        log::debug!("Opening connection");
+        log::debug!("Opening connection to {:?}", addrs[0]);
         socket.connect(addrs[0])?;
 
         Ok(Self {
@@ -226,7 +228,7 @@ impl Rmcp<Inactive> {
             Err(e) => return Err(ActivationError::GetChannelAuthenticationCapabilities(e)),
         };
 
-        log::trace!("Authentication capabilities: {:?}", authentication_caps);
+        log::debug!("Authentication capabilities: {:?}", authentication_caps);
 
         log::debug!("Requesting challenge");
 
@@ -278,7 +280,7 @@ impl IpmiConnection for Rmcp<Active> {
     type Error = RmcpError;
 
     fn send(&mut self, request: &mut crate::connection::Request) -> Result<(), Self::SendError> {
-        wire::send(
+        wire::send_v1_5(
             &mut self.inner,
             self.state.auth_type,
             self.requestor_addr,

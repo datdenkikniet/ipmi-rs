@@ -1,4 +1,4 @@
-use super::encapsulation::{CalculateAuthCodeError, EncapsulatedMessage, UnwrapEncapsulationError};
+use super::encapsulation::{CalculateAuthCodeError, IpmiSessionMessage, UnwrapEncapsulationError};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SupportedInteractions {
@@ -177,7 +177,7 @@ impl ASFMessage {
 pub enum RmcpClass {
     Ack(u8),
     Asf(ASFMessage),
-    Ipmi(EncapsulatedMessage),
+    Ipmi(IpmiSessionMessage),
     OemDefined,
 }
 
@@ -274,7 +274,7 @@ impl RmcpMessage {
             0x06 => RmcpClass::Asf(
                 ASFMessage::from_bytes(data).ok_or(RmcpUnwrapError::InvalidASFMessage)?,
             ),
-            0x07 => RmcpClass::Ipmi(EncapsulatedMessage::from_bytes(data, password)?),
+            0x07 => RmcpClass::Ipmi(IpmiSessionMessage::from_bytes(data, password)?),
             0x08 => RmcpClass::OemDefined,
             _ if class & 0x80 == 0x80 => RmcpClass::Ack(class & 0x7F),
             _ => {

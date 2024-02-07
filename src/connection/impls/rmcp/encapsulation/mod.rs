@@ -3,58 +3,9 @@ use crate::app::auth::AuthType;
 mod auth;
 mod md2;
 
+use crate::connection::rmcp::plus::{PayloadType, WirePayloadType};
+
 pub use self::auth::CalculateAuthCodeError;
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum PayloadType {
-    IpmiMessage,
-    Sol,
-    OemExplicit,
-    RmcpPlusOpenSessionRequest,
-    RmcpPlusOpenSessionResponse,
-    RAKPMessage1,
-    RAKPMessage2,
-    RAKPMessage3,
-    RAKPMessage4,
-}
-
-impl TryFrom<u8> for PayloadType {
-    type Error = ();
-
-    fn try_from(value: u8) -> Result<Self, Self::Error> {
-        let value = value & 0x3F;
-        let ty = match value {
-            0x00 => Self::IpmiMessage,
-            0x01 => Self::Sol,
-            0x02 => Self::OemExplicit,
-            0x10 => Self::RmcpPlusOpenSessionRequest,
-            0x11 => Self::RmcpPlusOpenSessionResponse,
-            0x12 => Self::RAKPMessage1,
-            0x13 => Self::RAKPMessage2,
-            0x14 => Self::RAKPMessage3,
-            0x15 => Self::RAKPMessage4,
-            _ => return Err(()),
-        };
-
-        Ok(ty)
-    }
-}
-
-impl From<PayloadType> for u8 {
-    fn from(value: PayloadType) -> Self {
-        match value {
-            PayloadType::IpmiMessage => 0x0,
-            PayloadType::Sol => 0x01,
-            PayloadType::OemExplicit => 0x02,
-            PayloadType::RmcpPlusOpenSessionRequest => 0x10,
-            PayloadType::RmcpPlusOpenSessionResponse => 0x11,
-            PayloadType::RAKPMessage1 => 0x12,
-            PayloadType::RAKPMessage2 => 0x13,
-            PayloadType::RAKPMessage3 => 0x14,
-            PayloadType::RAKPMessage4 => 0x15,
-        }
-    }
-}
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum UnwrapEncapsulationError {
@@ -70,53 +21,90 @@ pub enum UnwrapEncapsulationError {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct EncapsulatedMessage {
-    pub auth_type: AuthType,
-    pub session_sequence: u32,
-    pub session_id: u32,
-    pub payload: Vec<u8>,
+pub enum IpmiSessionMessage {
+    Ipmiv1_5 {
+        auth_type: AuthType,
+        session_sequence_number: u32,
+        session_id: u32,
+        payload: Vec<u8>,
+    },
+    Ipmiv2_0 {
+        encrypted: bool,
+        authenticated: bool,
+        payload_type: PayloadType,
+        session_id: u32,
+        session_sequence_number: u32,
+        payload: Vec<u8>,
+    },
 }
 
-impl EncapsulatedMessage {
+impl IpmiSessionMessage {
     pub fn write_data(
         &self,
         password: Option<&[u8; 16]>,
         buffer: &mut Vec<u8>,
     ) -> Result<(), CalculateAuthCodeError> {
-        let auth_code = auth::calculate(
-            &self.auth_type,
-            password,
-            self.session_id,
-            self.session_sequence,
-            &self.payload,
-        )?;
+        match self {
+            IpmiSessionMessage::Ipmiv1_5 {
+                auth_type,
+                session_sequence_number,
+                session_id,
+                payload,
+            } => {
+                let auth_code = auth::calculate(
+                    &auth_type,
+                    password,
+                    *session_id,
+                    *session_sequence_number,
+                    &payload,
+                )?;
 
-        buffer.push(self.auth_type.into());
-        buffer.extend_from_slice(&self.session_sequence.to_le_bytes());
-        buffer.extend_from_slice(&self.session_id.to_le_bytes());
+                buffer.push((*auth_type).into());
+                buffer.extend_from_slice(&session_sequence_number.to_le_bytes());
+                buffer.extend_from_slice(&session_id.to_le_bytes());
 
-        if let Some(auth_code) = auth_code {
-            buffer.extend_from_slice(auth_code.as_slice());
+                if let Some(auth_code) = auth_code {
+                    buffer.extend_from_slice(&auth_code);
+                }
+
+                buffer.push(payload.len() as u8);
+                buffer.extend_from_slice(&payload);
+
+                // Legacy PAD
+                buffer.push(0);
+
+                Ok(())
+            }
+            IpmiSessionMessage::Ipmiv2_0 {
+                encrypted,
+                authenticated,
+                payload_type,
+                session_id,
+                session_sequence_number,
+                payload,
+            } => {
+                let wire = WirePayloadType {
+                    authenticated: *authenticated,
+                    encrypted: *encrypted,
+                    payload_type: *payload_type,
+                };
+
+                wire.write(buffer);
+
+                Ok(())
+            }
         }
-
-        buffer.push(self.payload.len() as u8);
-        buffer.extend_from_slice(&self.payload);
-
-        // Legacy PAD
-        buffer.push(0);
-
-        Ok(())
     }
 
-    pub fn from_bytes(
-        data: &[u8],
+    fn ipmi_v1_5_from_bytes(
         password: Option<&[u8; 16]>,
+        data: &[u8],
     ) -> Result<Self, UnwrapEncapsulationError> {
-        if data.len() < 10 {
+        if data.len() < 11 {
             return Err(UnwrapEncapsulationError::NotEnoughData);
         }
 
-        // Strip legacy PAD
+        // strip LEGACY PAD
         let data = &data[..data.len() - 1];
 
         let session_sequence = u32::from_le_bytes(data[1..5].try_into().unwrap());
@@ -166,14 +154,63 @@ impl EncapsulatedMessage {
             return Err(UnwrapEncapsulationError::IncorrectPayloadLen);
         };
 
-        let me = Self {
+        Ok(Self::Ipmiv1_5 {
             auth_type,
-            session_sequence,
+            session_sequence_number: session_sequence,
             session_id,
             payload,
+        })
+    }
+
+    fn ipmi_v2_0_from_bytes(data: &[u8]) -> Result<Self, &'static str> {
+        if data.len() < 10 {
+            return Err("Not enough data");
+        }
+
+        debug_assert!(data[0] == 0x06);
+
+        let (
+            WirePayloadType {
+                authenticated,
+                encrypted,
+                payload_type,
+            },
+            data,
+        ) = WirePayloadType::from_data(data).ok_or("Invalid wire payload type.")?;
+
+        let session_id = u32::from_le_bytes(data[..4].try_into().unwrap());
+        let session_sequence_number = u32::from_le_bytes(data[4..8].try_into().unwrap());
+
+        let data_len = u16::from_le_bytes(data[8..10].try_into().unwrap());
+        let data = &data[10..];
+
+        let payload = if data_len == 0 && data.is_empty() {
+            Vec::new()
+        } else if data.len() == data_len as usize {
+            data.to_vec()
+        } else {
+            return Err("Payload len is not correct");
         };
 
-        Ok(me)
+        Ok(Self::Ipmiv2_0 {
+            encrypted,
+            payload_type,
+            authenticated,
+            session_id,
+            session_sequence_number,
+            payload,
+        })
+    }
+
+    pub fn from_bytes(
+        data: &[u8],
+        password: Option<&[u8; 16]>,
+    ) -> Result<Self, UnwrapEncapsulationError> {
+        if data[0] != 0x06 {
+            Self::ipmi_v1_5_from_bytes(password, data)
+        } else {
+            Ok(Self::ipmi_v2_0_from_bytes(data).unwrap())
+        }
     }
 }
 
@@ -188,7 +225,7 @@ mod test {
                 let data = $data;
 
                 let encapsulated =
-                    EncapsulatedMessage::from_bytes(&data, Some(b"password\0\0\0\0\0\0\0\0"));
+                    IpmiSessionMessage::from_bytes(&data, Some(b"password\0\0\0\0\0\0\0\0"));
 
                 assert_eq!(encapsulated, $then);
             }
@@ -198,9 +235,9 @@ mod test {
     test!(
         empty_noauth,
         [0, 1, 0, 0, 0, 2, 0, 0, 0, 0, 0],
-        Ok(EncapsulatedMessage {
+        Ok(IpmiSessionMessage::Ipmiv1_5 {
             auth_type: AuthType::None,
-            session_sequence: 1,
+            session_sequence_number: 1,
             session_id: 2,
             payload: vec![]
         })
@@ -209,9 +246,9 @@ mod test {
     test!(
         nonempty_noauth,
         [0, 1, 0, 0, 0, 2, 0, 0, 0, 5, 1, 2, 3, 4, 5, 0],
-        Ok(EncapsulatedMessage {
+        Ok(IpmiSessionMessage::Ipmiv1_5 {
             auth_type: AuthType::None,
-            session_sequence: 1,
+            session_sequence_number: 1,
             session_id: 2,
             payload: vec![1, 2, 3, 4, 5]
         })
@@ -229,9 +266,9 @@ mod test {
             2, 1, 0, 0, 0, 2, 0, 0, 0, 152, 54, 135, 85, 190, 228, 38, 149, 133, 51, 201, 23, 232,
             140, 18, 211, 0, 0
         ],
-        Ok(EncapsulatedMessage {
+        Ok(IpmiSessionMessage::Ipmiv1_5 {
             auth_type: AuthType::MD5,
-            session_sequence: 1,
+            session_sequence_number: 1,
             session_id: 2,
             payload: vec![]
         })

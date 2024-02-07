@@ -9,7 +9,7 @@ use crate::{
     app::auth,
     connection::{
         rmcp::{
-            encapsulation::EncapsulatedMessage,
+            encapsulation::IpmiSessionMessage,
             protocol::{RmcpClass, RmcpMessage},
         },
         LogicalUnit, Message, Request, Response,
@@ -53,7 +53,7 @@ pub fn checksum(data: impl IntoIterator<Item = u8>) -> impl Iterator<Item = u8> 
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn send(
+pub fn send_v1_5(
     inner: &mut UdpSocket,
     auth_type: auth::AuthType,
     requestor_addr: u8,
@@ -98,9 +98,9 @@ pub fn send(
 
     let message = RmcpMessage::new(
         0xFF,
-        RmcpClass::Ipmi(EncapsulatedMessage {
+        RmcpClass::Ipmi(IpmiSessionMessage::Ipmiv1_5 {
             auth_type,
-            session_sequence,
+            session_sequence_number: session_sequence,
             session_id: session_id.map(|v| v.get()).unwrap_or(0),
             payload: final_data,
         }),
@@ -137,7 +137,10 @@ pub fn recv(password: Option<&[u8; 16]>, inner: &mut UdpSocket) -> Result<Respon
         return Err(Error::new(ErrorKind::Other, "RMCP response does not have IPMI class").into());
     };
 
-    let data = encapsulated_message.payload;
+    let data = match encapsulated_message {
+        IpmiSessionMessage::Ipmiv1_5 { payload, .. } => payload,
+        IpmiSessionMessage::Ipmiv2_0 { .. } => todo!(),
+    };
 
     if data.len() < 7 {
         return Err(RmcpReceiveError::NotEnoughData.into());
