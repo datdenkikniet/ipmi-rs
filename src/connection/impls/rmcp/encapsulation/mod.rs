@@ -100,12 +100,9 @@ impl IpmiSessionMessage {
         password: Option<&[u8; 16]>,
         data: &[u8],
     ) -> Result<Self, UnwrapEncapsulationError> {
-        if data.len() < 11 {
+        if data.len() < 10 {
             return Err(UnwrapEncapsulationError::NotEnoughData);
         }
-
-        // strip LEGACY PAD
-        let data = &data[..data.len() - 1];
 
         let session_sequence = u32::from_le_bytes(data[1..5].try_into().unwrap());
         let session_id = u32::from_le_bytes(data[5..9].try_into().unwrap());
@@ -148,8 +145,16 @@ impl IpmiSessionMessage {
 
         let payload = if data_len == 0 && data.is_empty() {
             Vec::new()
+        }
+        // Only legacy PAD
+        else if data_len == 0 && data.len() == 1 {
+            Vec::new()
         } else if data.len() == data_len as usize {
             data.to_vec()
+        }
+        // Data & legacy PAD
+        else if data.len() - 1 == data_len as usize {
+            data[..data.len() - 1].to_vec()
         } else {
             return Err(UnwrapEncapsulationError::IncorrectPayloadLen);
         };
@@ -234,7 +239,7 @@ mod test {
 
     test!(
         empty_noauth,
-        [0, 1, 0, 0, 0, 2, 0, 0, 0, 0, 0],
+        [0, 1, 0, 0, 0, 2, 0, 0, 0, 0],
         Ok(IpmiSessionMessage::Ipmiv1_5 {
             auth_type: AuthType::None,
             session_sequence_number: 1,
@@ -245,7 +250,7 @@ mod test {
 
     test!(
         nonempty_noauth,
-        [0, 1, 0, 0, 0, 2, 0, 0, 0, 5, 1, 2, 3, 4, 5, 0],
+        [0, 1, 0, 0, 0, 2, 0, 0, 0, 5, 1, 2, 3, 4, 5],
         Ok(IpmiSessionMessage::Ipmiv1_5 {
             auth_type: AuthType::None,
             session_sequence_number: 1,
@@ -256,7 +261,7 @@ mod test {
 
     test!(
         nonempty_incorrect_len,
-        [0, 1, 0, 0, 0, 2, 0, 0, 0, 5, 1, 2, 3, 4, 0],
+        [0, 1, 0, 0, 0, 2, 0, 0, 0, 5, 1, 2, 3, 4],
         Err(UnwrapEncapsulationError::IncorrectPayloadLen)
     );
 
@@ -264,7 +269,7 @@ mod test {
         empty_md5,
         [
             2, 1, 0, 0, 0, 2, 0, 0, 0, 152, 54, 135, 85, 190, 228, 38, 149, 133, 51, 201, 23, 232,
-            140, 18, 211, 0, 0
+            140, 18, 211, 0
         ],
         Ok(IpmiSessionMessage::Ipmiv1_5 {
             auth_type: AuthType::MD5,
@@ -276,7 +281,7 @@ mod test {
 
     test!(
         truncated_md5,
-        [2, 0, 0, 0, 1, 0, 0, 0, 2, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0],
+        [2, 0, 0, 0, 1, 0, 0, 0, 2, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1],
         Err(UnwrapEncapsulationError::NotEnoughData)
     );
 }
