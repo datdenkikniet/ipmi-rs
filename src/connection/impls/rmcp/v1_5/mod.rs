@@ -5,18 +5,21 @@ use crate::{
         ActivateSession, AuthError, AuthType, ChannelAuthenticationCapabilities,
         GetSessionChallenge, PrivilegeLevel,
     },
-    connection::{IpmiConnection, ParseResponseError, Request, Response},
+    connection::{
+        rmcp::{IpmiSessionMessage, RmcpMessage},
+        IpmiConnection, ParseResponseError, Request, Response,
+    },
     Ipmi, IpmiError,
 };
 
-use super::{internal::IpmbState, RmcpError};
+use super::{internal::IpmbState, RmcpClass, RmcpError, RmcpReceiveError};
 
 pub use message::Message;
 
 mod auth;
+mod checksum;
 mod md2;
 mod message;
-mod wire;
 
 #[derive(Debug)]
 pub enum ActivationError {
@@ -58,7 +61,7 @@ pub struct State {
     session_id: Option<NonZeroU32>,
     auth_type: crate::app::auth::AuthType,
     password: Option<[u8; 16]>,
-    request_sequence: u32,
+    session_sequence: u32,
 }
 
 impl State {
@@ -69,8 +72,12 @@ impl State {
             auth_type: AuthType::None,
             password: None,
             session_id: None,
-            request_sequence: 0,
+            session_sequence: 0,
         }
+    }
+
+    pub fn release_socket(self) -> UdpSocket {
+        self.socket
     }
 
     pub fn activate(
@@ -133,7 +140,7 @@ impl State {
 
         self = ipmi.release();
 
-        self.request_sequence = activation_info.initial_sequence_number;
+        self.session_sequence = activation_info.initial_sequence_number;
         self.session_id = Some(activation_info.session_id);
 
         // TODO: assert the correct thing here
@@ -151,23 +158,115 @@ impl IpmiConnection for State {
     type Error = RmcpError;
 
     fn send(&mut self, request: &mut Request) -> Result<(), RmcpError> {
-        wire::send_v1_5(
-            &mut self.socket,
-            self.auth_type,
-            self.ipbm_state.requestor_addr,
-            self.ipbm_state.responder_addr,
-            &mut self.ipbm_state.ipmb_sequence,
-            self.ipbm_state.requestor_lun,
-            &mut self.request_sequence,
-            self.session_id,
-            self.password.as_ref(),
-            request,
-        )
-        .map(|_| ())
+        log::trace!("Sending message with auth type {:?}", self.auth_type);
+
+        let IpmbState {
+            ipmb_sequence,
+            responder_addr: rs_addr,
+            requestor_addr,
+            requestor_lun,
+        } = &mut self.ipbm_state;
+
+        let netfn_rslun: u8 =
+            (request.netfn().request_value() << 2) | request.target().lun().value();
+
+        let first_part = checksum::checksum([*rs_addr, netfn_rslun]);
+
+        let req_addr = *requestor_addr;
+
+        let ipmb_sequence_val = *ipmb_sequence;
+        *ipmb_sequence = ipmb_sequence.wrapping_add(1);
+
+        let reqseq_lun = (ipmb_sequence_val << 2) | requestor_lun.value();
+        let cmd = request.cmd();
+        let second_part = checksum::checksum(
+            [req_addr, reqseq_lun, cmd]
+                .into_iter()
+                .chain(request.data().iter().copied()),
+        );
+
+        let final_data: Vec<_> = first_part.chain(second_part).collect();
+
+        let request_sequence = &mut self.session_sequence;
+
+        // Only increment the request sequence once a session has been established
+        // succesfully.
+        if self.session_id.is_some() {
+            *request_sequence = request_sequence.wrapping_add(1);
+        }
+
+        let message: RmcpMessage = IpmiSessionMessage::V1_5(Message {
+            auth_type: self.auth_type,
+            session_sequence_number: self.session_sequence,
+            session_id: self.session_id.map(|v| v.get()).unwrap_or(0),
+            payload: final_data,
+        })
+        .into();
+
+        let send_bytes = message.to_bytes(self.password.as_ref())?;
+
+        self.socket
+            .send(&send_bytes)
+            .map_err(Into::into)
+            .map(|_| ())
     }
 
     fn recv(&mut self) -> Result<Response, RmcpError> {
-        wire::recv(self.password.as_ref(), &mut self.socket)
+        let mut buffer = [0u8; 1024];
+        let received_bytes = self.socket.recv(&mut buffer)?;
+
+        let data = &buffer[..received_bytes];
+
+        let rcmp_message = RmcpMessage::from_bytes(self.password.as_ref(), data)
+            .map_err(RmcpReceiveError::Rmcp)?;
+
+        let encapsulated_message = if let RmcpMessage {
+            class_and_contents: RmcpClass::Ipmi(message),
+            ..
+        } = rcmp_message
+        {
+            message
+        } else {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "RMCP response does not have IPMI class",
+            )
+            .into());
+        };
+
+        let data = match encapsulated_message {
+            IpmiSessionMessage::V1_5(Message { payload, .. }) => payload,
+            IpmiSessionMessage::V2_0 { .. } => todo!(),
+        };
+
+        if data.len() < 7 {
+            return Err(RmcpReceiveError::NotEnoughData.into());
+        }
+
+        let _req_addr = data[0];
+        let netfn = data[1] >> 2;
+        let _checksum1 = data[2];
+        let _rs_addr = data[3];
+        let _rqseq = data[4];
+        let cmd = data[5];
+        let response_data: Vec<_> = data[6..data.len() - 1].to_vec();
+        let _checksum2 = data[data.len() - 1];
+
+        // TODO: validate sequence, checksums, etc.
+
+        let response = if let Some(resp) = Response::new(
+            crate::connection::Message::new_raw(netfn, cmd, response_data),
+            0,
+        ) {
+            resp
+        } else {
+            // TODO: need better message here :)
+            return Err(
+                std::io::Error::new(std::io::ErrorKind::Other, "Response data was empty").into(),
+            );
+        };
+
+        Ok(response)
     }
 
     fn send_recv(&mut self, request: &mut Request) -> Result<Response, Self::Error> {

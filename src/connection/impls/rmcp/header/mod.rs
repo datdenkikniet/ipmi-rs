@@ -7,6 +7,7 @@ use super::{
 #[derive(Debug, Clone, PartialEq)]
 pub enum WriteError {
     V1_5(V1_5WriteError),
+    V2_0(&'static str),
 }
 
 impl From<V1_5WriteError> for WriteError {
@@ -15,14 +16,27 @@ impl From<V1_5WriteError> for WriteError {
     }
 }
 
+impl From<&'static str> for WriteError {
+    fn from(value: &'static str) -> Self {
+        Self::V2_0(value)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum ReadError {
     V1_5(V1_5ReadError),
+    V2_0(&'static str),
 }
 
 impl From<V1_5ReadError> for ReadError {
     fn from(value: V1_5ReadError) -> Self {
         Self::V1_5(value)
+    }
+}
+
+impl From<&'static str> for ReadError {
+    fn from(value: &'static str) -> Self {
+        Self::V2_0(value)
     }
 }
 
@@ -42,7 +56,9 @@ impl IpmiSessionMessage {
             IpmiSessionMessage::V1_5(message) => {
                 message.write_data(password, buffer).map_err(Into::into)
             }
-            IpmiSessionMessage::V2_0(_) => todo!(),
+            IpmiSessionMessage::V2_0(message) => message
+                .write_data(&mut super::v2_0::CryptoState::default(), buffer)
+                .map_err(Into::into),
         }
     }
 
@@ -50,7 +66,10 @@ impl IpmiSessionMessage {
         if data[0] != 0x06 {
             Ok(Self::V1_5(V1_5Message::from_data(password, data)?))
         } else {
-            todo!()
+            Ok(Self::V2_0(V2_0Message::from_data(
+                &mut super::v2_0::CryptoState::default(),
+                data,
+            )?))
         }
     }
 }
@@ -109,6 +128,12 @@ pub struct RmcpMessage {
     pub version: u8,
     pub sequence_number: u8,
     pub class_and_contents: RmcpClass,
+}
+
+impl From<IpmiSessionMessage> for RmcpMessage {
+    fn from(value: IpmiSessionMessage) -> Self {
+        Self::new(0xFF, RmcpClass::Ipmi(value))
+    }
 }
 
 impl RmcpMessage {

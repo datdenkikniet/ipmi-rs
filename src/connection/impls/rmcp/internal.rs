@@ -15,7 +15,7 @@ use crate::{
     },
 };
 
-use super::{v1_5::State as StateV1_5, ActivationError, RmcpError};
+use super::{v1_5::State as StateV1_5, v2_0::State as V2_0State, ActivationError, RmcpError};
 
 #[derive(Debug, Clone)]
 pub struct IpmbState {
@@ -181,7 +181,16 @@ impl RmcpWithState<Inactive> {
 
         log::debug!("Authentication capabilities: {:?}", authentication_caps);
 
-        if authentication_caps.ipmi15_connections_supported {
+        if authentication_caps.ipmi2_connections_supported {
+            let socket = ipmi.release().release_socket();
+            let state = V2_0State::new(socket);
+
+            let res = state.activate(None);
+
+            println!("{res:?}");
+
+            todo!()
+        } else if authentication_caps.ipmi15_connections_supported {
             let activated = ipmi.release().activate(
                 &authentication_caps,
                 privilege_level,
@@ -190,10 +199,6 @@ impl RmcpWithState<Inactive> {
             )?;
 
             Ok(RmcpWithState(Active::V1_5(activated)))
-        }
-        // TODO: prefer RMCP+ over non-plus
-        else if authentication_caps.ipmi2_connections_supported {
-            todo!()
         } else {
             Err(ActivationError::NoSupportedIpmiLANVersions)
         }

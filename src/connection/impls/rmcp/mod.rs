@@ -1,17 +1,16 @@
+use crate::{connection::IpmiConnection, IpmiCommandError};
+use std::{net::ToSocketAddrs, time::Duration};
+
 mod v1_5;
 pub use v1_5::ActivationError as V1_5ActivationError;
 
 mod v2_0;
 
 mod header;
-use std::{net::ToSocketAddrs, time::Duration};
-
-use header::*;
+pub(crate) use header::*;
 
 mod asf;
-pub use asf::*;
-
-use crate::{connection::IpmiConnection, IpmiCommandError};
+pub(crate) use asf::*;
 
 mod internal;
 use internal::{Active, RmcpWithState, Unbound};
