@@ -103,12 +103,12 @@ impl OpenSessionRequest {
         };
 
         macro_rules! write_algo {
-            ($field:ident, $map:ident) => {
+            ($field:ident, $map:ident, $default:expr) => {
                 if self.$field.is_empty() {
                     // Write NULL byte if we don't have any particular
                     // requests.
                     // TODO: should probably fill this with a sensible default.
-                    write(AlgorithmPayload::$map(None));
+                    write(AlgorithmPayload::$map(Some($default)));
                 } else {
                     self.$field
                         .iter()
@@ -119,9 +119,21 @@ impl OpenSessionRequest {
             };
         }
 
-        write_algo!(authentication_algorithms, Authentication);
-        write_algo!(integrity_algorithms, Integrity);
-        write_algo!(confidentiality_algorithms, Confidentiality);
+        write_algo!(
+            authentication_algorithms,
+            Authentication,
+            AuthenticationAlgorithm::RakpHmacSha256
+        );
+        write_algo!(
+            integrity_algorithms,
+            Integrity,
+            IntegrityAlgorithm::HmacSha1_96
+        );
+        write_algo!(
+            confidentiality_algorithms,
+            Confidentiality,
+            ConfidentialityAlgorithm::AesCbc128
+        );
     }
 }
 
@@ -147,6 +159,10 @@ impl OpenSessionResponse {
         let status_code = data[1];
 
         if status_code != 00 {
+            if let Ok(error_code) = OpenSessionResponseErrorStatusCode::try_from(status_code) {
+                log::warn!("RMCP+ error occurred. Status code: '{error_code:?}'");
+            }
+            println!("{status_code}");
             return Err("RMCP+ error occurred");
         }
 
@@ -187,5 +203,45 @@ impl OpenSessionResponse {
             integrity_payload,
             confidentiality_payload,
         })
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum OpenSessionResponseErrorStatusCode {
+    InsufficientResourcesForSessionCreation = 0x01,
+    InvalidSessionId = 0x02,
+    InvalidPayloadType = 0x03,
+    InvalidAuthenticationAlgorithm = 0x04,
+    InvalidIntegrityAlgorithm = 0x05,
+    InvalidConfidentialityAlgorithm = 0x10,
+    NoMatchingAuthenticationPayload = 0x06,
+    NoMatchingIntegrityPayload = 0x07,
+    NoMatchingCipherSuite = 0x011,
+    InvalidRole = 0x09,
+    IllegalOrUnrecognizedParameter = 0x12,
+}
+
+impl TryFrom<u8> for OpenSessionResponseErrorStatusCode {
+    type Error = ();
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        use OpenSessionResponseErrorStatusCode::*;
+
+        let value = match value {
+            0x01 => InsufficientResourcesForSessionCreation,
+            0x02 => InvalidSessionId,
+            0x03 => InvalidPayloadType,
+            0x04 => InvalidAuthenticationAlgorithm,
+            0x05 => InvalidIntegrityAlgorithm,
+            0x10 => InvalidConfidentialityAlgorithm,
+            0x06 => NoMatchingAuthenticationPayload,
+            0x07 => NoMatchingIntegrityPayload,
+            0x11 => NoMatchingCipherSuite,
+            0x09 => InvalidRole,
+            0x12 => IllegalOrUnrecognizedParameter,
+            _ => return Err(()),
+        };
+
+        Ok(value)
     }
 }

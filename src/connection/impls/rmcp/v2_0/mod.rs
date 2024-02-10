@@ -145,17 +145,15 @@ impl State {
     pub fn activate(self, privilege_level: Option<PrivilegeLevel>) -> std::io::Result<Self> {
         let open_session_request = OpenSessionRequest {
             message_tag: 0,
-            requested_max_privilege: privilege_level,
+            requested_max_privilege: None,
             remote_console_session_id: 0x0AA2A3A4,
-            authentication_algorithms: vec![AuthenticationAlgorithm::RakpHmacSha1],
-            confidentiality_algorithms: vec![ConfidentialityAlgorithm::AesCbc128],
-            integrity_algorithms: vec![IntegrityAlgorithm::HmacSha1_96],
+            authentication_algorithms: vec![],
+            confidentiality_algorithms: vec![],
+            integrity_algorithms: vec![],
         };
 
         let mut payload = Vec::new();
         open_session_request.write_data(&mut payload);
-
-        println!("{:02X?}", payload);
 
         let message = Message {
             ty: PayloadType::RmcpPlusOpenSessionRequest,
@@ -170,8 +168,6 @@ impl State {
             .map_err(|_| Error::new(ErrorKind::Other, "Failed to serialize RMCP message"))?;
 
         log::debug!("Sending RMCP+ Open Session Request.");
-
-        println!("{:02X?}", data);
 
         self.socket.send(&data).unwrap();
 

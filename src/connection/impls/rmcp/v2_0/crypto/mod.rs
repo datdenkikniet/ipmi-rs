@@ -13,9 +13,6 @@ pub trait OptionalByteEquivalent: Sized {
     fn from_byte(value: u8) -> Result<Option<Self>, ()>;
 }
 
-#[derive(Debug)]
-pub enum HandshakeState {}
-
 // TODO: override debug to avoid leaking crypto info
 #[derive(Debug)]
 pub struct CryptoState {
