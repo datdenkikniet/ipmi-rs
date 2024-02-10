@@ -7,7 +7,7 @@ pub use confidentiality::ConfidentialityAlgorithm;
 mod integrity;
 pub use integrity::IntegrityAlgorithm;
 
-pub trait Algorithm: Sized + Default {
+pub trait Algorithm: Sized + Default + PartialEq + PartialOrd + Ord {
     fn into_byte(value: Option<Self>) -> u8;
     fn from_byte(value: u8) -> Result<Option<Self>, ()>;
     fn all() -> &'static [Self];

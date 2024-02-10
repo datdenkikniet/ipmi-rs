@@ -5,8 +5,12 @@ use std::{
 };
 
 use crate::{
-    app::auth::PrivilegeLevel,
-    connection::rmcp::{v2_0::open_session::OpenSessionResponse, RmcpClass},
+    app::auth::{ChannelCipherSuites, GetChannelCipherSuites, PrivilegeLevel},
+    connection::{
+        rmcp::{v2_0::open_session::OpenSessionResponse, RmcpClass},
+        Channel, IpmiConnection,
+    },
+    Ipmi,
 };
 
 use self::open_session::OpenSessionRequest;
@@ -14,9 +18,11 @@ use self::open_session::OpenSessionRequest;
 mod open_session;
 
 mod crypto;
-pub use crypto::CryptoState;
+pub use crypto::{
+    Algorithm, AuthenticationAlgorithm, ConfidentialityAlgorithm, CryptoState, IntegrityAlgorithm,
+};
 
-use super::{IpmiSessionMessage, RmcpMessage};
+use super::{v1_5, IpmiSessionMessage, RmcpMessage};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum PayloadType {
@@ -140,10 +146,38 @@ impl State {
         }
     }
 
-    pub fn activate(self, privilege_level: Option<PrivilegeLevel>) -> std::io::Result<Self> {
+    pub fn activate(
+        state: v1_5::State,
+        privilege_level: Option<PrivilegeLevel>,
+    ) -> std::io::Result<Self> {
+        let mut all_data = Vec::new();
+        let mut idx = 0;
+
+        let mut ipmi = Ipmi::new(state);
+
+        loop {
+            let next_chunk = ipmi
+                .send_recv(GetChannelCipherSuites::new(Channel::Current, idx).unwrap())
+                .unwrap();
+
+            all_data.extend_from_slice(&next_chunk);
+            idx += 1;
+
+            if next_chunk.len() != 16 {
+                break;
+            }
+        }
+
+        for suite in ChannelCipherSuites::parse_full_data(&all_data) {
+            println!("{suite:?}");
+        }
+
+        let socket = ipmi.release().release_socket();
+        let me = Self::new(socket);
+
         let open_session_request = OpenSessionRequest {
             message_tag: 0,
-            requested_max_privilege: None,
+            requested_max_privilege: privilege_level,
             remote_console_session_id: 0x0AA2A3A4,
             // Writing NULL byte seems to be badly
             // supported , and writing more than
@@ -174,10 +208,10 @@ impl State {
 
         log::debug!("Sending RMCP+ Open Session Request.");
 
-        self.socket.send(&data).unwrap();
+        me.socket.send(&data).unwrap();
 
         let mut buffer = [0u8; 1024];
-        let recvd = self.socket.recv(&mut buffer)?;
+        let recvd = me.socket.recv(&mut buffer)?;
         let recvd = &buffer[..recvd];
 
         let message = RmcpMessage::from_bytes(None, &recvd)
@@ -206,6 +240,6 @@ impl State {
 
         println!("{response:?}");
 
-        Ok(self)
+        Ok(me)
     }
 }

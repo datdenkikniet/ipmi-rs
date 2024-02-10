@@ -5,6 +5,7 @@ mod v1_5;
 pub use v1_5::ActivationError as V1_5ActivationError;
 
 mod v2_0;
+pub use v2_0::{Algorithm, AuthenticationAlgorithm, ConfidentialityAlgorithm, IntegrityAlgorithm};
 
 mod header;
 pub(crate) use header::*;

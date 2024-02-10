@@ -1,6 +1,6 @@
 use super::Algorithm;
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum AuthenticationAlgorithm {
     RakpHmacSha1,
     RakpHmacMd5,
