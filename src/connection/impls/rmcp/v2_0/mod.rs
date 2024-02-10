@@ -14,9 +14,7 @@ use self::open_session::OpenSessionRequest;
 mod open_session;
 
 mod crypto;
-pub use crypto::{
-    AuthenticationAlgorithm, ConfidentialityAlgorithm, CryptoState, IntegrityAlgorithm,
-};
+pub use crypto::CryptoState;
 
 use super::{IpmiSessionMessage, RmcpMessage};
 
@@ -147,9 +145,16 @@ impl State {
             message_tag: 0,
             requested_max_privilege: None,
             remote_console_session_id: 0x0AA2A3A4,
-            authentication_algorithms: vec![],
-            confidentiality_algorithms: vec![],
-            integrity_algorithms: vec![],
+            // Writing NULL byte seems to be badly
+            // supported , and writing more than
+            // one payload seems to give some IPMI devices
+            // the shits, so we only pick a single default.
+            //
+            // TODO: open a few sessions to see what the best
+            // we can do is, in parallel?
+            authentication_algorithms: vec![Default::default()],
+            confidentiality_algorithms: vec![Default::default()],
+            integrity_algorithms: vec![Default::default()],
         };
 
         let mut payload = Vec::new();

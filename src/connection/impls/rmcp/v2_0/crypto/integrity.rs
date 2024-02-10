@@ -1,4 +1,4 @@
-use super::OptionalByteEquivalent;
+use super::Algorithm;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum IntegrityAlgorithm {
@@ -8,7 +8,13 @@ pub enum IntegrityAlgorithm {
     HmacSha256_128,
 }
 
-impl OptionalByteEquivalent for IntegrityAlgorithm {
+impl Default for IntegrityAlgorithm {
+    fn default() -> Self {
+        Self::HmacSha1_96
+    }
+}
+
+impl Algorithm for IntegrityAlgorithm {
     fn from_byte(value: u8) -> Result<Option<Self>, ()> {
         let value = match value {
             0x00 => return Ok(None),
@@ -30,5 +36,14 @@ impl OptionalByteEquivalent for IntegrityAlgorithm {
             Some(Self::Md5_128) => 0x03,
             Some(Self::HmacSha256_128) => 0x04,
         }
+    }
+
+    fn all() -> &'static [Self] {
+        &[
+            Self::HmacSha1_96,
+            Self::HmacMd5_128,
+            Self::Md5_128,
+            Self::HmacSha256_128,
+        ]
     }
 }

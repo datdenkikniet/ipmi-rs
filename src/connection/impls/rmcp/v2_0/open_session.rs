@@ -3,7 +3,7 @@ use std::num::NonZeroU32;
 use crate::app::auth::PrivilegeLevel;
 
 use super::crypto::{
-    AuthenticationAlgorithm, ConfidentialityAlgorithm, IntegrityAlgorithm, OptionalByteEquivalent,
+    Algorithm, AuthenticationAlgorithm, ConfidentialityAlgorithm, IntegrityAlgorithm,
 };
 
 #[derive(Clone, Copy)]
@@ -16,9 +16,9 @@ pub enum AlgorithmPayload {
 impl AlgorithmPayload {
     pub fn write(&self, buffer: &mut Vec<u8>) {
         let (ty, value) = match *self {
-            Self::Authentication(a) => (0x00, OptionalByteEquivalent::into_byte(a)),
-            Self::Integrity(i) => (0x01, OptionalByteEquivalent::into_byte(i)),
-            Self::Confidentiality(c) => (0x02, OptionalByteEquivalent::into_byte(c)),
+            Self::Authentication(a) => (0x00, Algorithm::into_byte(a)),
+            Self::Integrity(i) => (0x01, Algorithm::into_byte(i)),
+            Self::Confidentiality(c) => (0x02, Algorithm::into_byte(c)),
         };
 
         // Assert valid value
@@ -56,18 +56,18 @@ impl AlgorithmPayload {
 
         match ty {
             0x00 => {
-                let auth_algo = OptionalByteEquivalent::from_byte(algo)
-                    .map_err(|_| "Invalid authentication algorithm")?;
+                let auth_algo =
+                    Algorithm::from_byte(algo).map_err(|_| "Invalid authentication algorithm")?;
                 Ok(Self::Authentication(auth_algo))
             }
             0x01 => {
-                let auth_algo = OptionalByteEquivalent::from_byte(algo)
-                    .map_err(|_| "Invalid integrity algorithm")?;
+                let auth_algo =
+                    Algorithm::from_byte(algo).map_err(|_| "Invalid integrity algorithm")?;
                 Ok(Self::Integrity(auth_algo))
             }
             0x02 => {
-                let auth_algo = OptionalByteEquivalent::from_byte(algo)
-                    .map_err(|_| "Invalid confidentiality algorithm")?;
+                let auth_algo =
+                    Algorithm::from_byte(algo).map_err(|_| "Invalid confidentiality algorithm")?;
                 Ok(Self::Confidentiality(auth_algo))
             }
             _ => Err("Invalid payload type"),
@@ -103,12 +103,14 @@ impl OpenSessionRequest {
         };
 
         macro_rules! write_algo {
-            ($field:ident, $map:ident, $default:expr) => {
+            ($field:ident, $map:ident) => {
                 if self.$field.is_empty() {
-                    // Write NULL byte if we don't have any particular
-                    // requests.
-                    // TODO: should probably fill this with a sensible default.
-                    write(AlgorithmPayload::$map(Some($default)));
+                    log::debug!(
+                        "Using NULL value for {} algorithm payload. BMCs may have a hard time supporting this..",
+                        stringify!($map)
+                    );
+
+                    write(AlgorithmPayload::$map(None));
                 } else {
                     self.$field
                         .iter()
@@ -119,21 +121,9 @@ impl OpenSessionRequest {
             };
         }
 
-        write_algo!(
-            authentication_algorithms,
-            Authentication,
-            AuthenticationAlgorithm::RakpHmacSha256
-        );
-        write_algo!(
-            integrity_algorithms,
-            Integrity,
-            IntegrityAlgorithm::HmacSha1_96
-        );
-        write_algo!(
-            confidentiality_algorithms,
-            Confidentiality,
-            ConfidentialityAlgorithm::AesCbc128
-        );
+        write_algo!(authentication_algorithms, Authentication);
+        write_algo!(integrity_algorithms, Integrity);
+        write_algo!(confidentiality_algorithms, Confidentiality);
     }
 }
 

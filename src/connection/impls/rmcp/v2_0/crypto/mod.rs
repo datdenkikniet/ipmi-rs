@@ -7,10 +7,10 @@ pub use confidentiality::ConfidentialityAlgorithm;
 mod integrity;
 pub use integrity::IntegrityAlgorithm;
 
-pub trait OptionalByteEquivalent: Sized {
+pub trait Algorithm: Sized + Default {
     fn into_byte(value: Option<Self>) -> u8;
-
     fn from_byte(value: u8) -> Result<Option<Self>, ()>;
+    fn all() -> &'static [Self];
 }
 
 // TODO: override debug to avoid leaking crypto info

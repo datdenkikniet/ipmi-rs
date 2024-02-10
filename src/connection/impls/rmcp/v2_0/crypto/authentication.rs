@@ -1,4 +1,4 @@
-use super::OptionalByteEquivalent;
+use super::Algorithm;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum AuthenticationAlgorithm {
@@ -7,7 +7,13 @@ pub enum AuthenticationAlgorithm {
     RakpHmacSha256,
 }
 
-impl OptionalByteEquivalent for AuthenticationAlgorithm {
+impl Default for AuthenticationAlgorithm {
+    fn default() -> Self {
+        Self::RakpHmacSha1
+    }
+}
+
+impl Algorithm for AuthenticationAlgorithm {
     fn from_byte(value: u8) -> Result<Option<Self>, ()> {
         let value = match value {
             0x00 => return Ok(None),
@@ -27,5 +33,9 @@ impl OptionalByteEquivalent for AuthenticationAlgorithm {
             Some(Self::RakpHmacMd5) => 0x02,
             Some(Self::RakpHmacSha256) => 0x03,
         }
+    }
+
+    fn all() -> &'static [Self] {
+        &[Self::RakpHmacSha1, Self::RakpHmacMd5, Self::RakpHmacSha256]
     }
 }

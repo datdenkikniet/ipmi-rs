@@ -1,4 +1,4 @@
-use super::OptionalByteEquivalent;
+use super::Algorithm;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ConfidentialityAlgorithm {
@@ -7,7 +7,13 @@ pub enum ConfidentialityAlgorithm {
     Xrc4_40,
 }
 
-impl OptionalByteEquivalent for ConfidentialityAlgorithm {
+impl Default for ConfidentialityAlgorithm {
+    fn default() -> Self {
+        Self::AesCbc128
+    }
+}
+
+impl Algorithm for ConfidentialityAlgorithm {
     fn from_byte(value: u8) -> Result<Option<Self>, ()> {
         let value = match value {
             0x00 => return Ok(None),
@@ -27,5 +33,9 @@ impl OptionalByteEquivalent for ConfidentialityAlgorithm {
             Some(Self::Xrc4_128) => 0x02,
             Some(Self::Xrc4_40) => 0x03,
         }
+    }
+
+    fn all() -> &'static [Self] {
+        &[Self::AesCbc128, Self::Xrc4_128, Self::Xrc4_40]
     }
 }
