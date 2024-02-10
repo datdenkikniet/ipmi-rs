@@ -157,7 +157,7 @@ impl State {
             remote_console_session_id: 0x0AA2A3A4,
             authentication_algorithms: vec![AuthenticationAlgorithm::RakpHmacSha1],
             confidentiality_algorithms: vec![ConfidentialityAlgorithm::AesCbc128],
-            integrity_algorithms: vec![IntegrityAlgorithm::HmacSha256_128],
+            integrity_algorithms: vec![IntegrityAlgorithm::HmacSha1_96],
         };
 
         let mut payload = Vec::new();
@@ -178,6 +178,8 @@ impl State {
             .map_err(|_| Error::new(ErrorKind::Other, "Failed to serialize RMCP message"))?;
 
         log::debug!("Sending RMCP+ Open Session Request.");
+
+        println!("{:02X?}", data);
 
         self.socket.send(&data).unwrap();
 

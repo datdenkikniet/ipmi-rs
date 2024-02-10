@@ -31,15 +31,11 @@ impl AlgorithmPayload {
         // Payload len
         buffer.push(0x08);
 
-        // Null field
-        buffer.push(0x00);
-
         // Authentication algorithm
-
         buffer.push(value);
 
         // Reserved data
-        buffer.extend_from_slice(&[0x00, 0x00]);
+        buffer.extend_from_slice(&[0x00, 0x00, 0x00]);
     }
 
     pub fn from_data(data: &[u8]) -> Result<Self, &'static str> {
@@ -54,7 +50,7 @@ impl AlgorithmPayload {
             return Err("Incorrect payload len field");
         }
 
-        let algo = data[5];
+        let algo = data[4];
 
         match ty {
             0x00 => {
@@ -95,8 +91,8 @@ impl OpenSessionRequest {
         // Two reserved bytes
         // These two bytes cause no response to be sent.
         // Not sending them causes an error response: figure out why!
-        // buffer.push(0);
-        // buffer.push(0);
+        buffer.push(0);
+        buffer.push(0);
 
         buffer.extend_from_slice(&self.remote_console_session_id.to_le_bytes());
 

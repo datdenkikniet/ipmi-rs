@@ -68,7 +68,7 @@ impl CryptoState {
         assert!(self.authentication_algorithm.is_none());
         assert!(self.integrity_algorithm.is_none());
 
-        let data_len = 2 + data.len();
+        let data_len = data.len();
 
         if data_len > u16::MAX as usize {
             return Err("Payload is too long.");
