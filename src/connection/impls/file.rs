@@ -136,9 +136,9 @@ impl From<RequestTargetAddress> for IpmiAddr {
             RequestTargetAddress::Bmc(lun) => {
                 IpmiAddr::SysIface(IpmiSysIfaceAddr::bmc(lun.value()))
             }
-            RequestTargetAddress::BmcOrIpmb(addr, channel, lun) => {
-                IpmiAddr::Ipmb(IpmiIpmbAddr::new(channel.0 as i16, addr.0, lun.value()))
-            }
+            RequestTargetAddress::BmcOrIpmb(addr, channel, lun) => IpmiAddr::Ipmb(
+                IpmiIpmbAddr::new(channel.value() as i16, addr.0, lun.value()),
+            ),
         }
     }
 }

@@ -2,7 +2,7 @@ mod get_channel_authentication_capabilities;
 use core::cmp::Ordering;
 
 pub use get_channel_authentication_capabilities::{
-    Channel, ChannelAuthenticationCapabilities, GetChannelAuthenticationCapabilities,
+    ChannelAuthenticationCapabilities, GetChannelAuthenticationCapabilities,
 };
 
 mod get_session_challenge;

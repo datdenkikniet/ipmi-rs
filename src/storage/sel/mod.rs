@@ -1,4 +1,8 @@
-use crate::{connection::LogicalUnit, fmt::LogItem, log_vec, Loggable};
+use crate::{
+    connection::{Channel, LogicalUnit},
+    fmt::LogItem,
+    log_vec, Loggable,
+};
 
 use super::Timestamp;
 
@@ -66,12 +70,12 @@ impl From<u8> for SelRecordType {
 pub enum EventGenerator {
     RqSAAndLun {
         i2c_addr: u8,
-        channel_number: u8,
+        channel_number: Channel,
         lun: LogicalUnit,
     },
     SoftwareId {
         software_id: u8,
-        channel_number: u8,
+        channel_number: Channel,
     },
 }
 
@@ -79,7 +83,9 @@ impl From<(u8, u8)> for EventGenerator {
     fn from(value: (u8, u8)) -> Self {
         let is_software_id = (value.0 & 0x1) == 0x1;
         let i2c_or_sid = (value.0 >> 1) & 0x7F;
-        let channel_number = (value.1 >> 4) & 0xF;
+
+        // NOTE(unwrap): value is in valid range due to mask.
+        let channel_number = Channel::new((value.1 >> 4) & 0xF).unwrap();
 
         if is_software_id {
             Self::SoftwareId {

@@ -10,10 +10,10 @@ use std::{
 
 use crate::{
     app::auth::{
-        self, ActivateSession, AuthError, Channel, GetChannelAuthenticationCapabilities,
+        self, ActivateSession, AuthError, GetChannelAuthenticationCapabilities,
         GetSessionChallenge, PrivilegeLevel,
     },
-    connection::{IpmiConnection, LogicalUnit, Response},
+    connection::{Channel, IpmiConnection, LogicalUnit, Response},
     IpmiCommandError,
 };
 
