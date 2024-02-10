@@ -1,8 +1,22 @@
-use super::{AuthenticationAlgorithm, ConfidentialityAlgorithm, IntegrityAlgorithm};
+mod authentication;
+pub use authentication::AuthenticationAlgorithm;
+
+mod confidentiality;
+pub use confidentiality::ConfidentialityAlgorithm;
+
+mod integrity;
+pub use integrity::IntegrityAlgorithm;
+
+pub trait OptionalByteEquivalent: Sized {
+    fn into_byte(value: Option<Self>) -> u8;
+
+    fn from_byte(value: u8) -> Result<Option<Self>, ()>;
+}
 
 #[derive(Debug)]
 pub enum HandshakeState {}
 
+// TODO: override debug to avoid leaking crypto info
 #[derive(Debug)]
 pub struct CryptoState {
     pub confidentiality_algorithm: Option<ConfidentialityAlgorithm>,

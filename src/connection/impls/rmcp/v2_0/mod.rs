@@ -1,17 +1,8 @@
-mod authentication;
 use std::{
     io::{Error, ErrorKind},
     net::UdpSocket,
     num::NonZeroU32,
 };
-
-pub(crate) use authentication::AuthenticationAlgorithm;
-
-mod confidentiality;
-pub(crate) use confidentiality::ConfidentialityAlgorithm;
-
-mod integrity;
-pub(crate) use integrity::IntegrityAlgorithm;
 
 use crate::{
     app::auth::PrivilegeLevel,
@@ -23,7 +14,9 @@ use self::open_session::OpenSessionRequest;
 mod open_session;
 
 mod crypto;
-pub use crypto::CryptoState;
+pub use crypto::{
+    AuthenticationAlgorithm, ConfidentialityAlgorithm, CryptoState, IntegrityAlgorithm,
+};
 
 use super::{IpmiSessionMessage, RmcpMessage};
 
@@ -131,7 +124,6 @@ impl Message {
     }
 }
 
-// TODO: override debug to avoid leaking crypto info
 #[derive(Debug)]
 pub struct State {
     socket: UdpSocket,
