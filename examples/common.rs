@@ -4,10 +4,7 @@ use std::{io::ErrorKind, time::Duration};
 
 use clap::{Args, Parser};
 use ipmi_rs::{
-    connection::{
-        rmcp::{Active, Rmcp},
-        File, IpmiCommand,
-    },
+    connection::{rmcp::Rmcp, File, IpmiCommand},
     storage::sdr,
     Ipmi, IpmiCommandError, IpmiError, SdrIter,
 };
@@ -16,12 +13,12 @@ use ipmi_rs::{
 fn main() {}
 
 pub enum IpmiConnectionEnum {
-    Rmcp(Ipmi<Rmcp<Active>>),
+    Rmcp(Ipmi<Rmcp>),
     File(Ipmi<File>),
 }
 
 enum SdrIterInner<'a> {
-    Rmcp(SdrIter<'a, Rmcp<Active>>),
+    Rmcp(SdrIter<'a, Rmcp>),
     File(SdrIter<'a, File>),
 }
 
@@ -124,12 +121,11 @@ impl CommonOpts {
 
             log::debug!("Opening connection to {address}");
 
-            let rmcp = Rmcp::new(address, timeout)?;
-            let activated = rmcp
-                .activate(Some(username), Some(password.as_bytes()))
+            let mut rmcp = Rmcp::new(address, timeout)?;
+            rmcp.activate(Some(username), Some(password.as_bytes()))
                 .map_err(|e| error(format!("RMCP activation error: {:?}", e)))?;
 
-            let ipmi = Ipmi::new(activated);
+            let ipmi = Ipmi::new(rmcp);
             Ok(IpmiConnectionEnum::Rmcp(ipmi))
         } else {
             Err(error(format!(

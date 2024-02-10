@@ -10,13 +10,13 @@ use crate::{
     connection::{
         rmcp::{
             header::{RmcpClass, RmcpMessage},
-            IpmiSessionMessage,
+            IpmiSessionMessage, RmcpError, RmcpReceiveError,
         },
         LogicalUnit, Message, Request, Response,
     },
 };
 
-use super::{v1_5::Message as V1_5Message, RmcpError, RmcpUnwrapError};
+use super::Message as V1_5Message;
 
 pub fn checksum(data: impl IntoIterator<Item = u8>) -> impl Iterator<Item = u8> + FusedIterator {
     struct ChecksumIterator<I> {
@@ -109,14 +109,6 @@ pub fn send_v1_5(
     let send_bytes = message.to_bytes(password)?;
 
     inner.send(&send_bytes).map_err(Into::into)
-}
-
-#[derive(Debug)]
-pub enum RmcpReceiveError {
-    /// An RMCP error occured.
-    Rmcp(RmcpUnwrapError),
-    /// The packet did not contain enough data to form a valid RMCP message.
-    NotEnoughData,
 }
 
 pub fn recv(password: Option<&[u8; 16]>, inner: &mut UdpSocket) -> Result<Response, RmcpError> {
