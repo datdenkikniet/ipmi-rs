@@ -1,6 +1,6 @@
 use crate::app::auth::AuthType;
 
-use super::md2::md2;
+use super::{md2::md2, WriteError};
 
 fn calculate_md5(password: &[u8; 16], session_id: u32, session_seq: u32, data: &[u8]) -> [u8; 16] {
     let mut context = md5::Context::new();
@@ -24,20 +24,13 @@ fn calculate_md2(password: &[u8; 16], session_id: u32, session_seq: u32, data: &
     md2(data)
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum CalculateAuthCodeError {
-    /// A request was made to calculate the auth code for a message authenticated
-    /// using a method that requires a password, but no password was provided.
-    MissingPassword,
-}
-
 pub fn calculate(
     ty: &AuthType,
     password: Option<&[u8; 16]>,
     session_id: u32,
     session_seq: u32,
     data: &[u8],
-) -> Result<Option<[u8; 16]>, CalculateAuthCodeError> {
+) -> Result<Option<[u8; 16]>, WriteError> {
     match (ty, password) {
         (AuthType::None, _) => Ok(None),
         (AuthType::MD2, Some(password)) => {
@@ -47,7 +40,7 @@ pub fn calculate(
             Ok(Some(calculate_md5(password, session_id, session_seq, data)))
         }
         (AuthType::Key, Some(password)) => Ok(Some(*password)),
-        _ => Err(CalculateAuthCodeError::MissingPassword),
+        _ => Err(WriteError::MissingPassword),
     }
 }
 

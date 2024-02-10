@@ -10,23 +10,26 @@ use std::{
 
 use crate::{
     app::auth::{
-        self, ActivateSession, AuthError, GetChannelAuthenticationCapabilities,
-        GetSessionChallenge, PrivilegeLevel,
+        self, ActivateSession, AuthError, ChannelAuthenticationCapabilities,
+        GetChannelAuthenticationCapabilities, GetSessionChallenge, PrivilegeLevel,
     },
     connection::{Channel, IpmiConnection, LogicalUnit, Response},
     IpmiCommandError,
 };
 
-mod protocol;
-use protocol::*;
+mod v1_5;
+pub use v1_5::WriteError as v1_5WriteError;
+
+mod v2_0;
+
+mod header;
+use header::*;
+
+mod asf;
+pub use asf::*;
 
 mod wire;
 pub use wire::RmcpReceiveError;
-
-mod encapsulation;
-pub use encapsulation::{CalculateAuthCodeError, UnwrapEncapsulationError};
-
-mod plus;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Inactive;
@@ -35,7 +38,7 @@ pub struct Inactive;
 pub enum RmcpError {
     Io(std::io::Error),
     Receive(RmcpReceiveError),
-    Send(CalculateAuthCodeError),
+    Send(WriteError),
 }
 
 impl From<RmcpReceiveError> for RmcpError {
@@ -44,8 +47,8 @@ impl From<RmcpReceiveError> for RmcpError {
     }
 }
 
-impl From<CalculateAuthCodeError> for RmcpError {
-    fn from(value: CalculateAuthCodeError) -> Self {
+impl From<WriteError> for RmcpError {
+    fn from(value: WriteError) -> Self {
         Self::Send(value)
     }
 }
@@ -143,23 +146,6 @@ impl Rmcp<Inactive> {
         username: Option<&str>,
         password: Option<&[u8]>,
     ) -> Result<Rmcp<Active>, ActivationError> {
-        let challenge_command = match GetSessionChallenge::new(auth::AuthType::None, username) {
-            Some(v) => v,
-            None => return Err(ActivationError::UsernameTooLong),
-        };
-
-        let password = if let Some(password) = password {
-            if password.len() > 16 {
-                return Err(ActivationError::PasswordTooLong);
-            } else {
-                let mut padded = [0u8; 16];
-                padded[..password.len()].copy_from_slice(password);
-                Some(padded)
-            }
-        } else {
-            None
-        };
-
         let ping = RmcpMessage::new(
             0xFF,
             RmcpClass::Asf(ASFMessage {
@@ -171,13 +157,12 @@ impl Rmcp<Inactive> {
         log::debug!("Starting RMCP activation sequence");
 
         // NOTE(unwrap): Messages with `RmcpClass::ASF`` never require a password.
-        self.inner
-            .send(ping.to_bytes(password.as_ref()).unwrap().as_ref())?;
+        self.inner.send(ping.to_bytes(None).unwrap().as_ref())?;
 
         let mut buf = [0u8; 1024];
         let received = self.inner.recv(&mut buf)?;
 
-        let pong = RmcpMessage::from_bytes(password.as_ref(), &buf[..received]);
+        let pong = RmcpMessage::from_bytes(None, &buf[..received]);
 
         let (supported_entities, supported_interactions) = if let Ok(RmcpMessage {
             class_and_contents:
@@ -206,11 +191,9 @@ impl Rmcp<Inactive> {
             .into());
         }
 
-        let privilege_level = PrivilegeLevel::Administrator;
-
         let activated = self.convert(Active {
             auth_type: auth::AuthType::None,
-            password,
+            password: None,
             _supported_interactions: supported_interactions,
             session_id: None,
             request_sequence: 0,
@@ -219,6 +202,8 @@ impl Rmcp<Inactive> {
         let mut ipmi = crate::Ipmi::new(activated);
 
         log::debug!("Obtaining channel authentication capabilitiles");
+
+        let privilege_level = PrivilegeLevel::Administrator;
 
         let authentication_caps = match ipmi.send_recv(GetChannelAuthenticationCapabilities::new(
             Channel::Current,
@@ -230,7 +215,52 @@ impl Rmcp<Inactive> {
 
         log::debug!("Authentication capabilities: {:?}", authentication_caps);
 
+        if authentication_caps.ipmi2_connections_supported {
+            Self::activate_rmcp_plus(ipmi)
+        } else {
+            Self::activate_rmcp(
+                ipmi,
+                &authentication_caps,
+                privilege_level,
+                username,
+                password,
+            )
+        }
+    }
+
+    fn activate_rmcp_plus(
+        mut ipmi: crate::Ipmi<Rmcp<Active>>,
+    ) -> Result<Rmcp<Active>, ActivationError> {
+        todo!()
+    }
+
+    fn activate_rmcp(
+        mut ipmi: crate::Ipmi<Rmcp<Active>>,
+        authentication_caps: &ChannelAuthenticationCapabilities,
+        privilege_level: PrivilegeLevel,
+        username: Option<&str>,
+        password: Option<&[u8]>,
+    ) -> Result<Rmcp<Active>, ActivationError> {
+        let password = if let Some(password) = password {
+            if password.len() > 16 {
+                return Err(ActivationError::PasswordTooLong);
+            } else {
+                let mut padded = [0u8; 16];
+                padded[..password.len()].copy_from_slice(password);
+                Some(padded)
+            }
+        } else {
+            None
+        };
+
+        ipmi.inner.state.password = password;
+
         log::debug!("Requesting challenge");
+
+        let challenge_command = match GetSessionChallenge::new(auth::AuthType::None, username) {
+            Some(v) => v,
+            None => return Err(ActivationError::UsernameTooLong),
+        };
 
         let challenge = match ipmi.send_recv(challenge_command) {
             Ok(v) => v,

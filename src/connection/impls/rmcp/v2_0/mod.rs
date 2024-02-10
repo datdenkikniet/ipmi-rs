@@ -1,3 +1,80 @@
+mod authentication;
+pub(crate) use authentication::AuthenticationAlgorithm;
+
+mod confidentiality;
+pub(crate) use confidentiality::ConfidentialityAlgorithm;
+
+mod integrity;
+pub(crate) use integrity::IntegrityAlgorithm;
+
+mod open_session;
+
+#[derive(Debug, Clone)]
+pub struct Message {}
+
+impl Message {
+    fn write_data(&self, buffer: &mut Vec<u8>) {
+        /*
+        let wire = WirePayloadType {
+            authenticated: false,
+            encrypted: false,
+            payload_type: *payload_type,
+        };
+
+        wire.write_to(buffer);
+        buffer.extend_from_slice(&ssession_id.to_le_bytes());
+        buffer.extend_from_slice(&session_sequence_number.to_le_bytes());
+
+        buffer.extend_from_slice(&(payload.len() as u16).to_le_bytes());
+        buffer.extend_from_slice(&payload);
+
+        // Pad length
+        buffer.push(0);
+
+        // Next header
+        buffer.push(0);
+
+        Ok(())
+
+        */
+
+        todo!()
+    }
+
+    fn ipmi_v2_0_from_bytes(data: &[u8]) -> Result<Self, &'static str> {
+        if data.len() < 10 {
+            return Err("Not enough data");
+        }
+
+        debug_assert!(data[0] == 0x06);
+
+        let (
+            WirePayloadType {
+                authenticated,
+                encrypted,
+                payload_type,
+            },
+            data,
+        ) = WirePayloadType::from_data(data).ok_or("Invalid wire payload type.")?;
+
+        let session_id = u32::from_le_bytes(data[..4].try_into().unwrap());
+        let session_sequence_number = u32::from_le_bytes(data[4..8].try_into().unwrap());
+
+        let data_len = u16::from_le_bytes(data[8..10].try_into().unwrap());
+        let data = &data[10..];
+
+        let payload = if data_len == 0 && data.is_empty() {
+            Vec::new()
+        } else if data.len() == data_len as usize {
+            data.to_vec()
+        } else {
+            return Err("Payload len is not correct");
+        };
+
+        todo!()
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum PayloadType {
     IpmiMessage,
@@ -70,7 +147,7 @@ impl WirePayloadType {
         Some((wire, &data[1..]))
     }
 
-    pub fn write(&self, output: &mut Vec<u8>) {
+    pub fn write_to(&self, output: &mut Vec<u8>) {
         let authenticated = (self.authenticated as u8) << 7;
         let encrypted = (self.encrypted as u8) << 6;
 

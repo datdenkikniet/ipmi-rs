@@ -9,14 +9,14 @@ use crate::{
     app::auth,
     connection::{
         rmcp::{
-            encapsulation::IpmiSessionMessage,
-            protocol::{RmcpClass, RmcpMessage},
+            header::{RmcpClass, RmcpMessage},
+            IpmiSessionMessage,
         },
         LogicalUnit, Message, Request, Response,
     },
 };
 
-use super::{RmcpError, RmcpUnwrapError};
+use super::{v1_5::Message as V1_5Message, RmcpError, RmcpUnwrapError};
 
 pub fn checksum(data: impl IntoIterator<Item = u8>) -> impl Iterator<Item = u8> + FusedIterator {
     struct ChecksumIterator<I> {
@@ -98,12 +98,12 @@ pub fn send_v1_5(
 
     let message = RmcpMessage::new(
         0xFF,
-        RmcpClass::Ipmi(IpmiSessionMessage::Ipmiv1_5 {
+        RmcpClass::Ipmi(IpmiSessionMessage::V1_5(V1_5Message {
             auth_type,
             session_sequence_number: session_sequence,
             session_id: session_id.map(|v| v.get()).unwrap_or(0),
             payload: final_data,
-        }),
+        })),
     );
 
     let send_bytes = message.to_bytes(password)?;
@@ -138,8 +138,8 @@ pub fn recv(password: Option<&[u8; 16]>, inner: &mut UdpSocket) -> Result<Respon
     };
 
     let data = match encapsulated_message {
-        IpmiSessionMessage::Ipmiv1_5 { payload, .. } => payload,
-        IpmiSessionMessage::Ipmiv2_0 { .. } => todo!(),
+        IpmiSessionMessage::V1_5(V1_5Message { payload, .. }) => payload,
+        IpmiSessionMessage::V2_0 { .. } => todo!(),
     };
 
     if data.len() < 7 {
