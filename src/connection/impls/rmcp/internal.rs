@@ -167,7 +167,7 @@ impl RmcpWithState<Inactive> {
 
         let mut ipmi = crate::Ipmi::new(new_state);
 
-        log::debug!("Obtaining channel authentication capabilitiles");
+        log::debug!("Obtaining channel authentication capabilities");
 
         let privilege_level = PrivilegeLevel::Administrator;
 
