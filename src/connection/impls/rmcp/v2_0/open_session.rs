@@ -2,7 +2,10 @@ use std::num::NonZeroU32;
 
 use crate::app::auth::PrivilegeLevel;
 
-use super::crypto::{AuthenticationAlgorithm, ConfidentialityAlgorithm, IntegrityAlgorithm};
+use super::{
+    crypto::{AuthenticationAlgorithm, ConfidentialityAlgorithm, IntegrityAlgorithm},
+    RakpErrorStatusCode,
+};
 
 #[derive(Debug, Clone, Copy)]
 pub enum AlgorithmPayload {
@@ -197,9 +200,9 @@ impl OpenSessionResponse {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[repr(u32)]
 pub enum OpenSessionResponseErrorStatusCode {
-    InsufficientResourcesForSessionCreation = 0x01,
-    InvalidSessionId = 0x02,
+    CommonRakp(RakpErrorStatusCode),
     InvalidPayloadType = 0x03,
     InvalidAuthenticationAlgorithm = 0x04,
     InvalidIntegrityAlgorithm = 0x05,
@@ -208,7 +211,6 @@ pub enum OpenSessionResponseErrorStatusCode {
     NoMatchingIntegrityPayload = 0x07,
     NoMatchingCipherSuite = 0x011,
     InvalidRole = 0x09,
-    IllegalOrUnrecognizedParameter = 0x12,
 }
 
 impl TryFrom<u8> for OpenSessionResponseErrorStatusCode {
@@ -217,9 +219,11 @@ impl TryFrom<u8> for OpenSessionResponseErrorStatusCode {
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         use OpenSessionResponseErrorStatusCode::*;
 
+        if let Ok(common) = TryFrom::try_from(value) {
+            return Ok(CommonRakp(common));
+        }
+
         let value = match value {
-            0x01 => InsufficientResourcesForSessionCreation,
-            0x02 => InvalidSessionId,
             0x03 => InvalidPayloadType,
             0x04 => InvalidAuthenticationAlgorithm,
             0x05 => InvalidIntegrityAlgorithm,
@@ -228,7 +232,6 @@ impl TryFrom<u8> for OpenSessionResponseErrorStatusCode {
             0x07 => NoMatchingIntegrityPayload,
             0x11 => NoMatchingCipherSuite,
             0x09 => InvalidRole,
-            0x12 => IllegalOrUnrecognizedParameter,
             _ => return Err(()),
         };
 

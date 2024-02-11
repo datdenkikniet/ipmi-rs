@@ -7,10 +7,7 @@ pub use confidentiality::ConfidentialityAlgorithm;
 mod integrity;
 pub use integrity::IntegrityAlgorithm;
 
-use super::{
-    open_session::OpenSessionResponse,
-    rakp_1_2::{RakpMessageOne, RakpMessageTwo},
-};
+use super::{open_session::OpenSessionResponse, RakpMessageOne, RakpMessageTwo};
 
 pub trait Algorithm:
     Sized + Default + PartialEq + PartialOrd + Ord + Into<u8> + TryFrom<u8>
@@ -44,6 +41,7 @@ impl CryptoState {
         me.confidentiality_algorithm = response.confidentiality_payload;
         me.authentication_algorithm = response.authentication_payload;
         me.integrity_algorithm = response.integrity_payload;
+        me.password = password.to_vec();
         me
     }
 

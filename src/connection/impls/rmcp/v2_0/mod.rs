@@ -6,13 +6,7 @@ use std::{
 
 use crate::{
     app::auth::PrivilegeLevel,
-    connection::rmcp::{
-        socket::RmcpIpmiSocket,
-        v2_0::{
-            open_session::OpenSessionResponse,
-            rakp_1_2::{RakpMessageOne, RakpMessageTwo, Username},
-        },
-    },
+    connection::rmcp::{socket::RmcpIpmiSocket, v2_0::open_session::OpenSessionResponse},
 };
 
 use self::open_session::OpenSessionRequest;
@@ -20,10 +14,18 @@ use self::open_session::OpenSessionRequest;
 mod open_session;
 
 mod crypto;
-mod rakp_1_2;
 pub use crypto::{
     Algorithm, AuthenticationAlgorithm, ConfidentialityAlgorithm, CryptoState, IntegrityAlgorithm,
 };
+
+mod rakp;
+pub use rakp::ErrorStatusCode as RakpErrorStatusCode;
+
+mod rakp_1;
+use rakp_1::{RakpMessageOne, Username};
+
+mod rakp_2;
+use rakp_2::RakpMessageTwo;
 
 use super::{v1_5, IpmiSessionMessage};
 
