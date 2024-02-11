@@ -150,30 +150,7 @@ impl State {
         state: v1_5::State,
         privilege_level: Option<PrivilegeLevel>,
     ) -> std::io::Result<Self> {
-        let mut all_data = Vec::new();
-        let mut idx = 0;
-
-        let mut ipmi = Ipmi::new(state);
-
-        loop {
-            let next_chunk = ipmi
-                .send_recv(GetChannelCipherSuites::new(Channel::Current, idx).unwrap())
-                .unwrap();
-
-            all_data.extend_from_slice(&next_chunk);
-            idx += 1;
-
-            if next_chunk.len() != 16 {
-                break;
-            }
-        }
-
-        for suite in ChannelCipherSuites::parse_full_data(&all_data) {
-            println!("{suite:?}");
-        }
-
-        let socket = ipmi.release().release_socket();
-        let me = Self::new(socket);
+        let me = Self::new(state.release_socket());
 
         let open_session_request = OpenSessionRequest {
             message_tag: 0,
