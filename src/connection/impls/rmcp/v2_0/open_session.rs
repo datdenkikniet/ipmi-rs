@@ -130,7 +130,6 @@ impl OpenSessionRequest {
 #[derive(Debug, Clone)]
 pub struct OpenSessionResponse {
     pub message_tag: u8,
-    pub status_code: u8,
     pub maximum_privilege_level: PrivilegeLevel,
     pub remote_console_session_id: u32,
     pub managed_system_session_id: NonZeroU32,
@@ -185,7 +184,6 @@ impl OpenSessionResponse {
 
         Ok(Self {
             message_tag,
-            status_code,
             maximum_privilege_level: max_privilege_level,
             remote_console_session_id,
             managed_system_session_id,

@@ -6,7 +6,13 @@ use std::{
 
 use crate::{
     app::auth::PrivilegeLevel,
-    connection::rmcp::{v2_0::open_session::OpenSessionResponse, RmcpType},
+    connection::rmcp::{
+        socket::RmcpIpmiSocket,
+        v2_0::{
+            open_session::OpenSessionResponse,
+            rakp_1_2::{RakpMessageOne, RakpMessageTwo, Username},
+        },
+    },
 };
 
 use self::open_session::OpenSessionRequest;
@@ -14,11 +20,12 @@ use self::open_session::OpenSessionRequest;
 mod open_session;
 
 mod crypto;
+mod rakp_1_2;
 pub use crypto::{
     Algorithm, AuthenticationAlgorithm, ConfidentialityAlgorithm, CryptoState, IntegrityAlgorithm,
 };
 
-use super::{v1_5, IpmiSessionMessage, RmcpHeader};
+use super::{v1_5, IpmiSessionMessage};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum PayloadType {
@@ -142,11 +149,42 @@ impl State {
         }
     }
 
+    fn send_v2_message(
+        socket: &mut RmcpIpmiSocket,
+        ty: PayloadType,
+        payload: Vec<u8>,
+    ) -> std::io::Result<()> {
+        let message = Message {
+            ty,
+            session_id: 0,
+            session_sequence_number: 0,
+            payload,
+        };
+
+        socket.send(|buffer| {
+            message
+                .write_data(&mut CryptoState::default(), buffer)
+                .map_err(|e| Error::new(ErrorKind::Other, e))
+        })
+    }
+
+    fn get_v2_message(data: &[u8]) -> std::io::Result<Message> {
+        match IpmiSessionMessage::from_data(data, None) {
+            Ok(IpmiSessionMessage::V2_0(message)) => Ok(message),
+            e => {
+                return Err(Error::new(
+                    ErrorKind::Other,
+                    format!("Expected IPMI V2.0 message, got {e:?}"),
+                ))
+            }
+        }
+    }
+
     pub fn activate(
         state: v1_5::State,
         privilege_level: Option<PrivilegeLevel>,
     ) -> std::io::Result<Self> {
-        let me = Self::new(state.release_socket());
+        let mut socket = RmcpIpmiSocket::new(state.release_socket());
 
         let open_session_request = OpenSessionRequest {
             message_tag: 0,
@@ -164,57 +202,57 @@ impl State {
             integrity_algorithms: vec![Default::default()],
         };
 
-        let mut payload = Vec::new();
-        open_session_request.write_data(&mut payload);
-
-        let header = RmcpHeader::new_ipmi();
-
-        let message = Message {
-            ty: PayloadType::RmcpPlusOpenSessionRequest,
-            session_id: 0,
-            session_sequence_number: 0,
-            payload,
-        };
-
-        let data = header
-            .write(|buffer| message.write_data(&mut CryptoState::default(), buffer))
-            .map_err(|e| Error::new(ErrorKind::Other, e))?;
-
         log::debug!("Sending RMCP+ Open Session Request.");
 
-        me.socket.send(&data).unwrap();
+        let mut payload = Vec::new();
+        open_session_request.write_data(&mut payload);
+        Self::send_v2_message(
+            &mut socket,
+            PayloadType::RmcpPlusOpenSessionRequest,
+            payload,
+        )?;
 
-        let mut buffer = [0u8; 1024];
-        let recvd = me.socket.recv(&mut buffer)?;
-        let recvd = &buffer[..recvd];
-
-        let (message, data) = RmcpHeader::from_bytes(&recvd)
+        let data = socket
+            .recv()
             .map_err(|e| Error::new(ErrorKind::Other, format!("{e:?}")))?;
 
         // TODO: validate payload type, session id == 0, session sequence number == 0
         // TODO: validate message_tag is correct
 
-        if message.class().ty != RmcpType::Ipmi {
-            return Err(Error::new(
-                ErrorKind::Other,
-                "Received non-IPMI response to open session request",
-            ));
-        }
+        let response =
+            OpenSessionResponse::from_data(&Self::get_v2_message(data)?.payload).unwrap();
 
-        let message = match IpmiSessionMessage::from_data(data, None) {
-            Ok(IpmiSessionMessage::V2_0(message)) => message,
-            e => {
-                return Err(Error::new(
-                    ErrorKind::Other,
-                    format!("Expected IPMI V2.0 message, got {e:?}"),
-                ))
-            }
+        log::debug!("Received RMCP+ Open Session Response: {response:?}.");
+
+        let username = &Username::new("jona").unwrap();
+
+        let message_1 = RakpMessageOne {
+            message_tag: 0x0D,
+            managed_system_session_id: response.managed_system_session_id,
+            remote_console_random_number: &[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
+            requested_maximum_privilege_level: PrivilegeLevel::Administrator,
+            username,
         };
 
-        let response = OpenSessionResponse::from_data(&message.payload);
+        let mut payload = Vec::new();
+        message_1.write(&mut payload);
 
-        println!("{response:?}");
+        log::debug!("Sending RMCP+ RAKP Message 1.");
 
-        Ok(me)
+        Self::send_v2_message(&mut socket, PayloadType::RakpMessage1, payload)?;
+
+        let data = socket
+            .recv()
+            .map_err(|e| Error::new(ErrorKind::Other, format!("{e:?}")))?;
+
+        // TODO: validate payload type, session id == 0, session sequence number == 0
+        // TODO: validate message_tag is correct
+
+        let v2_message = Self::get_v2_message(data)?;
+        let response = RakpMessageTwo::from_data(&v2_message.payload).unwrap();
+
+        log::debug!("Received RMCP+ RAKP Message 2. {response:X?}");
+
+        Ok(State::new(socket.release()))
     }
 }
