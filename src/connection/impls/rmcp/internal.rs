@@ -10,7 +10,7 @@ use std::{
 use crate::{
     app::auth::{GetChannelAuthenticationCapabilities, PrivilegeLevel},
     connection::{
-        rmcp::{ASFMessage, ASFMessageType, RmcpClass, RmcpMessage},
+        rmcp::{ASFMessage, ASFMessageType, RmcpHeader, RmcpType},
         Channel, IpmiConnection, LogicalUnit, Response,
     },
 };
@@ -116,43 +116,56 @@ impl RmcpWithState<Inactive> {
         username: Option<&str>,
         password: Option<&[u8]>,
     ) -> Result<RmcpWithState<Active>, ActivationError> {
-        let ping = RmcpMessage::new(
-            0xFF,
-            RmcpClass::Asf(ASFMessage {
-                message_tag: 0x00,
-                message_type: ASFMessageType::Ping,
-            }),
-        );
+        let message_tag = 0xC8;
+
+        let ping_header = RmcpHeader::new_asf(0xFF);
+
+        let ping = ASFMessage {
+            message_tag,
+            message_type: ASFMessageType::Ping,
+        };
 
         log::debug!("Starting RMCP activation sequence");
 
         let socket = self.0.socket;
 
-        // NOTE(unwrap): Messages with `RmcpClass::ASF`` never require a password.
-        socket.send(ping.to_bytes(None).unwrap().as_ref())?;
+        // NOTE(unwrap): This cannot fail.
+        let ping_bytes = ping_header.write_infallible(|buffer| {
+            ping.write_data(buffer);
+        });
+
+        socket.send(&ping_bytes)?;
 
         let mut buf = [0u8; 1024];
         let received = socket.recv(&mut buf)?;
 
-        let pong = RmcpMessage::from_bytes(None, &buf[..received]);
+        let (pong_header, pong_data) = match RmcpHeader::from_bytes(&buf[..received]) {
+            Ok(res) => res,
+            Err(e) => return Err(Error::new(ErrorKind::Other, "Invalid RMCP header.").into()),
+        };
 
-        let (supported_entities, _) = if let Ok(RmcpMessage {
-            class_and_contents:
-                RmcpClass::Asf(ASFMessage {
-                    message_type:
-                        ASFMessageType::Pong {
-                            supported_entities,
-                            supported_interactions,
-                            ..
-                        },
-                    ..
-                }),
-            ..
-        }) = pong
-        {
-            (supported_entities, supported_interactions)
+        let (supported_entities, _) = if pong_header.class().ty == RmcpType::Asf {
+            let message = ASFMessage::from_bytes(pong_data)
+                .ok_or(Error::new(ErrorKind::Other, "Invalid ASF response"))?;
+
+            if message.message_tag != message_tag {
+                return Err(Error::new(ErrorKind::Other, "Incorrect ASF message tag.").into());
+            }
+
+            if let ASFMessageType::Pong {
+                supported_entities,
+                supported_interactions,
+                ..
+            } = message.message_type
+            {
+                (supported_entities, supported_interactions)
+            } else {
+                return Err(
+                    Error::new(ErrorKind::Other, "Non-pong response received for ping.").into(),
+                );
+            }
         } else {
-            return Err(Error::new(ErrorKind::Other, "Invalid response from remote").into());
+            return Err(Error::new(ErrorKind::Other, "Non-ASF response received for ping.").into());
         };
 
         if !supported_entities.ipmi {

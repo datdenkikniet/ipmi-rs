@@ -2,9 +2,14 @@ use crate::{connection::IpmiConnection, IpmiCommandError};
 use std::{net::ToSocketAddrs, time::Duration};
 
 mod v1_5;
-pub use v1_5::ActivationError as V1_5ActivationError;
+use v1_5::Message as V1_5Message;
+pub use v1_5::{
+    ActivationError as V1_5ActivationError, ReadError as V1_5ReadError,
+    WriteError as V1_5WriteError,
+};
 
 mod v2_0;
+use v2_0::Message as V2_0Message;
 pub use v2_0::{Algorithm, AuthenticationAlgorithm, ConfidentialityAlgorithm, IntegrityAlgorithm};
 
 mod header;
@@ -20,8 +25,86 @@ use internal::{Active, RmcpWithState, Unbound};
 pub enum RmcpReceiveError {
     /// An RMCP error occured.
     Rmcp(RmcpUnwrapError),
+    /// Invalid IPMI data
+    InvalidPayloadData(ReadError),
     /// The packet did not contain enough data to form a valid RMCP message.
     NotEnoughData,
+}
+
+impl From<ReadError> for RmcpReceiveError {
+    fn from(value: ReadError) -> Self {
+        Self::InvalidPayloadData(value)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum WriteError {
+    V1_5(V1_5WriteError),
+    V2_0(&'static str),
+}
+
+impl From<V1_5WriteError> for WriteError {
+    fn from(value: V1_5WriteError) -> Self {
+        Self::V1_5(value)
+    }
+}
+
+impl From<&'static str> for WriteError {
+    fn from(value: &'static str) -> Self {
+        Self::V2_0(value)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ReadError {
+    V1_5(V1_5ReadError),
+    V2_0(&'static str),
+}
+
+impl From<V1_5ReadError> for ReadError {
+    fn from(value: V1_5ReadError) -> Self {
+        Self::V1_5(value)
+    }
+}
+
+impl From<&'static str> for ReadError {
+    fn from(value: &'static str) -> Self {
+        Self::V2_0(value)
+    }
+}
+
+#[derive(Clone, Debug)]
+pub enum IpmiSessionMessage {
+    V1_5(V1_5Message),
+    V2_0(V2_0Message),
+}
+
+impl IpmiSessionMessage {
+    pub fn write_data(
+        &self,
+        password: Option<&[u8; 16]>,
+        buffer: &mut Vec<u8>,
+    ) -> Result<(), WriteError> {
+        match self {
+            IpmiSessionMessage::V1_5(message) => {
+                message.write_data(password, buffer).map_err(Into::into)
+            }
+            IpmiSessionMessage::V2_0(message) => message
+                .write_data(&mut v2_0::CryptoState::default(), buffer)
+                .map_err(Into::into),
+        }
+    }
+
+    pub fn from_data(data: &[u8], password: Option<&[u8; 16]>) -> Result<Self, ReadError> {
+        if data[0] != 0x06 {
+            Ok(Self::V1_5(V1_5Message::from_data(password, data)?))
+        } else {
+            Ok(Self::V2_0(V2_0Message::from_data(
+                &mut v2_0::CryptoState::default(),
+                data,
+            )?))
+        }
+    }
 }
 
 #[derive(Debug)]

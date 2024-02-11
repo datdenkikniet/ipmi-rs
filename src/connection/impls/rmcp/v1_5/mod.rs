@@ -1,4 +1,8 @@
-use std::{net::UdpSocket, num::NonZeroU32};
+use std::{
+    io::{Error, ErrorKind},
+    net::UdpSocket,
+    num::NonZeroU32,
+};
 
 use crate::{
     app::auth::{
@@ -6,13 +10,13 @@ use crate::{
         GetSessionChallenge, PrivilegeLevel,
     },
     connection::{
-        rmcp::{IpmiSessionMessage, RmcpMessage},
+        rmcp::{IpmiSessionMessage, RmcpHeader},
         IpmiConnection, ParseResponseError, Request, Response,
     },
     Ipmi, IpmiError,
 };
 
-use super::{internal::IpmbState, RmcpClass, RmcpError, RmcpReceiveError};
+use super::{internal::IpmbState, RmcpError, RmcpReceiveError, RmcpType};
 
 pub use message::Message;
 
@@ -195,15 +199,17 @@ impl IpmiConnection for State {
             *request_sequence = request_sequence.wrapping_add(1);
         }
 
-        let message: RmcpMessage = IpmiSessionMessage::V1_5(Message {
+        let header = RmcpHeader::new_ipmi();
+
+        let message = IpmiSessionMessage::V1_5(Message {
             auth_type: self.auth_type,
             session_sequence_number: self.session_sequence,
             session_id: self.session_id.map(|v| v.get()).unwrap_or(0),
             payload: final_data,
-        })
-        .into();
+        });
 
-        let send_bytes = message.to_bytes(self.password.as_ref())?;
+        let send_bytes =
+            header.write(|buffer| message.write_data(self.password.as_ref(), buffer))?;
 
         self.socket
             .send(&send_bytes)
@@ -217,22 +223,16 @@ impl IpmiConnection for State {
 
         let data = &buffer[..received_bytes];
 
-        let rcmp_message = RmcpMessage::from_bytes(self.password.as_ref(), data)
-            .map_err(RmcpReceiveError::Rmcp)?;
+        let (rcmp_message, data) = RmcpHeader::from_bytes(data).map_err(RmcpReceiveError::Rmcp)?;
 
-        let encapsulated_message = if let RmcpMessage {
-            class_and_contents: RmcpClass::Ipmi(message),
-            ..
-        } = rcmp_message
-        {
-            message
-        } else {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "RMCP response does not have IPMI class",
-            )
-            .into());
-        };
+        if rcmp_message.class().ty != RmcpType::Ipmi {
+            return Err(
+                Error::new(ErrorKind::Other, "RMCP response does not have IPMI class").into(),
+            );
+        }
+
+        let encapsulated_message = IpmiSessionMessage::from_data(data, self.password.as_ref())
+            .map_err(|e| RmcpError::Receive(e.into()))?;
 
         let data = match encapsulated_message {
             IpmiSessionMessage::V1_5(Message { payload, .. }) => payload,
@@ -261,9 +261,7 @@ impl IpmiConnection for State {
             resp
         } else {
             // TODO: need better message here :)
-            return Err(
-                std::io::Error::new(std::io::ErrorKind::Other, "Response data was empty").into(),
-            );
+            return Err(Error::new(ErrorKind::Other, "Response data was empty").into());
         };
 
         Ok(response)

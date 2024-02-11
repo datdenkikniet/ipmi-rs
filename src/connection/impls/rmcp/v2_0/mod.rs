@@ -7,8 +7,8 @@ use std::{
 use crate::{
     app::auth::{ChannelCipherSuites, GetChannelCipherSuites, PrivilegeLevel},
     connection::{
-        rmcp::{v2_0::open_session::OpenSessionResponse, RmcpClass},
-        Channel, IpmiConnection,
+        rmcp::{v2_0::open_session::OpenSessionResponse, RmcpType},
+        Channel,
     },
     Ipmi,
 };
@@ -22,7 +22,7 @@ pub use crypto::{
     Algorithm, AuthenticationAlgorithm, ConfidentialityAlgorithm, CryptoState, IntegrityAlgorithm,
 };
 
-use super::{v1_5, IpmiSessionMessage, RmcpMessage};
+use super::{v1_5, IpmiSessionMessage, RmcpHeader};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum PayloadType {
@@ -194,6 +194,8 @@ impl State {
         let mut payload = Vec::new();
         open_session_request.write_data(&mut payload);
 
+        let header = RmcpHeader::new_ipmi();
+
         let message = Message {
             ty: PayloadType::RmcpPlusOpenSessionRequest,
             session_id: 0,
@@ -201,10 +203,9 @@ impl State {
             payload,
         };
 
-        let rmcp_message: RmcpMessage = IpmiSessionMessage::V2_0(message).into();
-        let data = rmcp_message
-            .to_bytes(None)
-            .map_err(|_| Error::new(ErrorKind::Other, "Failed to serialize RMCP message"))?;
+        let data = header
+            .write(|buffer| message.write_data(&mut CryptoState::default(), buffer))
+            .map_err(|e| Error::new(ErrorKind::Other, e))?;
 
         log::debug!("Sending RMCP+ Open Session Request.");
 
@@ -214,29 +215,30 @@ impl State {
         let recvd = me.socket.recv(&mut buffer)?;
         let recvd = &buffer[..recvd];
 
-        let message = RmcpMessage::from_bytes(None, &recvd)
+        let (message, data) = RmcpHeader::from_bytes(&recvd)
             .map_err(|e| Error::new(ErrorKind::Other, format!("{e:?}")))?;
 
         // TODO: validate payload type, session id == 0, session sequence number == 0
         // TODO: validate message_tag is correct
 
-        let response = if let RmcpMessage {
-            class_and_contents:
-                RmcpClass::Ipmi(IpmiSessionMessage::V2_0(Message {
-                    ty: PayloadType::RmcpPlusOpenSessionResponse,
-                    payload,
-                    ..
-                })),
-            ..
-        } = message
-        {
-            OpenSessionResponse::from_data(&payload)
-        } else {
+        if message.class().ty != RmcpType::Ipmi {
             return Err(Error::new(
                 ErrorKind::Other,
-                format!("Incorrect was returned. Got {message:?}"),
+                "Received non-IPMI response to open session request",
             ));
+        }
+
+        let message = match IpmiSessionMessage::from_data(data, None) {
+            Ok(IpmiSessionMessage::V2_0(message)) => message,
+            e => {
+                return Err(Error::new(
+                    ErrorKind::Other,
+                    format!("Expected IPMI V2.0 message, got {e:?}"),
+                ))
+            }
         };
+
+        let response = OpenSessionResponse::from_data(&message.payload);
 
         println!("{response:?}");
 
