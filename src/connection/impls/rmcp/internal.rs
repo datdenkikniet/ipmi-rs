@@ -15,7 +15,10 @@ use crate::{
     },
 };
 
-use super::{v1_5::State as StateV1_5, v2_0::State as V2_0State, ActivationError, RmcpError};
+use super::{
+    v1_5::State as StateV1_5, v2_0::State as V2_0State, ActivationError, RmcpIpmiError,
+    RmcpIpmiReceiveError,
+};
 
 #[derive(Debug, Clone)]
 pub struct IpmbState {
@@ -141,7 +144,11 @@ impl RmcpWithState<Inactive> {
 
         let (pong_header, pong_data) = match RmcpHeader::from_bytes(&buf[..received]) {
             Ok(res) => res,
-            Err(e) => return Err(Error::new(ErrorKind::Other, "Invalid RMCP header.").into()),
+            Err(e) => {
+                return Err(
+                    Error::new(ErrorKind::Other, format!("Invalid RMCP header. {e:?}")).into(),
+                )
+            }
         };
 
         let (supported_entities, _) = if pong_header.class().ty == RmcpType::Asf {
@@ -217,17 +224,19 @@ impl RmcpWithState<Inactive> {
 }
 
 impl IpmiConnection for RmcpWithState<Active> {
-    type SendError = RmcpError;
+    type SendError = RmcpIpmiError;
 
-    type RecvError = RmcpError;
+    type RecvError = RmcpIpmiReceiveError;
 
-    type Error = RmcpError;
+    type Error = RmcpIpmiError;
 
     fn send(&mut self, request: &mut crate::connection::Request) -> Result<(), Self::SendError> {
         match self.state_mut() {
-            Active::V1_5(state) => state.send(request),
+            Active::V1_5(state) => state.send(request)?,
             Active::V2_0(_) => todo!(),
         }
+
+        Ok(())
     }
 
     fn recv(&mut self) -> Result<Response, Self::RecvError> {

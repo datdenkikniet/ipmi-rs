@@ -1,15 +1,15 @@
 use crate::{connection::IpmiConnection, IpmiCommandError};
 use std::{net::ToSocketAddrs, time::Duration};
 
+mod socket;
+
 mod v1_5;
-use v1_5::Message as V1_5Message;
 pub use v1_5::{
     ActivationError as V1_5ActivationError, ReadError as V1_5ReadError,
     WriteError as V1_5WriteError,
 };
 
 mod v2_0;
-use v2_0::Message as V2_0Message;
 pub use v2_0::{Algorithm, AuthenticationAlgorithm, ConfidentialityAlgorithm, IntegrityAlgorithm};
 
 mod header;
@@ -21,119 +21,82 @@ pub(crate) use asf::*;
 mod internal;
 use internal::{Active, RmcpWithState, Unbound};
 
+mod session;
+pub(crate) use session::IpmiSessionMessage;
+
 #[derive(Debug)]
-pub enum RmcpReceiveError {
-    /// An RMCP error occured.
-    Rmcp(RmcpUnwrapError),
-    /// Invalid IPMI data
-    InvalidPayloadData(ReadError),
-    /// The packet did not contain enough data to form a valid RMCP message.
+pub enum RmcpIpmiReceiveError {
+    Io(std::io::Error),
+    RmcpHeader(RmcpHeaderError),
+    Session(UnwrapSessionError),
+    NotIpmi,
     NotEnoughData,
+    EmptyMessage,
 }
 
-impl From<ReadError> for RmcpReceiveError {
-    fn from(value: ReadError) -> Self {
-        Self::InvalidPayloadData(value)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum WriteError {
+#[derive(Debug)]
+pub enum RmcpIpmiSendError {
+    Io(std::io::Error),
     V1_5(V1_5WriteError),
     V2_0(&'static str),
 }
 
-impl From<V1_5WriteError> for WriteError {
+impl From<V1_5WriteError> for RmcpIpmiSendError {
     fn from(value: V1_5WriteError) -> Self {
         Self::V1_5(value)
     }
 }
 
-impl From<&'static str> for WriteError {
+impl From<&'static str> for RmcpIpmiSendError {
     fn from(value: &'static str) -> Self {
         Self::V2_0(value)
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum ReadError {
-    V1_5(V1_5ReadError),
-    V2_0(&'static str),
-}
-
-impl From<V1_5ReadError> for ReadError {
-    fn from(value: V1_5ReadError) -> Self {
-        Self::V1_5(value)
-    }
-}
-
-impl From<&'static str> for ReadError {
-    fn from(value: &'static str) -> Self {
-        Self::V2_0(value)
-    }
-}
-
-#[derive(Clone, Debug)]
-pub enum IpmiSessionMessage {
-    V1_5(V1_5Message),
-    V2_0(V2_0Message),
-}
-
-impl IpmiSessionMessage {
-    pub fn write_data(
-        &self,
-        password: Option<&[u8; 16]>,
-        buffer: &mut Vec<u8>,
-    ) -> Result<(), WriteError> {
-        match self {
-            IpmiSessionMessage::V1_5(message) => {
-                message.write_data(password, buffer).map_err(Into::into)
-            }
-            IpmiSessionMessage::V2_0(message) => message
-                .write_data(&mut v2_0::CryptoState::default(), buffer)
-                .map_err(Into::into),
-        }
-    }
-
-    pub fn from_data(data: &[u8], password: Option<&[u8; 16]>) -> Result<Self, ReadError> {
-        if data[0] != 0x06 {
-            Ok(Self::V1_5(V1_5Message::from_data(password, data)?))
-        } else {
-            Ok(Self::V2_0(V2_0Message::from_data(
-                &mut v2_0::CryptoState::default(),
-                data,
-            )?))
-        }
-    }
-}
-
-#[derive(Debug)]
-pub enum RmcpError {
-    NotActive,
-    Io(std::io::Error),
-    Receive(RmcpReceiveError),
-    Send(WriteError),
-}
-
-impl From<RmcpReceiveError> for RmcpError {
-    fn from(value: RmcpReceiveError) -> Self {
-        Self::Receive(value)
-    }
-}
-
-impl From<WriteError> for RmcpError {
-    fn from(value: WriteError) -> Self {
-        Self::Send(value)
-    }
-}
-
-impl From<std::io::Error> for RmcpError {
+impl From<std::io::Error> for RmcpIpmiSendError {
     fn from(value: std::io::Error) -> Self {
         Self::Io(value)
     }
 }
 
-type CommandError<T> = IpmiCommandError<RmcpError, T>;
+#[derive(Debug, Clone, PartialEq)]
+pub enum UnwrapSessionError {
+    V1_5(V1_5ReadError),
+    V2_0(&'static str),
+}
+
+impl From<V1_5ReadError> for UnwrapSessionError {
+    fn from(value: V1_5ReadError) -> Self {
+        Self::V1_5(value)
+    }
+}
+
+impl From<&'static str> for UnwrapSessionError {
+    fn from(value: &'static str) -> Self {
+        Self::V2_0(value)
+    }
+}
+
+#[derive(Debug)]
+pub enum RmcpIpmiError {
+    NotActive,
+    Receive(RmcpIpmiReceiveError),
+    Send(RmcpIpmiSendError),
+}
+
+impl From<RmcpIpmiReceiveError> for RmcpIpmiError {
+    fn from(value: RmcpIpmiReceiveError) -> Self {
+        Self::Receive(value)
+    }
+}
+
+impl From<RmcpIpmiSendError> for RmcpIpmiError {
+    fn from(value: RmcpIpmiSendError) -> Self {
+        Self::Send(value)
+    }
+}
+
+type CommandError<T> = IpmiCommandError<RmcpIpmiError, T>;
 
 #[derive(Debug)]
 pub enum ActivationError {
@@ -141,7 +104,7 @@ pub enum ActivationError {
     NoSupportedIpmiLANVersions,
     GetChannelAuthenticationCapabilities(CommandError<()>),
     V1_5(V1_5ActivationError),
-    RmcpError(RmcpUnwrapError),
+    RmcpError(RmcpHeaderError),
 }
 
 impl From<V1_5ActivationError> for ActivationError {
@@ -204,27 +167,27 @@ impl Rmcp {
 }
 
 impl IpmiConnection for Rmcp {
-    type SendError = RmcpError;
+    type SendError = RmcpIpmiError;
 
-    type RecvError = RmcpError;
+    type RecvError = RmcpIpmiError;
 
-    type Error = RmcpError;
+    type Error = RmcpIpmiError;
 
     fn send(&mut self, request: &mut crate::connection::Request) -> Result<(), Self::SendError> {
-        let active = self.active_state.as_mut().ok_or(RmcpError::NotActive)?;
+        let active = self.active_state.as_mut().ok_or(RmcpIpmiError::NotActive)?;
         active.send(request)
     }
 
     fn recv(&mut self) -> Result<crate::connection::Response, Self::RecvError> {
-        let active = self.active_state.as_mut().ok_or(RmcpError::NotActive)?;
-        active.recv()
+        let active = self.active_state.as_mut().ok_or(RmcpIpmiError::NotActive)?;
+        active.recv().map_err(RmcpIpmiError::Receive)
     }
 
     fn send_recv(
         &mut self,
         request: &mut crate::connection::Request,
     ) -> Result<crate::connection::Response, Self::Error> {
-        let active = self.active_state.as_mut().ok_or(RmcpError::NotActive)?;
+        let active = self.active_state.as_mut().ok_or(RmcpIpmiError::NotActive)?;
         active.send_recv(request)
     }
 }

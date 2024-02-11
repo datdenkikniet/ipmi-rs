@@ -44,7 +44,7 @@ pub enum RmcpType {
 }
 
 #[derive(Debug)]
-pub enum RmcpUnwrapError {
+pub enum RmcpHeaderError {
     /// There was not enough data in the packet to parse a valid RMCP message.
     NotEnoughData,
     /// The RMCP packet contained an invalid ASF message.
@@ -74,7 +74,7 @@ impl RmcpHeader {
     }
 
     pub fn new_asf(sequence: u8) -> Self {
-        Self::new(0xFF, RmcpType::Asf)
+        Self::new(sequence, RmcpType::Asf)
     }
 
     pub fn new_ipmi() -> Self {
@@ -118,9 +118,9 @@ impl RmcpHeader {
         Ok(bytes)
     }
 
-    pub fn from_bytes<'a>(data: &'a [u8]) -> Result<(Self, &'a [u8]), RmcpUnwrapError> {
+    pub fn from_bytes<'a>(data: &'a [u8]) -> Result<(Self, &'a [u8]), RmcpHeaderError> {
         if data.len() < 4 {
-            return Err(RmcpUnwrapError::NotEnoughData);
+            return Err(RmcpHeaderError::NotEnoughData);
         }
 
         let version = data[0];
@@ -129,7 +129,7 @@ impl RmcpHeader {
 
         let data = &data[4..];
 
-        let class = RmcpClass::try_from(class).map_err(|_| RmcpUnwrapError::InvalidRmcpClass)?;
+        let class = RmcpClass::try_from(class).map_err(|_| RmcpHeaderError::InvalidRmcpClass)?;
 
         Ok((
             Self {

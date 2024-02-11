@@ -5,12 +5,8 @@ use std::{
 };
 
 use crate::{
-    app::auth::{ChannelCipherSuites, GetChannelCipherSuites, PrivilegeLevel},
-    connection::{
-        rmcp::{v2_0::open_session::OpenSessionResponse, RmcpType},
-        Channel,
-    },
-    Ipmi,
+    app::auth::PrivilegeLevel,
+    connection::rmcp::{v2_0::open_session::OpenSessionResponse, RmcpType},
 };
 
 use self::open_session::OpenSessionRequest;
