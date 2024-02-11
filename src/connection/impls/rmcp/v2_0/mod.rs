@@ -150,6 +150,7 @@ impl State {
     }
 
     fn send_v2_message(
+        crypto_state: &mut CryptoState,
         socket: &mut RmcpIpmiSocket,
         ty: PayloadType,
         payload: Vec<u8>,
@@ -163,7 +164,7 @@ impl State {
 
         socket.send(|buffer| {
             message
-                .write_data(&mut CryptoState::default(), buffer)
+                .write_data(crypto_state, buffer)
                 .map_err(|e| Error::new(ErrorKind::Other, e))
         })
     }
@@ -184,6 +185,7 @@ impl State {
     // TODO: validate sequence numbers
     // TODO: validate remote console session ID
     // TODO: validate managed system session ID
+    // TODO: assert that rng is always CryptoRng
     pub fn activate(
         state: v1_5::State,
         privilege_level: Option<PrivilegeLevel>,
@@ -201,9 +203,12 @@ impl State {
 
         log::debug!("Sending RMCP+ Open Session Request.");
 
+        let mut crypto_state = CryptoState::default();
+
         let mut payload = Vec::new();
         open_session_request.write_data(&mut payload);
         Self::send_v2_message(
+            &mut crypto_state,
             &mut socket,
             PayloadType::RmcpPlusOpenSessionRequest,
             payload,
@@ -220,20 +225,29 @@ impl State {
 
         let username = &Username::new("jona").unwrap();
 
-        let message_1 = RakpMessageOne {
+        use rand::Rng;
+        let mut rng = rand::thread_rng();
+        let random_data = rng.gen();
+
+        let rakp_message_1 = RakpMessageOne {
             message_tag: 0x0D,
             managed_system_session_id: response.managed_system_session_id,
-            remote_console_random_number: &[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
+            remote_console_random_number: random_data,
             requested_maximum_privilege_level: PrivilegeLevel::Administrator,
             username,
         };
 
         let mut payload = Vec::new();
-        message_1.write(&mut payload);
+        rakp_message_1.write(&mut payload);
 
         log::debug!("Sending RMCP+ RAKP Message 1.");
 
-        Self::send_v2_message(&mut socket, PayloadType::RakpMessage1, payload)?;
+        Self::send_v2_message(
+            &mut crypto_state,
+            &mut socket,
+            PayloadType::RakpMessage1,
+            payload,
+        )?;
 
         let data = socket
             .recv()
@@ -263,6 +277,9 @@ impl State {
                 ),
             ));
         }
+
+        let configured_crypto_state = crypto_state.configured(b"password", &response);
+        configured_crypto_state.validate(&rakp_message_1, &rakp_message_2);
 
         Ok(State::new(socket.release()))
     }

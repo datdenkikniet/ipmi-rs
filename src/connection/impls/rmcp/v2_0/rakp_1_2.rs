@@ -27,6 +27,10 @@ impl Username {
 
         Some(Self { data, length })
     }
+
+    pub fn len(&self) -> u8 {
+        self.length as u8
+    }
 }
 
 impl core::ops::Deref for Username {
@@ -42,7 +46,7 @@ impl core::ops::Deref for Username {
 pub struct RakpMessageOne<'a> {
     pub message_tag: u8,
     pub managed_system_session_id: NonZeroU32,
-    pub remote_console_random_number: &'a [u8; 16],
+    pub remote_console_random_number: [u8; 16],
     pub requested_maximum_privilege_level: PrivilegeLevel,
     pub username: &'a Username,
 }
@@ -59,7 +63,7 @@ impl RakpMessageOne<'_> {
         buffer.extend_from_slice(&self.managed_system_session_id.get().to_le_bytes());
 
         // Remote console random number
-        buffer.extend_from_slice(self.remote_console_random_number);
+        buffer.extend_from_slice(&self.remote_console_random_number);
 
         // Requested maximum privilege level
         buffer.push(self.requested_maximum_privilege_level.into());
