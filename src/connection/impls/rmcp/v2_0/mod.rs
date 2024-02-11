@@ -4,28 +4,15 @@ use std::{
     num::NonZeroU32,
 };
 
-use crate::{
-    app::auth::PrivilegeLevel,
-    connection::rmcp::{socket::RmcpIpmiSocket, v2_0::open_session::OpenSessionResponse},
-};
-
-use self::open_session::OpenSessionRequest;
-
-mod open_session;
+use crate::{app::auth::PrivilegeLevel, connection::rmcp::socket::RmcpIpmiSocket};
 
 mod crypto;
 pub use crypto::{
     Algorithm, AuthenticationAlgorithm, ConfidentialityAlgorithm, CryptoState, IntegrityAlgorithm,
 };
 
-mod rakp;
-pub use rakp::ErrorStatusCode as RakpErrorStatusCode;
-
-mod rakp_1;
-use rakp_1::{RakpMessageOne, Username};
-
-mod rakp_2;
-use rakp_2::RakpMessageTwo;
+mod messages;
+use messages::*;
 
 use super::{v1_5, IpmiSessionMessage};
 
@@ -205,12 +192,12 @@ impl State {
 
         log::debug!("Sending RMCP+ Open Session Request.");
 
-        let mut crypto_state = CryptoState::default();
+        let mut inactive_crypto_state = CryptoState::default();
 
         let mut payload = Vec::new();
         open_session_request.write_data(&mut payload);
         Self::send_v2_message(
-            &mut crypto_state,
+            &mut inactive_crypto_state,
             &mut socket,
             PayloadType::RmcpPlusOpenSessionRequest,
             payload,
@@ -245,7 +232,7 @@ impl State {
         log::debug!("Sending RMCP+ RAKP Message 1.");
 
         Self::send_v2_message(
-            &mut crypto_state,
+            &mut inactive_crypto_state,
             &mut socket,
             PayloadType::RakpMessage1,
             payload,
@@ -280,8 +267,49 @@ impl State {
             ));
         }
 
-        let configured_crypto_state = crypto_state.configured(b"password", &response);
-        configured_crypto_state.validate(&rakp_message_1, &rakp_message_2);
+        let mut crypto_state = CryptoState::new(None, env!("RMCP_PASSWORD").as_bytes(), &response);
+        let message_3_value = crypto_state.validate(&rakp_message_1, &rakp_message_2);
+
+        let rakp_message_3 = if let Some(m3) = message_3_value.as_ref() {
+            RakpMessage3 {
+                message_tag: 0x0A,
+                managed_system_session_id: response.managed_system_session_id,
+                contents: RakpMessage3Contents::Succes(m3),
+            }
+        } else {
+            log::warn!("Received RAKP message 2 with invalid integrity check value.");
+
+            RakpMessage3 {
+                message_tag: 0x0A,
+                managed_system_session_id: response.managed_system_session_id,
+                contents: RakpMessage3Contents::Failure(
+                    RakpMessage3ErrorStatusCode::InvalidIntegrityCheckValue,
+                ),
+            }
+        };
+
+        let mut payload = Vec::new();
+        rakp_message_3.write(&mut payload);
+
+        log::debug!("Sending RAKP message 3.");
+
+        Self::send_v2_message(
+            &mut inactive_crypto_state,
+            &mut socket,
+            PayloadType::RakpMessage3,
+            payload,
+        )?;
+
+        if !rakp_message_3.is_failure() {
+            let data = socket
+                .recv()
+                .map_err(|e| Error::new(ErrorKind::Other, format!("{e:?}")))?;
+
+            let message = Self::get_v2_message(data).unwrap();
+            let rakp_message_4 = RakpMessage4::from_data(&message.payload);
+
+            println!("{:02X?}", rakp_message_4);
+        }
 
         Ok(State::new(socket.release()))
     }

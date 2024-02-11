@@ -7,7 +7,7 @@ pub use confidentiality::ConfidentialityAlgorithm;
 mod integrity;
 pub use integrity::IntegrityAlgorithm;
 
-use super::{open_session::OpenSessionResponse, RakpMessageOne, RakpMessageTwo};
+use super::{messages::OpenSessionResponse, RakpMessageOne, RakpMessageTwo};
 
 pub trait Algorithm:
     Sized + Default + PartialEq + PartialOrd + Ord + Into<u8> + TryFrom<u8>
@@ -20,29 +20,34 @@ pub struct CryptoState {
     confidentiality_algorithm: ConfidentialityAlgorithm,
     authentication_algorithm: AuthenticationAlgorithm,
     integrity_algorithm: IntegrityAlgorithm,
+    kg: Option<[u8; 20]>,
     password: Vec<u8>,
+    sik: Option<[u8; 20]>,
 }
 
 impl Default for CryptoState {
     fn default() -> Self {
         Self {
+            kg: None,
             confidentiality_algorithm: ConfidentialityAlgorithm::None,
             authentication_algorithm: AuthenticationAlgorithm::RakpNone,
             integrity_algorithm: IntegrityAlgorithm::None,
             password: Vec::new(),
+            sik: None,
         }
     }
 }
 
 impl CryptoState {
-    #[must_use]
-    pub fn configured(&self, password: &[u8], response: &OpenSessionResponse) -> Self {
-        let mut me = Self::default();
-        me.confidentiality_algorithm = response.confidentiality_payload;
-        me.authentication_algorithm = response.authentication_payload;
-        me.integrity_algorithm = response.integrity_payload;
-        me.password = password.to_vec();
-        me
+    pub fn new(kg: Option<[u8; 20]>, password: &[u8], response: &OpenSessionResponse) -> Self {
+        Self {
+            kg,
+            confidentiality_algorithm: response.confidentiality_payload,
+            authentication_algorithm: response.authentication_payload,
+            integrity_algorithm: response.integrity_payload,
+            password: password.to_vec(),
+            sik: None,
+        }
     }
 
     pub fn encrypted(&self) -> bool {
@@ -53,7 +58,7 @@ impl CryptoState {
         self.authentication_algorithm != AuthenticationAlgorithm::RakpNone
     }
 
-    pub fn validate(&self, m1: &RakpMessageOne, m2: &RakpMessageTwo) -> bool {
+    pub fn validate(&mut self, m1: &RakpMessageOne, m2: &RakpMessageTwo) -> Option<Vec<u8>> {
         match self.authentication_algorithm {
             AuthenticationAlgorithm::RakpNone => todo!(),
             AuthenticationAlgorithm::RakpHmacSha1 => self.validate_hmac_sha1(m1, m2),
@@ -62,28 +67,58 @@ impl CryptoState {
         }
     }
 
-    fn validate_hmac_sha1(&self, m1: &RakpMessageOne, m2: &RakpMessageTwo) -> bool {
+    fn kg(&self) -> &[u8] {
+        self.kg
+            .as_ref()
+            .map(|v| &v[..])
+            .unwrap_or(self.password.as_ref())
+    }
+
+    fn validate_hmac_sha1(&mut self, m1: &RakpMessageOne, m2: &RakpMessageTwo) -> Option<Vec<u8>> {
         use hmac::{Hmac, Mac};
         use sha1::Sha1;
 
-        let mut hmac = Hmac::<Sha1>::new_from_slice(&self.password).unwrap();
+        type HmacSha1 = Hmac<Sha1>;
+
+        let mut hmac = HmacSha1::new_from_slice(&self.password)
+            .expect("SHA1 HMAC initialization from bytes is infallible");
+
+        let privilege_level_byte = u8::from(m1.requested_maximum_privilege_level);
 
         hmac.update(&m2.remote_console_session_id.get().to_le_bytes());
         hmac.update(&m1.managed_system_session_id.get().to_le_bytes());
         hmac.update(&m1.remote_console_random_number);
         hmac.update(&m2.managed_system_random_number);
         hmac.update(&m2.managed_system_guid);
-        hmac.update(&[
-            u8::from(m1.requested_maximum_privilege_level),
-            m1.username.len(),
-        ]);
+        hmac.update(&[privilege_level_byte, m1.username.len()]);
         hmac.update(&m1.username);
 
         let hmac_output = hmac.finalize().into_bytes();
-        println!("{:02X?}", hmac_output);
-        println!("{:02X?}", m2.key_exchange_auth_code);
 
-        hmac_output.as_slice() == m2.key_exchange_auth_code
+        if hmac_output.as_slice() == m2.key_exchange_auth_code {
+            let mut hmac = HmacSha1::new_from_slice(self.kg())
+                .expect("SHA1 HMAC initialization from bytes is infallible");
+
+            hmac.update(&m1.remote_console_random_number);
+            hmac.update(&m2.managed_system_random_number);
+            hmac.update(&[privilege_level_byte, m1.username.len()]);
+            hmac.update(&m1.username);
+
+            let sik = Some(hmac.finalize().into_bytes().try_into().unwrap());
+            self.sik = sik;
+
+            let mut hmac = HmacSha1::new_from_slice(&self.password)
+                .expect("SHA1 HMAC initialization from bytes is infallible");
+
+            hmac.update(&m2.managed_system_random_number);
+            hmac.update(&m2.remote_console_session_id.get().to_le_bytes());
+            hmac.update(&[privilege_level_byte, m1.username.len()]);
+            hmac.update(&m1.username);
+
+            Some(hmac.finalize().into_bytes().to_vec())
+        } else {
+            None
+        }
     }
 
     pub fn read_payload(

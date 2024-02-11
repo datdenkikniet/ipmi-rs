@@ -21,7 +21,8 @@ pub struct RakpMessageTwo<'a> {
 
 impl<'a> RakpMessageTwo<'a> {
     pub fn from_data(data: &'a [u8]) -> Result<Self, RakpMessageTwoParseError> {
-        if data.len() < 2 {
+        // 4 = tag, status code, reserved bytes
+        if data.len() < 4 {
             return Err(RakpMessageTwoParseError::NotEnoughData);
         }
 
@@ -62,9 +63,9 @@ impl<'a> RakpMessageTwo<'a> {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-#[repr(u32)]
+#[repr(u8)]
 pub enum ErrorStatusCode {
-    CommonRakp(RakpErrorStatusCode),
+    Common(RakpErrorStatusCode),
     InactiveSessionId = 0x08,
     InvalidRole = 0x09,
     UnauthorizedRoleOrPrivilegeLevelRequested = 0x0A,
@@ -78,7 +79,7 @@ impl TryFrom<u8> for ErrorStatusCode {
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         if let Ok(common) = TryFrom::try_from(value) {
-            return Ok(ErrorStatusCode::CommonRakp(common));
+            return Ok(ErrorStatusCode::Common(common));
         }
 
         let value = match value {

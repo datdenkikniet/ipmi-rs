@@ -2,9 +2,10 @@ use std::num::NonZeroU32;
 
 use crate::app::auth::PrivilegeLevel;
 
-use super::{
-    crypto::{AuthenticationAlgorithm, ConfidentialityAlgorithm, IntegrityAlgorithm},
-    RakpErrorStatusCode,
+use super::RakpErrorStatusCode;
+
+use crate::connection::rmcp::v2_0::crypto::{
+    AuthenticationAlgorithm, ConfidentialityAlgorithm, IntegrityAlgorithm,
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -200,7 +201,7 @@ impl OpenSessionResponse {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-#[repr(u32)]
+#[repr(u8)]
 pub enum OpenSessionResponseErrorStatusCode {
     CommonRakp(RakpErrorStatusCode),
     InvalidPayloadType = 0x03,
