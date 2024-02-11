@@ -7,37 +7,36 @@ pub use confidentiality::ConfidentialityAlgorithm;
 mod integrity;
 pub use integrity::IntegrityAlgorithm;
 
-pub trait Algorithm: Sized + Default + PartialEq + PartialOrd + Ord {
-    fn into_byte(value: Option<Self>) -> u8;
-    fn from_byte(value: u8) -> Result<Option<Self>, ()>;
-    fn all() -> &'static [Self];
+pub trait Algorithm:
+    Sized + Default + PartialEq + PartialOrd + Ord + Into<u8> + TryFrom<u8>
+{
 }
 
 // TODO: override debug to avoid leaking crypto info
 #[derive(Debug)]
 pub struct CryptoState {
-    pub confidentiality_algorithm: Option<ConfidentialityAlgorithm>,
-    pub authentication_algorithm: Option<AuthenticationAlgorithm>,
-    pub integrity_algorithm: Option<IntegrityAlgorithm>,
+    pub confidentiality_algorithm: ConfidentialityAlgorithm,
+    pub authentication_algorithm: AuthenticationAlgorithm,
+    pub integrity_algorithm: IntegrityAlgorithm,
 }
 
 impl Default for CryptoState {
     fn default() -> Self {
         Self {
-            confidentiality_algorithm: None,
-            authentication_algorithm: None,
-            integrity_algorithm: None,
+            confidentiality_algorithm: ConfidentialityAlgorithm::None,
+            authentication_algorithm: AuthenticationAlgorithm::RakpNone,
+            integrity_algorithm: IntegrityAlgorithm::None,
         }
     }
 }
 
 impl CryptoState {
     pub fn encrypted(&self) -> bool {
-        self.confidentiality_algorithm.is_some()
+        self.confidentiality_algorithm != ConfidentialityAlgorithm::None
     }
 
     pub fn authenticated(&self) -> bool {
-        self.authentication_algorithm.is_some()
+        self.authentication_algorithm != AuthenticationAlgorithm::RakpNone
     }
 
     pub fn read_payload(
@@ -48,19 +47,16 @@ impl CryptoState {
     ) -> Result<Vec<u8>, &'static str> {
         assert!(!encrypted);
         assert!(!authenticated);
-        assert!(self.confidentiality_algorithm.is_none());
-        assert!(self.authentication_algorithm.is_none());
-        assert!(self.integrity_algorithm.is_none());
 
         if data.len() < 2 {
             return Err("Not enough data");
         }
 
-        if self.confidentiality_algorithm.is_some() != encrypted {
+        if self.encrypted() != encrypted {
             return Err("Mismatching encryption state");
         }
 
-        if self.authentication_algorithm.is_some() != authenticated {
+        if self.authenticated() != authenticated {
             return Err("Mismatching authentication state");
         }
 
@@ -75,10 +71,6 @@ impl CryptoState {
     }
 
     pub fn write_payload(&mut self, data: &[u8], buffer: &mut Vec<u8>) -> Result<(), &'static str> {
-        assert!(self.confidentiality_algorithm.is_none());
-        assert!(self.authentication_algorithm.is_none());
-        assert!(self.integrity_algorithm.is_none());
-
         let data_len = data.len();
 
         if data_len > u16::MAX as usize {

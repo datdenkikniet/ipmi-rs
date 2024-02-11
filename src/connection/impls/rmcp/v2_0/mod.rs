@@ -180,6 +180,10 @@ impl State {
         }
     }
 
+    // TODO: validate message tags
+    // TODO: validate sequence numbers
+    // TODO: validate remote console session ID
+    // TODO: validate managed system session ID
     pub fn activate(
         state: v1_5::State,
         privilege_level: Option<PrivilegeLevel>,
@@ -190,16 +194,9 @@ impl State {
             message_tag: 0,
             requested_max_privilege: privilege_level,
             remote_console_session_id: 0x0AA2A3A4,
-            // Writing NULL byte seems to be badly
-            // supported , and writing more than
-            // one payload seems to give some IPMI devices
-            // the shits, so we only pick a single default.
-            //
-            // TODO: open a few sessions to see what the best
-            // we can do is, in parallel?
-            authentication_algorithms: vec![Default::default()],
-            confidentiality_algorithms: vec![Default::default()],
-            integrity_algorithms: vec![Default::default()],
+            authentication_algorithms: None,
+            confidentiality_algorithms: None,
+            integrity_algorithms: None,
         };
 
         log::debug!("Sending RMCP+ Open Session Request.");
@@ -215,9 +212,6 @@ impl State {
         let data = socket
             .recv()
             .map_err(|e| Error::new(ErrorKind::Other, format!("{e:?}")))?;
-
-        // TODO: validate payload type, session id == 0, session sequence number == 0
-        // TODO: validate message_tag is correct
 
         let response =
             OpenSessionResponse::from_data(&Self::get_v2_message(data)?.payload).unwrap();
@@ -245,13 +239,30 @@ impl State {
             .recv()
             .map_err(|e| Error::new(ErrorKind::Other, format!("{e:?}")))?;
 
-        // TODO: validate payload type, session id == 0, session sequence number == 0
-        // TODO: validate message_tag is correct
-
         let v2_message = Self::get_v2_message(data)?;
-        let response = RakpMessageTwo::from_data(&v2_message.payload).unwrap();
+        let rakp_message_2 = RakpMessageTwo::from_data(&v2_message.payload).unwrap();
 
-        log::debug!("Received RMCP+ RAKP Message 2. {response:X?}");
+        log::debug!("Received RMCP+ RAKP Message 2. {rakp_message_2:X?}");
+
+        let kex_auth_code = rakp_message_2.key_exchange_auth_code;
+
+        let required_kex_auth_code_len = match response.authentication_payload {
+            AuthenticationAlgorithm::RakpNone => 0,
+            AuthenticationAlgorithm::RakpHmacSha1 => 20,
+            AuthenticationAlgorithm::RakpHmacSha256 => 32,
+            AuthenticationAlgorithm::RakpHmacMd5 => 16,
+        };
+
+        if kex_auth_code.len() != required_kex_auth_code_len {
+            return Err(Error::new(
+                ErrorKind::Other,
+                format!(
+                    "Key exchange auth code length {} is incorrect for authentication algorithm {:?}",
+                    kex_auth_code.len(),
+                    response.authentication_payload
+                ),
+            ));
+        }
 
         Ok(State::new(socket.release()))
     }

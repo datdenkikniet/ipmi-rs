@@ -2,23 +2,21 @@ use std::num::NonZeroU32;
 
 use crate::app::auth::PrivilegeLevel;
 
-use super::crypto::{
-    Algorithm, AuthenticationAlgorithm, ConfidentialityAlgorithm, IntegrityAlgorithm,
-};
+use super::crypto::{AuthenticationAlgorithm, ConfidentialityAlgorithm, IntegrityAlgorithm};
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub enum AlgorithmPayload {
-    Authentication(Option<AuthenticationAlgorithm>),
-    Integrity(Option<IntegrityAlgorithm>),
-    Confidentiality(Option<ConfidentialityAlgorithm>),
+    Authentication(AuthenticationAlgorithm),
+    Integrity(IntegrityAlgorithm),
+    Confidentiality(ConfidentialityAlgorithm),
 }
 
 impl AlgorithmPayload {
-    pub fn write(&self, buffer: &mut Vec<u8>) {
+    pub fn write(&self, null_byte: bool, buffer: &mut Vec<u8>) {
         let (ty, value) = match *self {
-            Self::Authentication(a) => (0x00, Algorithm::into_byte(a)),
-            Self::Integrity(i) => (0x01, Algorithm::into_byte(i)),
-            Self::Confidentiality(c) => (0x02, Algorithm::into_byte(c)),
+            Self::Authentication(a) => (0x00, u8::from(a)),
+            Self::Integrity(i) => (0x01, u8::from(i)),
+            Self::Confidentiality(c) => (0x02, u8::from(c)),
         };
 
         // Assert valid value
@@ -30,8 +28,12 @@ impl AlgorithmPayload {
         // reserved data
         buffer.extend_from_slice(&[0x00, 0x00]);
 
-        // Payload len
-        buffer.push(0x08);
+        // Payload len OR null byte
+        if null_byte {
+            buffer.push(0x00)
+        } else {
+            buffer.push(0x08);
+        }
 
         // Authentication algorithm
         buffer.push(value);
@@ -56,19 +58,19 @@ impl AlgorithmPayload {
 
         match ty {
             0x00 => {
-                let auth_algo =
-                    Algorithm::from_byte(algo).map_err(|_| "Invalid authentication algorithm")?;
-                Ok(Self::Authentication(auth_algo))
+                let algo = AuthenticationAlgorithm::try_from(algo)
+                    .map_err(|_| "Invalid authentication algorithm")?;
+                Ok(Self::Authentication(algo))
             }
             0x01 => {
-                let auth_algo =
-                    Algorithm::from_byte(algo).map_err(|_| "Invalid integrity algorithm")?;
-                Ok(Self::Integrity(auth_algo))
+                let algo = IntegrityAlgorithm::try_from(algo)
+                    .map_err(|_| "Invalid integrity algorithm")?;
+                Ok(Self::Integrity(algo))
             }
             0x02 => {
-                let auth_algo =
-                    Algorithm::from_byte(algo).map_err(|_| "Invalid confidentiality algorithm")?;
-                Ok(Self::Confidentiality(auth_algo))
+                let algo = ConfidentialityAlgorithm::try_from(algo)
+                    .map_err(|_| "Invalid confidentiality algorithm")?;
+                Ok(Self::Confidentiality(algo))
             }
             _ => Err("Invalid payload type"),
         }
@@ -80,9 +82,14 @@ pub struct OpenSessionRequest {
     pub message_tag: u8,
     pub requested_max_privilege: Option<PrivilegeLevel>,
     pub remote_console_session_id: u32,
-    pub authentication_algorithms: Vec<AuthenticationAlgorithm>,
-    pub integrity_algorithms: Vec<IntegrityAlgorithm>,
-    pub confidentiality_algorithms: Vec<ConfidentialityAlgorithm>,
+    // TODO: technically these support vectors of algorithms, but
+    // the testing platform we're trying doesn't seem to support
+    // that very well.
+    //
+    // Use options for now.
+    pub authentication_algorithms: Option<AuthenticationAlgorithm>,
+    pub integrity_algorithms: Option<IntegrityAlgorithm>,
+    pub confidentiality_algorithms: Option<ConfidentialityAlgorithm>,
 }
 
 impl OpenSessionRequest {
@@ -98,25 +105,21 @@ impl OpenSessionRequest {
 
         buffer.extend_from_slice(&self.remote_console_session_id.to_le_bytes());
 
-        let mut write = |v| {
-            AlgorithmPayload::write(&v, buffer);
-        };
-
         macro_rules! write_algo {
             ($field:ident, $map:ident) => {
-                if self.$field.is_empty() {
+                if self.$field.is_none() {
                     log::debug!(
-                        "Using NULL value for {} algorithm payload. BMCs may have a hard time supporting this..",
+                        "Using NULL value for {} algorithm payload.",
                         stringify!($map)
                     );
 
-                    write(AlgorithmPayload::$map(None));
+                    AlgorithmPayload::$map(Default::default()).write(true, buffer);
                 } else {
                     self.$field
                         .iter()
-                        .map(|v| Some(*v))
+                        .copied()
                         .map(AlgorithmPayload::$map)
-                        .for_each(&mut write);
+                        .for_each(|v| v.write(false, buffer));
                 }
             };
         }
@@ -151,7 +154,6 @@ impl OpenSessionResponse {
             if let Ok(error_code) = OpenSessionResponseErrorStatusCode::try_from(status_code) {
                 log::warn!("RMCP+ error occurred. Status code: '{error_code:?}'");
             }
-            println!("{status_code}");
             return Err("RMCP+ error occurred");
         }
 
@@ -168,17 +170,17 @@ impl OpenSessionResponse {
             .map_err(|_| "Invalid managed system session ID")?;
 
         let authentication_payload = match AlgorithmPayload::from_data(&data[12..20])? {
-            AlgorithmPayload::Authentication(Some(v)) => v,
+            AlgorithmPayload::Authentication(a) => a,
             _ => return Err("Authentication payload contained non-authentication payload type."),
         };
 
         let integrity_payload = match AlgorithmPayload::from_data(&data[20..28])? {
-            AlgorithmPayload::Integrity(Some(v)) => v,
+            AlgorithmPayload::Integrity(i) => i,
             _ => return Err("Integrity payload contained non-integrity payload type."),
         };
 
         let confidentiality_payload = match AlgorithmPayload::from_data(&data[28..36])? {
-            AlgorithmPayload::Confidentiality(Some(auth)) => auth,
+            AlgorithmPayload::Confidentiality(c) => c,
             _ => return Err("Confidenitality payload contained non-confidentiality payload type."),
         };
 

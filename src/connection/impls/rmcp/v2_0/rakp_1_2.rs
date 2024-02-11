@@ -2,8 +2,6 @@ use std::num::NonZeroU32;
 
 use crate::app::auth::PrivilegeLevel;
 
-use super::AuthenticationAlgorithm;
-
 #[derive(Debug)]
 pub struct Username {
     data: [u8; 16],

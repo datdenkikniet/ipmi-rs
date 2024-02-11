@@ -20,6 +20,8 @@ md5 = "0.7"
 
 # For unix-file IPMI
 nix = { version = "0.26", default-features = false, features = [ "ioctl" ], optional = true }
+hmac = "0.12.1"
+sha1 = "0.10.6"
 
 [features]
 default = [ "time", "unix-file", "log-to-file" ]

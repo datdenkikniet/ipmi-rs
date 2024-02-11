@@ -1,5 +1,5 @@
 use crate::connection::{
-    rmcp::{Algorithm, AuthenticationAlgorithm, ConfidentialityAlgorithm, IntegrityAlgorithm},
+    rmcp::{AuthenticationAlgorithm, ConfidentialityAlgorithm, IntegrityAlgorithm},
     Channel, IpmiCommand, Message, NetFn, ParseResponseError,
 };
 
@@ -197,19 +197,19 @@ macro_rules ! cipher_suite {
                 }
             }
 
-            pub fn authentication(&self) -> Option<AuthenticationAlgorithm> {
+            pub fn authentication(&self) -> AuthenticationAlgorithm {
                 let auth = self.as_suite()[0];
-                Algorithm::from_byte(auth).unwrap()
+                TryFrom::try_from(auth).unwrap()
             }
 
-            pub fn integrity(&self) -> Option<IntegrityAlgorithm> {
+            pub fn integrity(&self) -> IntegrityAlgorithm {
                 let integ = self.as_suite()[1];
-                Algorithm::from_byte(integ).unwrap()
+                TryFrom::try_from(integ).unwrap()
             }
 
-            pub fn confidentiality(&self) -> Option<ConfidentialityAlgorithm> {
+            pub fn confidentiality(&self) -> ConfidentialityAlgorithm {
                 let conf = self.as_suite()[1];
-                Algorithm::from_byte(conf).unwrap()
+                TryFrom::try_from(conf).unwrap()
             }
         }
     }
