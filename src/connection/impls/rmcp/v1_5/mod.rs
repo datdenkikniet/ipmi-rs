@@ -23,6 +23,7 @@ mod message;
 
 #[derive(Debug)]
 pub enum ActivationError {
+    Io(std::io::Error),
     PasswordTooLong,
     UsernameTooLong,
     GetSessionChallenge(IpmiError<RmcpIpmiError, ParseResponseError<AuthError>>),

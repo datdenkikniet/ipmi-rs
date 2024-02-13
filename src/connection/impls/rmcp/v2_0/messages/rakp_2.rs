@@ -3,7 +3,7 @@ use std::num::NonZeroU32;
 use super::RakpErrorStatusCode;
 
 #[derive(Debug)]
-pub enum RakpMessageTwoParseError {
+pub enum ParseError {
     NotEnoughData,
     ErrorStatusCode(ErrorStatusCode),
     UnknownErrorStatusCode(u8),
@@ -11,7 +11,7 @@ pub enum RakpMessageTwoParseError {
 }
 
 #[derive(Debug)]
-pub struct RakpMessageTwo<'a> {
+pub struct RakpMessage2<'a> {
     pub message_tag: u8,
     pub remote_console_session_id: NonZeroU32,
     pub managed_system_random_number: [u8; 16],
@@ -19,11 +19,11 @@ pub struct RakpMessageTwo<'a> {
     pub key_exchange_auth_code: &'a [u8],
 }
 
-impl<'a> RakpMessageTwo<'a> {
-    pub fn from_data(data: &'a [u8]) -> Result<Self, RakpMessageTwoParseError> {
+impl<'a> RakpMessage2<'a> {
+    pub fn from_data(data: &'a [u8]) -> Result<Self, ParseError> {
         // 4 = tag, status code, reserved bytes
         if data.len() < 4 {
-            return Err(RakpMessageTwoParseError::NotEnoughData);
+            return Err(ParseError::NotEnoughData);
         }
 
         let message_tag = data[0];
@@ -31,21 +31,19 @@ impl<'a> RakpMessageTwo<'a> {
 
         if status_code != 0 {
             return Err(ErrorStatusCode::try_from(status_code)
-                .map(RakpMessageTwoParseError::ErrorStatusCode)
-                .unwrap_or(RakpMessageTwoParseError::UnknownErrorStatusCode(
-                    status_code,
-                )));
+                .map(ParseError::ErrorStatusCode)
+                .unwrap_or(ParseError::UnknownErrorStatusCode(status_code)));
         }
 
         if data.len() < 40 {
-            return Err(RakpMessageTwoParseError::NotEnoughData);
+            return Err(ParseError::NotEnoughData);
         }
 
         let remote_console_session_id =
             if let Some(v) = NonZeroU32::new(u32::from_le_bytes(data[4..8].try_into().unwrap())) {
                 v
             } else {
-                return Err(RakpMessageTwoParseError::InvalidRemoteConsoleSessionId);
+                return Err(ParseError::InvalidRemoteConsoleSessionId);
             };
 
         let managed_system_random_number = data[8..24].try_into().unwrap();

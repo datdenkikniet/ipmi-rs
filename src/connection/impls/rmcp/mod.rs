@@ -10,7 +10,11 @@ pub use v1_5::{
 };
 
 mod v2_0;
-pub use v2_0::{Algorithm, AuthenticationAlgorithm, ConfidentialityAlgorithm, IntegrityAlgorithm};
+pub use v2_0::{
+    ActivationError as V2_0ActivationError, Algorithm, AuthenticationAlgorithm,
+    ConfidentialityAlgorithm, IntegrityAlgorithm, ReadError as V2_0ReadError,
+    WriteError as V2_0WriteError, *,
+};
 
 mod header;
 pub(crate) use header::*;
@@ -36,9 +40,8 @@ pub enum RmcpIpmiReceiveError {
 
 #[derive(Debug)]
 pub enum RmcpIpmiSendError {
-    Io(std::io::Error),
     V1_5(V1_5WriteError),
-    V2_0(&'static str),
+    V2_0(V2_0WriteError),
 }
 
 impl From<V1_5WriteError> for RmcpIpmiSendError {
@@ -47,22 +50,16 @@ impl From<V1_5WriteError> for RmcpIpmiSendError {
     }
 }
 
-impl From<&'static str> for RmcpIpmiSendError {
-    fn from(value: &'static str) -> Self {
+impl From<V2_0WriteError> for RmcpIpmiSendError {
+    fn from(value: V2_0WriteError) -> Self {
         Self::V2_0(value)
-    }
-}
-
-impl From<std::io::Error> for RmcpIpmiSendError {
-    fn from(value: std::io::Error) -> Self {
-        Self::Io(value)
     }
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum UnwrapSessionError {
     V1_5(V1_5ReadError),
-    V2_0(&'static str),
+    V2_0(V2_0ReadError),
 }
 
 impl From<V1_5ReadError> for UnwrapSessionError {
@@ -71,8 +68,8 @@ impl From<V1_5ReadError> for UnwrapSessionError {
     }
 }
 
-impl From<&'static str> for UnwrapSessionError {
-    fn from(value: &'static str) -> Self {
+impl From<V2_0ReadError> for UnwrapSessionError {
+    fn from(value: V2_0ReadError) -> Self {
         Self::V2_0(value)
     }
 }
@@ -100,22 +97,16 @@ type CommandError<T> = IpmiCommandError<RmcpIpmiError, T>;
 
 #[derive(Debug)]
 pub enum ActivationError {
-    Io(std::io::Error),
     NoSupportedIpmiLANVersions,
     GetChannelAuthenticationCapabilities(CommandError<()>),
     V1_5(V1_5ActivationError),
+    V2_0(V2_0ActivationError),
     RmcpError(RmcpHeaderError),
 }
 
 impl From<V1_5ActivationError> for ActivationError {
     fn from(value: V1_5ActivationError) -> Self {
         Self::V1_5(value)
-    }
-}
-
-impl From<std::io::Error> for ActivationError {
-    fn from(value: std::io::Error) -> Self {
-        Self::Io(value)
     }
 }
 
@@ -159,7 +150,7 @@ impl Rmcp {
             log::info!("De-activating RMCP connection for re-activation");
         }
 
-        let inactive = self.unbound_state.bind()?;
+        let inactive = self.unbound_state.bind().map_err(ActivationError::Io)?;
         let activated = inactive.activate(username, password)?;
         self.active_state = Some(activated);
         Ok(())

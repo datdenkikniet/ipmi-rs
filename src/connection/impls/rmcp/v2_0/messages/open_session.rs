@@ -8,6 +8,16 @@ use crate::connection::rmcp::v2_0::crypto::{
     AuthenticationAlgorithm, ConfidentialityAlgorithm, IntegrityAlgorithm,
 };
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum AlgorithmPayloadError {
+    IncorrectDataLen,
+    IncorrectPayloadLenValue,
+    UnknownAuthAlgorithm(u8),
+    UnknownIntegrityAlgorithm(u8),
+    UnknownConfidentialityAlgorithm(u8),
+    UnknownPayloadType(u8),
+}
+
 #[derive(Debug, Clone, Copy)]
 pub enum AlgorithmPayload {
     Authentication(AuthenticationAlgorithm),
@@ -46,16 +56,18 @@ impl AlgorithmPayload {
         buffer.extend_from_slice(&[0x00, 0x00, 0x00]);
     }
 
-    pub fn from_data(data: &[u8]) -> Result<Self, &'static str> {
+    pub fn from_data(data: &[u8]) -> Result<Self, AlgorithmPayloadError> {
+        use AlgorithmPayloadError::*;
+
         if data.len() != 8 {
-            return Err("Incorrect amount of data");
+            return Err(IncorrectDataLen);
         }
 
         let ty = data[0];
         let payload_len = data[3];
 
         if payload_len != 8 {
-            return Err("Incorrect payload len field");
+            return Err(IncorrectPayloadLenValue);
         }
 
         let algo = data[4];
@@ -63,20 +75,20 @@ impl AlgorithmPayload {
         match ty {
             0x00 => {
                 let algo = AuthenticationAlgorithm::try_from(algo)
-                    .map_err(|_| "Invalid authentication algorithm")?;
+                    .map_err(|_| UnknownAuthAlgorithm(algo))?;
                 Ok(Self::Authentication(algo))
             }
             0x01 => {
                 let algo = IntegrityAlgorithm::try_from(algo)
-                    .map_err(|_| "Invalid integrity algorithm")?;
+                    .map_err(|_| UnknownIntegrityAlgorithm(algo))?;
                 Ok(Self::Integrity(algo))
             }
             0x02 => {
                 let algo = ConfidentialityAlgorithm::try_from(algo)
-                    .map_err(|_| "Invalid confidentiality algorithm")?;
+                    .map_err(|_| UnknownConfidentialityAlgorithm(algo))?;
                 Ok(Self::Confidentiality(algo))
             }
-            _ => Err("Invalid payload type"),
+            _ => Err(UnknownPayloadType(ty)),
         }
     }
 }
@@ -134,6 +146,19 @@ impl OpenSessionRequest {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ParseSessionResponseError {
+    NotEnoughData,
+    HaveErrorCode(Result<OpenSessionResponseErrorStatusCode, u8>),
+    ZeroManagedSystemSessionId,
+    InvalidPrivilegeLevel(u8),
+    InvalidAlgorithmPayload,
+    AuthPayloadWasNonAuthAlgorithm,
+    IntegrityPayloadWasNonIntegrityAlgorithm,
+    ConfidentialityPayloadWasNonConfidentialityAlgorithm,
+    AlgorithmPayloadError(AlgorithmPayloadError),
+}
+
 #[derive(Debug, Clone)]
 pub struct OpenSessionResponse {
     pub message_tag: u8,
@@ -146,47 +171,51 @@ pub struct OpenSessionResponse {
 }
 
 impl OpenSessionResponse {
-    pub fn from_data(data: &[u8]) -> Result<Self, &'static str> {
+    pub fn from_data(data: &[u8]) -> Result<Self, ParseSessionResponseError> {
+        use ParseSessionResponseError::*;
+
         if data.len() < 2 {
-            return Err("Not enough data");
+            return Err(NotEnoughData);
         }
 
         let message_tag = data[0];
         let status_code = data[1];
 
         if status_code != 00 {
-            if let Ok(error_code) = OpenSessionResponseErrorStatusCode::try_from(status_code) {
-                log::warn!("RMCP+ error occurred. Status code: '{error_code:?}'");
-            }
-            return Err("RMCP+ error occurred");
+            return Err(HaveErrorCode(
+                OpenSessionResponseErrorStatusCode::try_from(status_code).map_err(|_| status_code),
+            ));
         }
 
         if data.len() != 36 {
-            return Err("Incorrect amount of data");
+            return Err(NotEnoughData);
         }
 
         let max_privilege_level =
-            PrivilegeLevel::try_from(data[2]).map_err(|_| "Invalid privilege level")?;
+            PrivilegeLevel::try_from(data[2]).map_err(|_| InvalidPrivilegeLevel(data[2]))?;
 
         let remote_console_session_id = u32::from_le_bytes(data[4..8].try_into().unwrap());
         let managed_system_session_id = u32::from_le_bytes(data[8..12].try_into().unwrap());
-        let managed_system_session_id = NonZeroU32::try_from(managed_system_session_id)
-            .map_err(|_| "Invalid managed system session ID")?;
+        let managed_system_session_id =
+            NonZeroU32::new(managed_system_session_id).ok_or(ZeroManagedSystemSessionId)?;
 
-        let authentication_payload = match AlgorithmPayload::from_data(&data[12..20])? {
-            AlgorithmPayload::Authentication(a) => a,
-            _ => return Err("Authentication payload contained non-authentication payload type."),
-        };
+        let authentication_payload =
+            match AlgorithmPayload::from_data(&data[12..20]).map_err(AlgorithmPayloadError)? {
+                AlgorithmPayload::Authentication(a) => a,
+                _ => return Err(AuthPayloadWasNonAuthAlgorithm),
+            };
 
-        let integrity_payload = match AlgorithmPayload::from_data(&data[20..28])? {
-            AlgorithmPayload::Integrity(i) => i,
-            _ => return Err("Integrity payload contained non-integrity payload type."),
-        };
+        let integrity_payload =
+            match AlgorithmPayload::from_data(&data[20..28]).map_err(AlgorithmPayloadError)? {
+                AlgorithmPayload::Integrity(i) => i,
+                _ => return Err(IntegrityPayloadWasNonIntegrityAlgorithm),
+            };
 
-        let confidentiality_payload = match AlgorithmPayload::from_data(&data[28..36])? {
-            AlgorithmPayload::Confidentiality(c) => c,
-            _ => return Err("Confidenitality payload contained non-confidentiality payload type."),
-        };
+        let confidentiality_payload =
+            match AlgorithmPayload::from_data(&data[28..36]).map_err(AlgorithmPayloadError)? {
+                AlgorithmPayload::Confidentiality(c) => c,
+                _ => return Err(ConfidentialityPayloadWasNonConfidentialityAlgorithm),
+            };
 
         Ok(Self {
             message_tag,

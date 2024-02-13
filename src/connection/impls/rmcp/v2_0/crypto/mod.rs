@@ -7,7 +7,7 @@ pub use confidentiality::ConfidentialityAlgorithm;
 mod integrity;
 pub use integrity::IntegrityAlgorithm;
 
-use super::{messages::OpenSessionResponse, RakpMessageOne, RakpMessageTwo};
+use super::{messages::OpenSessionResponse, RakpMessage1, RakpMessage2, WriteError};
 
 pub trait Algorithm:
     Sized + Default + PartialEq + PartialOrd + Ord + Into<u8> + TryFrom<u8>
@@ -58,7 +58,7 @@ impl CryptoState {
         self.authentication_algorithm != AuthenticationAlgorithm::RakpNone
     }
 
-    pub fn validate(&mut self, m1: &RakpMessageOne, m2: &RakpMessageTwo) -> Option<Vec<u8>> {
+    pub fn validate(&mut self, m1: &RakpMessage1, m2: &RakpMessage2) -> Option<Vec<u8>> {
         match self.authentication_algorithm {
             AuthenticationAlgorithm::RakpNone => todo!(),
             AuthenticationAlgorithm::RakpHmacSha1 => self.validate_hmac_sha1(m1, m2),
@@ -74,7 +74,7 @@ impl CryptoState {
             .unwrap_or(self.password.as_ref())
     }
 
-    fn validate_hmac_sha1(&mut self, m1: &RakpMessageOne, m2: &RakpMessageTwo) -> Option<Vec<u8>> {
+    fn validate_hmac_sha1(&mut self, m1: &RakpMessage1, m2: &RakpMessage2) -> Option<Vec<u8>> {
         use hmac::{Hmac, Mac};
         use sha1::Sha1;
 
@@ -152,11 +152,11 @@ impl CryptoState {
         }
     }
 
-    pub fn write_payload(&mut self, data: &[u8], buffer: &mut Vec<u8>) -> Result<(), &'static str> {
+    pub fn write_payload(&mut self, data: &[u8], buffer: &mut Vec<u8>) -> Result<(), WriteError> {
         let data_len = data.len();
 
         if data_len > u16::MAX as usize {
-            return Err("Payload is too long.");
+            return Err(WriteError::PayloadTooLong);
         }
 
         // Confidentiality header

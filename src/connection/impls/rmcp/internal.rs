@@ -202,8 +202,10 @@ impl RmcpWithState<Inactive> {
         log::debug!("Authentication capabilities: {:?}", authentication_caps);
 
         if authentication_caps.ipmi2_connections_supported {
+            let username = super::v2_0::Username::new(username.unwrap_or(""));
+
             let socket = ipmi.release();
-            let res = V2_0State::activate(socket, Some(privilege_level));
+            let res = V2_0State::activate(socket, Some(privilege_level))?;
 
             println!("{res:?}");
 

@@ -22,7 +22,7 @@ impl IpmiSessionMessage {
             }
             IpmiSessionMessage::V2_0(message) => message
                 .write_data(&mut v2_0::CryptoState::default(), buffer)
-                .map_err(Into::into),
+                .map_err(RmcpIpmiSendError::V2_0),
         }
     }
 

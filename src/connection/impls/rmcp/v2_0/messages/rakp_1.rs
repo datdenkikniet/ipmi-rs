@@ -43,7 +43,7 @@ impl core::ops::Deref for Username {
 
 // TODO: override debug to hide crypto info
 #[derive(Debug)]
-pub struct RakpMessageOne<'a> {
+pub struct RakpMessage1<'a> {
     pub message_tag: u8,
     pub managed_system_session_id: NonZeroU32,
     pub remote_console_random_number: [u8; 16],
@@ -51,7 +51,7 @@ pub struct RakpMessageOne<'a> {
     pub username: &'a Username,
 }
 
-impl RakpMessageOne<'_> {
+impl RakpMessage1<'_> {
     pub fn write(&self, buffer: &mut Vec<u8>) {
         // Message tag
         buffer.push(self.message_tag);
