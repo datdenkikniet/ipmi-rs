@@ -2,7 +2,7 @@
 // BE = most significant byte first = RMCP/ASF
 
 use std::{
-    io::{Error, ErrorKind},
+    io::ErrorKind,
     net::{SocketAddr, ToSocketAddrs, UdpSocket},
     time::Duration,
 };
@@ -137,26 +137,23 @@ impl RmcpWithState<Inactive> {
             ping.write_data(buffer);
         });
 
-        socket.send(&ping_bytes)?;
+        socket
+            .send(&ping_bytes)
+            .map_err(ActivationError::PingSend)?;
 
         let mut buf = [0u8; 1024];
-        let received = socket.recv(&mut buf)?;
+        let received = socket
+            .recv(&mut buf)
+            .map_err(ActivationError::PongReceive)?;
 
-        let (pong_header, pong_data) = match RmcpHeader::from_bytes(&buf[..received]) {
-            Ok(res) => res,
-            Err(e) => {
-                return Err(
-                    Error::new(ErrorKind::Other, format!("Invalid RMCP header. {e:?}")).into(),
-                )
-            }
-        };
+        let (pong_header, pong_data) =
+            RmcpHeader::from_bytes(&buf[..received]).map_err(|_| ActivationError::PongRead)?;
 
         let (supported_entities, _) = if pong_header.class().ty == RmcpType::Asf {
-            let message = ASFMessage::from_bytes(pong_data)
-                .ok_or(Error::new(ErrorKind::Other, "Invalid ASF response"))?;
+            let message = ASFMessage::from_bytes(pong_data).ok_or(ActivationError::PongRead)?;
 
             if message.message_tag != message_tag {
-                return Err(Error::new(ErrorKind::Other, "Incorrect ASF message tag.").into());
+                return Err(ActivationError::PongRead);
             }
 
             if let ASFMessageType::Pong {
@@ -167,20 +164,14 @@ impl RmcpWithState<Inactive> {
             {
                 (supported_entities, supported_interactions)
             } else {
-                return Err(
-                    Error::new(ErrorKind::Other, "Non-pong response received for ping.").into(),
-                );
+                return Err(ActivationError::PongRead);
             }
         } else {
-            return Err(Error::new(ErrorKind::Other, "Non-ASF response received for ping.").into());
+            return Err(ActivationError::PongRead);
         };
 
         if !supported_entities.ipmi {
-            return Err(Error::new(
-                ErrorKind::Unsupported,
-                "Remote does not support IPMI entity.",
-            )
-            .into());
+            return Err(ActivationError::IpmiNotSupported);
         }
 
         let new_state = StateV1_5::new(socket);
@@ -202,12 +193,17 @@ impl RmcpWithState<Inactive> {
         log::debug!("Authentication capabilities: {:?}", authentication_caps);
 
         if authentication_caps.ipmi2_connections_supported {
-            let username = super::v2_0::Username::new(username.unwrap_or(""));
+            let username = super::v2_0::Username::new(username.unwrap_or(""))
+                .unwrap_or(super::v2_0::Username::new_empty());
 
             let socket = ipmi.release();
-            let res = V2_0State::activate(socket, Some(privilege_level))?;
 
-            println!("{res:?}");
+            let res = V2_0State::activate(
+                socket,
+                Some(privilege_level),
+                &username,
+                password.unwrap_or(&[]),
+            )?;
 
             todo!()
         } else if authentication_caps.ipmi15_connections_supported {

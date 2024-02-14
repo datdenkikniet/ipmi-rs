@@ -9,6 +9,13 @@ pub struct Username {
 }
 
 impl Username {
+    pub fn new_empty() -> Self {
+        Self {
+            data: [0u8; 16],
+            length: 0,
+        }
+    }
+
     /// Will truncate username to max 16 bytes
     pub fn new(data: &str) -> Option<Self> {
         let chars = data.chars().take(16);

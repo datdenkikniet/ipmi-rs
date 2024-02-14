@@ -2,7 +2,9 @@ use std::io::ErrorKind;
 
 use clap::Parser;
 use common::CommonOpts;
-use ipmi_rs::connection::rmcp::{RmcpIpmiError, RmcpIpmiReceiveError, RmcpIpmiSendError};
+use ipmi_rs::connection::rmcp::{
+    RmcpIpmiError, RmcpIpmiReceiveError, RmcpIpmiSendError, V1_5WriteError, V2_0WriteError,
+};
 use ipmi_rs::connection::RequestTargetAddress;
 use ipmi_rs::{
     connection::Message,
@@ -65,7 +67,8 @@ fn main() -> std::io::Result<()> {
         common::IpmiConnectionEnum::Rmcp(mut r) => {
             r.inner_mut().send_recv(&mut request).map_err(|e| match e {
                 RmcpIpmiError::Receive(RmcpIpmiReceiveError::Io(io))
-                | RmcpIpmiError::Send(RmcpIpmiSendError::Io(io)) => io,
+                | RmcpIpmiError::Send(RmcpIpmiSendError::V1_5(V1_5WriteError::Io(io)))
+                | RmcpIpmiError::Send(RmcpIpmiSendError::V2_0(V2_0WriteError::Io(io))) => io,
                 e => {
                     log::error!("RMCP command failed: {e:?}");
                     std::io::Error::new(ErrorKind::Other, format!("{e:?}"))

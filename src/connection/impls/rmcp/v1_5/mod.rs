@@ -31,8 +31,9 @@ pub enum ActivationError {
     ActivateSession(IpmiError<RmcpIpmiError, ParseResponseError<AuthError>>),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug)]
 pub enum WriteError {
+    Io(std::io::Error),
     /// A request was made to calculate the auth code for a message authenticated
     /// using a method that requires a password, but no password was provided.
     MissingPassword,
@@ -203,10 +204,26 @@ impl IpmiConnection for State {
             payload: final_data,
         });
 
-        self.socket
-            .send(|buffer| message.write_data(self.password.as_ref(), buffer))?;
+        enum Send {
+            Ipmi(RmcpIpmiSendError),
+            Io(std::io::Error),
+        }
 
-        Ok(())
+        impl From<std::io::Error> for Send {
+            fn from(value: std::io::Error) -> Self {
+                Self::Io(value)
+            }
+        }
+
+        match self.socket.send(|buffer| {
+            message
+                .write_data(self.password.as_ref(), buffer)
+                .map_err(Send::Ipmi)
+        }) {
+            Ok(_) => Ok(()),
+            Err(Send::Ipmi(ipmi)) => Err(ipmi),
+            Err(Send::Io(io)) => Err(RmcpIpmiSendError::V1_5(WriteError::Io(io))),
+        }
     }
 
     fn recv(&mut self) -> Result<Response, RmcpIpmiReceiveError> {

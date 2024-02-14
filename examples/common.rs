@@ -5,7 +5,10 @@ use std::{io::ErrorKind, time::Duration};
 use clap::{Args, Parser};
 use ipmi_rs::{
     connection::{
-        rmcp::{Rmcp, RmcpIpmiError, RmcpIpmiReceiveError, RmcpIpmiSendError},
+        rmcp::{
+            Rmcp, RmcpIpmiError, RmcpIpmiReceiveError, RmcpIpmiSendError, V1_5WriteError,
+            V2_0WriteError,
+        },
         File, IpmiCommand,
     },
     storage::sdr,
@@ -50,7 +53,10 @@ impl IpmiConnectionEnum {
                 Err(e) => {
                     let mapped = e.map(|e| match e {
                         RmcpIpmiError::Receive(RmcpIpmiReceiveError::Io(io))
-                        | RmcpIpmiError::Send(RmcpIpmiSendError::Io(io)) => io,
+                        | RmcpIpmiError::Send(RmcpIpmiSendError::V1_5(V1_5WriteError::Io(io)))
+                        | RmcpIpmiError::Send(RmcpIpmiSendError::V2_0(V2_0WriteError::Io(io))) => {
+                            io
+                        }
                         e => {
                             log::error!("RMCP command failed: {e:?}");
                             std::io::Error::new(ErrorKind::Other, format!("{e:?}"))

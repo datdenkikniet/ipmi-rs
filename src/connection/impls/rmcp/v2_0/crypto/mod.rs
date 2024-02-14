@@ -14,6 +14,14 @@ pub trait Algorithm:
 {
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum CryptoUnwrapError {
+    NotEnoughData,
+    MismatchingEncryptionState,
+    MismatchingAuthenticationState,
+    IncorrectPayloadLen,
+}
+
 // TODO: override debug to avoid leaking crypto info
 #[derive(Debug)]
 pub struct CryptoState {
@@ -126,20 +134,20 @@ impl CryptoState {
         encrypted: bool,
         authenticated: bool,
         data: &[u8],
-    ) -> Result<Vec<u8>, &'static str> {
+    ) -> Result<Vec<u8>, CryptoUnwrapError> {
         assert!(!encrypted);
         assert!(!authenticated);
 
         if data.len() < 2 {
-            return Err("Not enough data");
+            return Err(CryptoUnwrapError::NotEnoughData);
         }
 
         if self.encrypted() != encrypted {
-            return Err("Mismatching encryption state");
+            return Err(CryptoUnwrapError::MismatchingEncryptionState);
         }
 
         if self.authenticated() != authenticated {
-            return Err("Mismatching authentication state");
+            return Err(CryptoUnwrapError::MismatchingAuthenticationState);
         }
 
         let data_len = u16::from_le_bytes(data[..2].try_into().unwrap());
@@ -148,7 +156,7 @@ impl CryptoState {
         if data_len as usize == data.len() {
             return Ok(data.to_vec());
         } else {
-            Err("Incorrect payload length")
+            Err(CryptoUnwrapError::IncorrectPayloadLen)
         }
     }
 

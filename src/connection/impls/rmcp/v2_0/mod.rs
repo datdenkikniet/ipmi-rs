@@ -14,6 +14,8 @@ pub use messages::{
     RakpMessage4ErrorStatusCode, RakpMessage4ParseError,
 };
 
+use self::crypto::CryptoUnwrapError;
+
 use super::{v1_5, IpmiSessionMessage, RmcpIpmiReceiveError, UnwrapSessionError};
 
 #[derive(Debug)]
@@ -55,6 +57,10 @@ impl From<std::io::Error> for WriteError {
 #[derive(Debug, Clone, PartialEq)]
 pub enum ReadError {
     NotIpmiV2_0,
+    NotEnoughData,
+    NotRmcpPlus,
+    InvalidPayloadType(u8),
+    DecryptionError(CryptoUnwrapError),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -134,23 +140,26 @@ impl Message {
         Ok(())
     }
 
-    pub fn from_data(state: &mut CryptoState, data: &[u8]) -> Result<Self, &'static str> {
+    pub fn from_data(state: &mut CryptoState, data: &[u8]) -> Result<Self, ReadError> {
         if data.len() < 10 {
-            return Err("Not enough data");
+            return Err(ReadError::NotEnoughData);
         }
 
         if data[0] != 0x06 {
-            return Err("Not an RMCP+ packet");
+            return Err(ReadError::NotIpmiV2_0);
         }
 
         let encrypted = (data[1] & 0x80) == 0x80;
         let authenticated = (data[1] & 0x40) == 0x40;
-        let ty = PayloadType::try_from(data[1] & 0x3F).map_err(|_| "Invalid payload type")?;
+        let ty = PayloadType::try_from(data[1] & 0x3F)
+            .map_err(|_| ReadError::InvalidPayloadType(data[1] & 0x3F))?;
 
         let session_id = u32::from_le_bytes(data[2..6].try_into().unwrap());
         let session_sequence_number = u32::from_le_bytes(data[6..10].try_into().unwrap());
 
-        let payload = state.read_payload(encrypted, authenticated, &data[10..])?;
+        let payload = state
+            .read_payload(encrypted, authenticated, &data[10..])
+            .map_err(ReadError::DecryptionError)?;
 
         Ok(Self {
             ty,

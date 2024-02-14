@@ -97,6 +97,12 @@ type CommandError<T> = IpmiCommandError<RmcpIpmiError, T>;
 
 #[derive(Debug)]
 pub enum ActivationError {
+    BindSocket(std::io::Error),
+    PingSend(std::io::Error),
+    PongReceive(std::io::Error),
+    PongRead,
+    /// The contacted host does not support IPMI over RMCP.
+    IpmiNotSupported,
     NoSupportedIpmiLANVersions,
     GetChannelAuthenticationCapabilities(CommandError<()>),
     V1_5(V1_5ActivationError),
@@ -107,6 +113,12 @@ pub enum ActivationError {
 impl From<V1_5ActivationError> for ActivationError {
     fn from(value: V1_5ActivationError) -> Self {
         Self::V1_5(value)
+    }
+}
+
+impl From<V2_0ActivationError> for ActivationError {
+    fn from(value: V2_0ActivationError) -> Self {
+        Self::V2_0(value)
     }
 }
 
@@ -150,7 +162,11 @@ impl Rmcp {
             log::info!("De-activating RMCP connection for re-activation");
         }
 
-        let inactive = self.unbound_state.bind().map_err(ActivationError::Io)?;
+        let inactive = self
+            .unbound_state
+            .bind()
+            .map_err(ActivationError::BindSocket)?;
+
         let activated = inactive.activate(username, password)?;
         self.active_state = Some(activated);
         Ok(())
