@@ -6,7 +6,10 @@ pub use compact_sensor_record::CompactSensorRecord;
 
 use nonmax::NonMaxU8;
 
-use crate::{connection::LogicalUnit, Loggable};
+use crate::{
+    connection::{Channel, LogicalUnit},
+    Loggable,
+};
 
 use super::{event_reading_type_code::EventReadingTypeCodes, RecordId, SensorType, Unit};
 
@@ -61,7 +64,7 @@ impl Value {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SensorKey {
     pub owner_id: SensorOwner,
-    pub owner_channel: u8,
+    pub owner_channel: Channel,
     pub fru_inv_device_owner_lun: LogicalUnit,
     pub owner_lun: LogicalUnit,
     pub sensor_number: SensorNumber,
@@ -75,7 +78,10 @@ impl SensorKey {
 
         let owner_id = SensorOwner::from(record_data[0]);
         let owner_channel_fru_lun = record_data[1];
-        let owner_channel = (owner_channel_fru_lun & 0xF0) >> 4;
+
+        // NOTE(unwrap): value is guaranteed to be in the correct range due to mask + shift.
+        let owner_channel = Channel::new((owner_channel_fru_lun & 0xF0) >> 4).unwrap();
+
         let fru_inv_device_owner_lun =
             LogicalUnit::try_from((owner_channel_fru_lun >> 2) & 0x3).unwrap();
         let owner_lun = LogicalUnit::try_from(owner_channel_fru_lun & 0x3).unwrap();

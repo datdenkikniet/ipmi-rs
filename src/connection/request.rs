@@ -1,6 +1,6 @@
 use crate::connection::{LogicalUnit, NetFn};
 
-use super::Message;
+use super::{Address, Channel, Message};
 
 pub struct Request {
     target: RequestTargetAddress,
@@ -39,11 +39,6 @@ impl Request {
         self.target
     }
 }
-
-#[derive(Copy, Clone, Debug, PartialEq)]
-pub struct Address(pub u8);
-#[derive(Copy, Clone, Debug, PartialEq)]
-pub struct Channel(pub u8);
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum RequestTargetAddress {

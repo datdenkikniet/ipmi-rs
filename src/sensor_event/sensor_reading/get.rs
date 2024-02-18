@@ -54,7 +54,7 @@ impl GetSensorReading {
         Self {
             sensor_number: value.sensor_number,
             address: Address(value.owner_id.into()),
-            channel: Channel(value.owner_channel),
+            channel: value.owner_channel,
         }
     }
 }

@@ -1,4 +1,4 @@
-use crate::connection::{IpmiCommand, Message, NetFn};
+use crate::connection::{Channel, IpmiCommand, Message, NetFn};
 
 use super::{AuthType, PrivilegeLevel};
 
@@ -39,25 +39,14 @@ impl ChannelAuthenticationCapabilities {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum Channel {
-    Current,
-    Number(u8),
-}
-
 #[derive(Debug, Clone)]
 pub struct GetChannelAuthenticationCapabilities {
-    channel_number: u8,
+    channel_number: Channel,
     privilege_level: PrivilegeLevel,
 }
 
 impl GetChannelAuthenticationCapabilities {
     pub fn new(channel_number: Channel, privilege_level: PrivilegeLevel) -> Self {
-        let channel_number = match channel_number {
-            Channel::Current => 0xE,
-            Channel::Number(n) => n & 0x0F,
-        };
-
         Self {
             channel_number,
             privilege_level,
@@ -71,7 +60,7 @@ impl From<GetChannelAuthenticationCapabilities> for Message {
             NetFn::App,
             0x38,
             vec![
-                0x80 | (value.channel_number & 0x0F),
+                0x80 | value.channel_number.value(),
                 value.privilege_level.into(),
             ],
         )
