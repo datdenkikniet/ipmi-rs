@@ -16,7 +16,7 @@ use crate::{
 };
 
 use super::{
-    v1_5::State as StateV1_5, v2_0::State as V2_0State, ActivationError, RmcpIpmiError,
+    v1_5::State as V1_5State, v2_0::State as V2_0State, ActivationError, RmcpIpmiError,
     RmcpIpmiReceiveError,
 };
 
@@ -52,24 +52,9 @@ pub struct Inactive {
 
 #[derive(Debug)]
 pub enum Active {
-    V1_5(StateV1_5),
-    V2_0(StateV2_0),
+    V1_5(V1_5State),
+    V2_0(V2_0State),
 }
-
-impl From<StateV1_5> for Active {
-    fn from(value: StateV1_5) -> Self {
-        Self::V1_5(value)
-    }
-}
-
-impl From<StateV2_0> for Active {
-    fn from(value: StateV2_0) -> Self {
-        Self::V2_0(value)
-    }
-}
-
-#[derive(Debug)]
-pub struct StateV2_0 {}
 
 #[derive(Debug, Clone)]
 pub(super) struct RmcpWithState<T>(T);
@@ -174,7 +159,7 @@ impl RmcpWithState<Inactive> {
             return Err(ActivationError::IpmiNotSupported);
         }
 
-        let new_state = StateV1_5::new(socket);
+        let new_state = V1_5State::new(socket);
 
         let mut ipmi = crate::Ipmi::new(new_state);
 
@@ -205,7 +190,7 @@ impl RmcpWithState<Inactive> {
                 password.unwrap_or(&[]),
             )?;
 
-            todo!()
+            Ok(RmcpWithState(Active::V2_0(res)))
         } else if authentication_caps.ipmi15_connections_supported {
             let activated = ipmi.release().activate(
                 &authentication_caps,

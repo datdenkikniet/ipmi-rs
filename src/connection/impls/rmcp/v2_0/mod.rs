@@ -34,6 +34,7 @@ pub enum ActivationError {
     RakpMessage4Receive(RmcpIpmiReceiveError),
     RakpMessage4Read(UnwrapSessionError),
     RakpMessage4Parse(RakpMessage4ParseError),
+    ServerAuthenticationFailed,
 }
 
 impl From<ParseSessionResponseError> for ActivationError {
@@ -173,44 +174,23 @@ impl Message {
 #[derive(Debug)]
 pub struct State {
     socket: UdpSocket,
-    session_id: Option<NonZeroU32>,
-    session_sequence_number: Option<NonZeroU32>,
+    session_id: NonZeroU32,
+    session_sequence_number: NonZeroU32,
     state: CryptoState,
 }
 
 impl State {
-    pub fn new(socket: UdpSocket) -> Self {
+    pub fn new(
+        socket: UdpSocket,
+        session_id: NonZeroU32,
+        session_sequence_number: NonZeroU32,
+        crypto_state: CryptoState,
+    ) -> Self {
         Self {
             socket,
-            session_id: None,
-            session_sequence_number: None,
-            state: CryptoState::default(),
-        }
-    }
-
-    fn send_v2_message(
-        crypto_state: &mut CryptoState,
-        socket: &mut RmcpIpmiSocket,
-        ty: PayloadType,
-        payload: Vec<u8>,
-    ) -> Result<(), WriteError> {
-        let message = Message {
-            ty,
-            session_id: 0,
-            session_sequence_number: 0,
-            payload,
-        };
-
-        socket.send(|buffer| message.write_data(crypto_state, buffer))
-    }
-
-    fn get_v2_message(data: &[u8]) -> Result<Message, UnwrapSessionError> {
-        match IpmiSessionMessage::from_data(data, None) {
-            Ok(IpmiSessionMessage::V2_0(message)) => Ok(message),
-            Ok(IpmiSessionMessage::V1_5(_)) => {
-                Err(UnwrapSessionError::V2_0(ReadError::NotIpmiV2_0))
-            }
-            Err(e) => Err(e),
+            session_id,
+            session_sequence_number,
+            state: crypto_state,
         }
     }
 
@@ -225,6 +205,32 @@ impl State {
         username: &Username,
         password: &[u8],
     ) -> Result<Self, ActivationError> {
+        fn send(
+            crypto_state: &mut CryptoState,
+            socket: &mut RmcpIpmiSocket,
+            ty: PayloadType,
+            payload: Vec<u8>,
+        ) -> Result<(), WriteError> {
+            let message = Message {
+                ty,
+                session_id: 0,
+                session_sequence_number: 0,
+                payload,
+            };
+
+            socket.send(|buffer| message.write_data(crypto_state, buffer))
+        }
+
+        fn recv(data: &[u8]) -> Result<Message, UnwrapSessionError> {
+            match IpmiSessionMessage::from_data(data, None) {
+                Ok(IpmiSessionMessage::V2_0(message)) => Ok(message),
+                Ok(IpmiSessionMessage::V1_5(_)) => {
+                    Err(UnwrapSessionError::V2_0(ReadError::NotIpmiV2_0))
+                }
+                Err(e) => Err(e),
+            }
+        }
+
         let mut socket = RmcpIpmiSocket::new(state.release_socket());
 
         let open_session_request = OpenSessionRequest {
@@ -242,7 +248,7 @@ impl State {
 
         let mut payload = Vec::new();
         open_session_request.write_data(&mut payload);
-        Self::send_v2_message(
+        send(
             &mut inactive_crypto_state,
             &mut socket,
             PayloadType::RmcpPlusOpenSessionRequest,
@@ -254,8 +260,7 @@ impl State {
             .recv()
             .map_err(ActivationError::OpenSessionResponseReceive)?;
 
-        let response_data =
-            Self::get_v2_message(data).map_err(|e| ActivationError::OpenSessionResponseRead(e))?;
+        let response_data = recv(data).map_err(|e| ActivationError::OpenSessionResponseRead(e))?;
 
         let response = match OpenSessionResponse::from_data(&response_data.payload) {
             Ok(r) => r,
@@ -285,7 +290,7 @@ impl State {
 
         log::debug!("Sending RMCP+ RAKP Message 1.");
 
-        Self::send_v2_message(
+        send(
             &mut inactive_crypto_state,
             &mut socket,
             PayloadType::RakpMessage1,
@@ -297,7 +302,7 @@ impl State {
             .recv()
             .map_err(ActivationError::RakpMessage2Receive)?;
 
-        let v2_message = Self::get_v2_message(data).map_err(ActivationError::RakpMessage2Read)?;
+        let v2_message = recv(data).map_err(ActivationError::RakpMessage2Read)?;
         let rakp_message_2 = RakpMessage2::from_data(&v2_message.payload)
             .map_err(ActivationError::RakpMessage2Parse)?;
 
@@ -345,7 +350,7 @@ impl State {
 
         log::debug!("Sending RAKP message 3.");
 
-        Self::send_v2_message(
+        send(
             &mut inactive_crypto_state,
             &mut socket,
             PayloadType::RakpMessage3,
@@ -353,19 +358,26 @@ impl State {
         )
         .map_err(ActivationError::RakpMessage3Send)?;
 
-        if !rakp_message_3.is_failure() {
-            let data = socket
-                .recv()
-                .map_err(ActivationError::RakpMessage4Receive)?;
-
-            let message = Self::get_v2_message(data).unwrap();
-            let rakp_message_4 = RakpMessage4::from_data(&message.payload)
-                .map_err(ActivationError::RakpMessage4Parse)?;
-
-            println!("{:02X?}", rakp_message_4.integrity_check_value);
-        } else {
+        if rakp_message_3.is_failure() {
+            return Err(ActivationError::ServerAuthenticationFailed)?;
         }
 
-        Ok(State::new(socket.release()))
+        let data = socket
+            .recv()
+            .map_err(ActivationError::RakpMessage4Receive)?;
+
+        let message = recv(data).unwrap();
+        let rakp_message_4 = RakpMessage4::from_data(&message.payload)
+            .map_err(ActivationError::RakpMessage4Parse)?;
+
+        let session_id = rakp_message_2.remote_console_session_id;
+        let session_sequence_number = NonZeroU32::new(1).unwrap();
+
+        Ok(State::new(
+            socket.release(),
+            session_id,
+            session_sequence_number,
+            crypto_state,
+        ))
     }
 }
