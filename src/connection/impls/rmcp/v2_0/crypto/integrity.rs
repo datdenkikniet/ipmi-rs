@@ -9,7 +9,7 @@ pub enum IntegrityAlgorithm {
 
 impl Default for IntegrityAlgorithm {
     fn default() -> Self {
-        Self::HmacSha1_96
+        Self::None
     }
 }
 

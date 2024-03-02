@@ -8,7 +8,8 @@ pub enum ConfidentialityAlgorithm {
 
 impl Default for ConfidentialityAlgorithm {
     fn default() -> Self {
-        Self::AesCbc128
+        // TODO: default to AesCbc128
+        Self::None
     }
 }
 

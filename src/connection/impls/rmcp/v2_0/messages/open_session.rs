@@ -103,9 +103,9 @@ pub struct OpenSessionRequest {
     // that very well.
     //
     // Use options for now.
-    pub authentication_algorithms: Option<AuthenticationAlgorithm>,
-    pub integrity_algorithms: Option<IntegrityAlgorithm>,
-    pub confidentiality_algorithms: Option<ConfidentialityAlgorithm>,
+    pub authentication_algorithms: AuthenticationAlgorithm,
+    pub integrity_algorithms: IntegrityAlgorithm,
+    pub confidentiality_algorithms: ConfidentialityAlgorithm,
 }
 
 impl OpenSessionRequest {
@@ -121,28 +121,9 @@ impl OpenSessionRequest {
 
         buffer.extend_from_slice(&self.remote_console_session_id.to_le_bytes());
 
-        macro_rules! write_algo {
-            ($field:ident, $map:ident) => {
-                if self.$field.is_none() {
-                    log::debug!(
-                        "Using NULL value for {} algorithm payload.",
-                        stringify!($map)
-                    );
-
-                    AlgorithmPayload::$map(Default::default()).write(true, buffer);
-                } else {
-                    self.$field
-                        .iter()
-                        .copied()
-                        .map(AlgorithmPayload::$map)
-                        .for_each(|v| v.write(false, buffer));
-                }
-            };
-        }
-
-        write_algo!(authentication_algorithms, Authentication);
-        write_algo!(integrity_algorithms, Integrity);
-        write_algo!(confidentiality_algorithms, Confidentiality);
+        AlgorithmPayload::Authentication(self.authentication_algorithms).write(false, buffer);
+        AlgorithmPayload::Integrity(self.integrity_algorithms).write(false, buffer);
+        AlgorithmPayload::Confidentiality(self.confidentiality_algorithms).write(false, buffer);
     }
 }
 

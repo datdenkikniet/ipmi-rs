@@ -225,7 +225,7 @@ impl IpmiConnection for RmcpWithState<Active> {
     fn recv(&mut self) -> Result<Response, Self::RecvError> {
         match self.state_mut() {
             Active::V1_5(state) => state.recv(),
-            Active::V2_0(_) => todo!(),
+            Active::V2_0(state) => state.recv(),
         }
     }
 
@@ -235,7 +235,7 @@ impl IpmiConnection for RmcpWithState<Active> {
     ) -> Result<Response, Self::Error> {
         match self.state_mut() {
             Active::V1_5(state) => state.send_recv(request),
-            Active::V2_0(_) => todo!(),
+            Active::V2_0(state) => state.send_recv(request),
         }
     }
 }

@@ -12,7 +12,8 @@ impl Algorithm for AuthenticationAlgorithm {}
 
 impl Default for AuthenticationAlgorithm {
     fn default() -> Self {
-        Self::RakpHmacSha1
+        // TODO: default to RakpHmacSha1
+        Self::RakpNone
     }
 }
 

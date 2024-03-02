@@ -1,6 +1,9 @@
 use std::{net::UdpSocket, num::NonZeroU32, ops::Add};
 
-use crate::{app::auth::PrivilegeLevel, connection::rmcp::socket::RmcpIpmiSocket};
+use crate::{
+    app::auth::PrivilegeLevel,
+    connection::{rmcp::socket::RmcpIpmiSocket, IpmiConnection, Response},
+};
 
 mod crypto;
 pub use crypto::{
@@ -228,12 +231,12 @@ impl State {
             message_tag: 0,
             requested_max_privilege: privilege_level,
             remote_console_session_id: 0x0AA2A3A4,
-            authentication_algorithms: None,
-            confidentiality_algorithms: None,
-            integrity_algorithms: None,
+            authentication_algorithms: AuthenticationAlgorithm::RakpHmacSha1,
+            confidentiality_algorithms: Default::default(),
+            integrity_algorithms: Default::default(),
         };
 
-        log::debug!("Sending RMCP+ Open Session Request.");
+        log::debug!("Sending RMCP+ Open Session Request. {open_session_request:?}");
 
         let mut inactive_crypto_state = CryptoState::default();
 
@@ -361,6 +364,8 @@ impl State {
         let rakp_message_4 = RakpMessage4::from_data(&message.payload)
             .map_err(ActivationError::RakpMessage4Parse)?;
 
+        log::debug!("Received RAKP Message 4: {rakp_message_4:?}");
+
         let session_id = rakp_message_2.remote_console_session_id;
         let session_sequence_number = NonZeroU32::new(1).unwrap();
 
@@ -391,10 +396,12 @@ impl State {
             .write_payload(&payload_data, &mut payload)
             .map_err(|e| RmcpIpmiError::Send(super::RmcpIpmiSendError::V2_0(e)))?;
 
+        println!("{:?}", self.state);
+
         let message = Message {
             ty: PayloadType::IpmiMessage,
             session_id: self.session_id.get(),
-            session_sequence_number: self.session_sequence_number.get(),
+            session_sequence_number,
             payload,
         };
 
@@ -403,5 +410,57 @@ impl State {
             .unwrap();
 
         Ok(())
+    }
+
+    // TODO: validate session sequence number
+    // TODO: Validate session sequence ID
+    pub fn recv(&mut self) -> Result<crate::connection::Response, RmcpIpmiReceiveError> {
+        let data = self.socket.recv()?;
+
+        // TODO: use crypto state, please :)
+        let encapsulated_message =
+            IpmiSessionMessage::from_data(data, None).map_err(RmcpIpmiReceiveError::Session)?;
+
+        let data = match encapsulated_message {
+            IpmiSessionMessage::V2_0(Message { payload, .. }) => payload,
+            IpmiSessionMessage::V1_5 { .. } => {
+                panic!("Received IPMI V1.5 message in V1.5 session.")
+            }
+        };
+
+        if data.len() < 7 {
+            return Err(RmcpIpmiReceiveError::NotEnoughData);
+        }
+
+        let _req_addr = data[0];
+        let netfn = data[1] >> 2;
+        let _checksum1 = data[2];
+        let _rs_addr = data[3];
+        let _rqseq = data[4];
+        let cmd = data[5];
+        let response_data: Vec<_> = data[6..data.len()].to_vec();
+        let _checksum2 = data[data.len()];
+
+        // TODO: validate sequence, checksums, etc.
+
+        let response = if let Some(resp) = Response::new(
+            crate::connection::Message::new_raw(netfn, cmd, response_data),
+            0,
+        ) {
+            resp
+        } else {
+            // TODO: need better message here :)
+            return Err(RmcpIpmiReceiveError::EmptyMessage);
+        };
+
+        Ok(response)
+    }
+
+    pub fn send_recv(
+        &mut self,
+        request: &mut crate::connection::Request,
+    ) -> Result<crate::connection::Response, RmcpIpmiError> {
+        self.send(request)?;
+        self.recv().map_err(Into::into)
     }
 }
