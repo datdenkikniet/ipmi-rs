@@ -16,6 +16,8 @@ pub use v2_0::{
     WriteError as V2_0WriteError, *,
 };
 
+mod checksum;
+
 mod header;
 pub(crate) use header::*;
 

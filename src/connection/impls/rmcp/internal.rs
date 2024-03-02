@@ -16,8 +16,8 @@ use crate::{
 };
 
 use super::{
-    v1_5::State as V1_5State, v2_0::State as V2_0State, ActivationError, RmcpIpmiError,
-    RmcpIpmiReceiveError,
+    checksum::Checksum, v1_5::State as V1_5State, v2_0::State as V2_0State, ActivationError,
+    RmcpIpmiError, RmcpIpmiReceiveError,
 };
 
 #[derive(Debug, Clone)]
@@ -216,7 +216,7 @@ impl IpmiConnection for RmcpWithState<Active> {
     fn send(&mut self, request: &mut crate::connection::Request) -> Result<(), Self::SendError> {
         match self.state_mut() {
             Active::V1_5(state) => state.send(request)?,
-            Active::V2_0(_) => todo!(),
+            Active::V2_0(state) => state.send(request)?,
         }
 
         Ok(())
@@ -238,4 +238,62 @@ impl IpmiConnection for RmcpWithState<Active> {
             Active::V2_0(_) => todo!(),
         }
     }
+}
+
+// TODO: `ExactSizeIterator` to avoid/postpone allocation?
+pub fn next_ipmb_message(
+    request: &crate::connection::Request,
+    ipmb_state: &mut IpmbState,
+) -> Vec<u8> {
+    let IpmbState {
+        ipmb_sequence,
+        responder_addr: rs_addr,
+        requestor_addr,
+        requestor_lun,
+    } = ipmb_state;
+
+    let data = request.data();
+
+    let mut all_data = Vec::with_capacity(7 + data.len());
+
+    let netfn_rslun: u8 = (request.netfn().request_value() << 2) | request.target().lun().value();
+    let first_part = [*rs_addr, netfn_rslun];
+
+    all_data.extend(first_part.into_iter());
+    all_data.push(Checksum::from_iter(first_part.into_iter()));
+
+    let req_addr = *requestor_addr;
+
+    let ipmb_sequence_val = *ipmb_sequence;
+    *ipmb_sequence = ipmb_sequence.wrapping_add(1);
+
+    let reqseq_lun = (ipmb_sequence_val << 2) | requestor_lun.value();
+    let cmd = request.cmd();
+
+    let second_start = [req_addr, reqseq_lun, cmd];
+    let second_end = request.data().iter().copied();
+    let second_part_chk = Checksum::from_iter(second_start.into_iter().chain(second_end.clone()));
+
+    all_data.extend(second_start.into_iter());
+    all_data.extend(second_end);
+    all_data.push(second_part_chk);
+
+    all_data
+}
+
+#[test]
+fn ipmb_message_test() {
+    use crate::connection::Message;
+
+    let data = next_ipmb_message(
+        &crate::connection::Request::new(
+            Message::new_raw(0x0D, 0x0B, vec![0x01, 0x02, 0x03]),
+            crate::connection::RequestTargetAddress::Bmc(crate::connection::LogicalUnit::One),
+        ),
+        &mut IpmbState::default(),
+    );
+
+    let expected = vec![0x20, 0x31, 0xAF, 0x81, 0x00, 0x0B, 0x01, 0x02, 0x03, 0x6E];
+
+    assert_eq!(expected, data);
 }

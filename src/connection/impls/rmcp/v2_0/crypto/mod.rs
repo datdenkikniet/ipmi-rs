@@ -154,7 +154,7 @@ impl CryptoState {
         let data = &data[2..];
 
         if data_len as usize == data.len() {
-            return Ok(data.to_vec());
+            Ok(data.to_vec())
         } else {
             Err(CryptoUnwrapError::IncorrectPayloadLen)
         }
@@ -173,7 +173,7 @@ impl CryptoState {
         buffer.extend_from_slice(&(data_len as u16).to_le_bytes());
 
         // Data
-        buffer.extend_from_slice(data);
+        buffer.extend(data);
 
         // Confidentiality trailer
 

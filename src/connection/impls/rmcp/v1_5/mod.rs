@@ -17,7 +17,6 @@ use super::{
 pub use message::Message;
 
 mod auth;
-mod checksum;
 mod md2;
 mod message;
 
@@ -59,7 +58,7 @@ pub enum ReadError {
 #[derive(Debug)]
 pub struct State {
     socket: RmcpIpmiSocket,
-    ipbm_state: IpmbState,
+    ipmb_state: IpmbState,
     session_id: Option<NonZeroU32>,
     auth_type: crate::app::auth::AuthType,
     password: Option<[u8; 16]>,
@@ -70,7 +69,7 @@ impl State {
     pub fn new(socket: UdpSocket) -> Self {
         Self {
             socket: RmcpIpmiSocket::new(socket),
-            ipbm_state: Default::default(),
+            ipmb_state: Default::default(),
             auth_type: AuthType::None,
             password: None,
             session_id: None,
@@ -162,33 +161,6 @@ impl IpmiConnection for State {
     fn send(&mut self, request: &mut Request) -> Result<(), RmcpIpmiSendError> {
         log::trace!("Sending message with auth type {:?}", self.auth_type);
 
-        let IpmbState {
-            ipmb_sequence,
-            responder_addr: rs_addr,
-            requestor_addr,
-            requestor_lun,
-        } = &mut self.ipbm_state;
-
-        let netfn_rslun: u8 =
-            (request.netfn().request_value() << 2) | request.target().lun().value();
-
-        let first_part = checksum::checksum([*rs_addr, netfn_rslun]);
-
-        let req_addr = *requestor_addr;
-
-        let ipmb_sequence_val = *ipmb_sequence;
-        *ipmb_sequence = ipmb_sequence.wrapping_add(1);
-
-        let reqseq_lun = (ipmb_sequence_val << 2) | requestor_lun.value();
-        let cmd = request.cmd();
-        let second_part = checksum::checksum(
-            [req_addr, reqseq_lun, cmd]
-                .into_iter()
-                .chain(request.data().iter().copied()),
-        );
-
-        let final_data: Vec<_> = first_part.chain(second_part).collect();
-
         let request_sequence = &mut self.session_sequence;
 
         // Only increment the request sequence once a session has been established
@@ -196,6 +168,8 @@ impl IpmiConnection for State {
         if self.session_id.is_some() {
             *request_sequence = request_sequence.wrapping_add(1);
         }
+
+        let final_data = super::internal::next_ipmb_message(request, &mut self.ipmb_state);
 
         let message = IpmiSessionMessage::V1_5(Message {
             auth_type: self.auth_type,

@@ -1,4 +1,4 @@
-use std::{net::UdpSocket, num::NonZeroU32};
+use std::{net::UdpSocket, num::NonZeroU32, ops::Add};
 
 use crate::{app::auth::PrivilegeLevel, connection::rmcp::socket::RmcpIpmiSocket};
 
@@ -16,7 +16,10 @@ pub use messages::{
 
 use self::crypto::CryptoUnwrapError;
 
-use super::{v1_5, IpmiSessionMessage, RmcpIpmiReceiveError, UnwrapSessionError};
+use super::{
+    internal::IpmbState, v1_5, IpmiSessionMessage, RmcpIpmiError, RmcpIpmiReceiveError,
+    UnwrapSessionError,
+};
 
 #[derive(Debug)]
 pub enum ActivationError {
@@ -177,27 +180,15 @@ pub struct State {
     session_id: NonZeroU32,
     session_sequence_number: NonZeroU32,
     state: CryptoState,
+    ipmb_state: IpmbState,
 }
 
 impl State {
-    pub fn new(
-        socket: UdpSocket,
-        session_id: NonZeroU32,
-        session_sequence_number: NonZeroU32,
-        crypto_state: CryptoState,
-    ) -> Self {
-        Self {
-            socket,
-            session_id,
-            session_sequence_number,
-            state: crypto_state,
-        }
-    }
-
     // TODO: validate message tags
     // TODO: validate sequence numbers
     // TODO: validate remote console session ID
     // TODO: validate managed system session ID
+    // TODO: validate RAKP message 4
     // TODO: assert that rng is always CryptoRng
     pub fn activate(
         state: v1_5::State,
@@ -373,11 +364,40 @@ impl State {
         let session_id = rakp_message_2.remote_console_session_id;
         let session_sequence_number = NonZeroU32::new(1).unwrap();
 
-        Ok(State::new(
-            socket.release(),
+        Ok(Self {
+            socket: socket.release(),
             session_id,
             session_sequence_number,
-            crypto_state,
-        ))
+            state: crypto_state,
+            ipmb_state: IpmbState::default(),
+        })
+    }
+
+    pub fn send(&mut self, request: &mut crate::connection::Request) -> Result<(), RmcpIpmiError> {
+        let session_sequence_number = self.session_sequence_number.get();
+
+        if session_sequence_number == u32::MAX {
+            todo!("Handle wrapping session number by re-activating?");
+        }
+
+        self.session_sequence_number =
+            NonZeroU32::new(self.session_sequence_number.get().add(1)).unwrap();
+
+        let payload_data = super::internal::next_ipmb_message(request, &mut self.ipmb_state);
+
+        let mut payload = Vec::new();
+
+        self.state
+            .write_payload(&payload_data, &mut payload)
+            .map_err(|e| RmcpIpmiError::Send(super::RmcpIpmiSendError::V2_0(e)))?;
+
+        let message = IpmiSessionMessage::V2_0(Message {
+            ty: PayloadType::IpmiMessage,
+            session_id: self.session_id.get(),
+            session_sequence_number: self.session_sequence_number.get(),
+            payload,
+        });
+
+        Ok(())
     }
 }
