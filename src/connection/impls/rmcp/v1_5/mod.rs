@@ -171,15 +171,15 @@ impl IpmiConnection for State {
 
         let final_data = super::internal::next_ipmb_message(request, &mut self.ipmb_state);
 
-        let message = IpmiSessionMessage::V1_5(Message {
+        let message = Message {
             auth_type: self.auth_type,
             session_sequence_number: self.session_sequence,
             session_id: self.session_id.map(|v| v.get()).unwrap_or(0),
             payload: final_data,
-        });
+        };
 
         enum Send {
-            Ipmi(RmcpIpmiSendError),
+            Ipmi(WriteError),
             Io(std::io::Error),
         }
 
@@ -195,7 +195,7 @@ impl IpmiConnection for State {
                 .map_err(Send::Ipmi)
         }) {
             Ok(_) => Ok(()),
-            Err(Send::Ipmi(ipmi)) => Err(ipmi),
+            Err(Send::Ipmi(ipmi)) => Err(RmcpIpmiSendError::V1_5(ipmi)),
             Err(Send::Io(io)) => Err(RmcpIpmiSendError::V1_5(WriteError::Io(io))),
         }
     }

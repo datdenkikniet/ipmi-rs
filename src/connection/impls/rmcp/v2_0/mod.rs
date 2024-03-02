@@ -176,7 +176,7 @@ impl Message {
 
 #[derive(Debug)]
 pub struct State {
-    socket: UdpSocket,
+    socket: RmcpIpmiSocket,
     session_id: NonZeroU32,
     session_sequence_number: NonZeroU32,
     state: CryptoState,
@@ -365,7 +365,7 @@ impl State {
         let session_sequence_number = NonZeroU32::new(1).unwrap();
 
         Ok(Self {
-            socket: socket.release(),
+            socket,
             session_id,
             session_sequence_number,
             state: crypto_state,
@@ -391,12 +391,16 @@ impl State {
             .write_payload(&payload_data, &mut payload)
             .map_err(|e| RmcpIpmiError::Send(super::RmcpIpmiSendError::V2_0(e)))?;
 
-        let message = IpmiSessionMessage::V2_0(Message {
+        let message = Message {
             ty: PayloadType::IpmiMessage,
             session_id: self.session_id.get(),
             session_sequence_number: self.session_sequence_number.get(),
             payload,
-        });
+        };
+
+        self.socket
+            .send(|buffer| message.write_data(&mut self.state, buffer))
+            .unwrap();
 
         Ok(())
     }
