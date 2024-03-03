@@ -1,20 +1,9 @@
-use super::Algorithm;
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum AuthenticationAlgorithm {
     RakpNone,
     RakpHmacSha1,
     RakpHmacMd5,
     RakpHmacSha256,
-}
-
-impl Algorithm for AuthenticationAlgorithm {}
-
-impl Default for AuthenticationAlgorithm {
-    fn default() -> Self {
-        // TODO: default to RakpHmacSha1
-        Self::RakpNone
-    }
 }
 
 impl From<AuthenticationAlgorithm> for u8 {

@@ -1,13 +1,18 @@
-use std::{net::UdpSocket, num::NonZeroU32, ops::Add};
+use std::{num::NonZeroU32, ops::Add};
 
 use crate::{
     app::auth::PrivilegeLevel,
-    connection::{rmcp::socket::RmcpIpmiSocket, IpmiConnection, Response},
+    connection::{rmcp::socket::RmcpIpmiSocket, Response},
 };
+
+use hmac::{digest::FixedOutput, Hmac, Mac};
+use sha1::Sha1;
+
+pub type HmacSha1 = Hmac<Sha1>;
 
 mod crypto;
 pub use crypto::{
-    Algorithm, AuthenticationAlgorithm, ConfidentialityAlgorithm, CryptoState, IntegrityAlgorithm,
+    AuthenticationAlgorithm, ConfidentialityAlgorithm, CryptoState, IntegrityAlgorithm,
 };
 
 mod messages;
@@ -19,10 +24,7 @@ pub use messages::{
 
 use self::crypto::CryptoUnwrapError;
 
-use super::{
-    internal::IpmbState, v1_5, IpmiSessionMessage, RmcpIpmiError, RmcpIpmiReceiveError,
-    UnwrapSessionError,
-};
+use super::{internal::IpmbState, v1_5, RmcpIpmiError, RmcpIpmiReceiveError, UnwrapSessionError};
 
 #[derive(Debug)]
 pub enum ActivationError {
@@ -40,6 +42,7 @@ pub enum ActivationError {
     RakpMessage4Receive(RmcpIpmiReceiveError),
     RakpMessage4Read(UnwrapSessionError),
     RakpMessage4Parse(RakpMessage4ParseError),
+    RakpMessage4InvalidIntegrityCheckValue,
     ServerAuthenticationFailed,
 }
 
@@ -70,6 +73,12 @@ pub enum ReadError {
     DecryptionError(CryptoUnwrapError),
 }
 
+impl From<CryptoUnwrapError> for ReadError {
+    fn from(value: CryptoUnwrapError) -> Self {
+        Self::DecryptionError(value)
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum PayloadType {
     IpmiMessage,
@@ -80,6 +89,14 @@ pub enum PayloadType {
     RakpMessage2,
     RakpMessage3,
     RakpMessage4,
+}
+
+#[derive(Debug, Clone)]
+pub struct Message {
+    pub ty: PayloadType,
+    pub session_id: u32,
+    pub session_sequence_number: u32,
+    pub payload: Vec<u8>,
 }
 
 impl TryFrom<u8> for PayloadType {
@@ -114,66 +131,6 @@ impl From<PayloadType> for u8 {
             PayloadType::RakpMessage3 => 0x14,
             PayloadType::RakpMessage4 => 0x15,
         }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct Message {
-    ty: PayloadType,
-    session_id: u32,
-    session_sequence_number: u32,
-    payload: Vec<u8>,
-}
-
-impl Message {
-    pub fn write_data(
-        &self,
-        state: &mut CryptoState,
-        buffer: &mut Vec<u8>,
-    ) -> Result<(), WriteError> {
-        buffer.push(0x06);
-
-        let encrypted = (state.encrypted() as u8) << 7;
-        let authenticated = (state.authenticated() as u8) << 6;
-        buffer.push(encrypted | authenticated | u8::from(self.ty));
-
-        // TODO: support OEM IANA and OEM payload ID? Ignore for now: unsupported payload type
-
-        buffer.extend_from_slice(&self.session_id.to_le_bytes());
-        buffer.extend_from_slice(&self.session_sequence_number.to_le_bytes());
-
-        state.write_payload(&self.payload, buffer)?;
-
-        Ok(())
-    }
-
-    pub fn from_data(state: &mut CryptoState, data: &[u8]) -> Result<Self, ReadError> {
-        if data.len() < 10 {
-            return Err(ReadError::NotEnoughData);
-        }
-
-        if data[0] != 0x06 {
-            return Err(ReadError::NotIpmiV2_0);
-        }
-
-        let encrypted = (data[1] & 0x80) == 0x80;
-        let authenticated = (data[1] & 0x40) == 0x40;
-        let ty = PayloadType::try_from(data[1] & 0x3F)
-            .map_err(|_| ReadError::InvalidPayloadType(data[1] & 0x3F))?;
-
-        let session_id = u32::from_le_bytes(data[2..6].try_into().unwrap());
-        let session_sequence_number = u32::from_le_bytes(data[6..10].try_into().unwrap());
-
-        let payload = state
-            .read_payload(encrypted, authenticated, &data[10..])
-            .map_err(ReadError::DecryptionError)?;
-
-        Ok(Self {
-            ty,
-            session_id,
-            session_sequence_number,
-            payload,
-        })
     }
 }
 
@@ -212,17 +169,13 @@ impl State {
                 payload,
             };
 
-            socket.send(|buffer| message.write_data(crypto_state, buffer))
+            socket.send(|buffer| crypto_state.write_message(&message, buffer))
         }
 
         fn recv(data: &[u8]) -> Result<Message, UnwrapSessionError> {
-            match IpmiSessionMessage::from_data(data, None) {
-                Ok(IpmiSessionMessage::V2_0(message)) => Ok(message),
-                Ok(IpmiSessionMessage::V1_5(_)) => {
-                    Err(UnwrapSessionError::V2_0(ReadError::NotIpmiV2_0))
-                }
-                Err(e) => Err(e),
-            }
+            CryptoState::default()
+                .read_payload(data)
+                .map_err(UnwrapSessionError::V2_0)
         }
 
         let mut socket = RmcpIpmiSocket::new(state.release_socket());
@@ -232,8 +185,8 @@ impl State {
             requested_max_privilege: privilege_level,
             remote_console_session_id: 0x0AA2A3A4,
             authentication_algorithms: AuthenticationAlgorithm::RakpHmacSha1,
-            confidentiality_algorithms: Default::default(),
-            integrity_algorithms: Default::default(),
+            confidentiality_algorithms: ConfidentialityAlgorithm::None,
+            integrity_algorithms: IntegrityAlgorithm::None,
         };
 
         log::debug!("Sending RMCP+ Open Session Request. {open_session_request:?}");
@@ -364,9 +317,23 @@ impl State {
         let rakp_message_4 = RakpMessage4::from_data(&message.payload)
             .map_err(ActivationError::RakpMessage4Parse)?;
 
-        log::debug!("Received RAKP Message 4: {rakp_message_4:?}");
+        log::debug!("Received RAKP Message 4: {rakp_message_4:02X?}");
 
-        let session_id = rakp_message_2.remote_console_session_id;
+        let mut hmac = HmacSha1::new_from_slice(crypto_state.sik())
+            .expect("SHA1 HMAC initialization from bytes is infallible");
+
+        hmac.update(&rakp_message_1.remote_console_random_number);
+        hmac.update(&rakp_message_3.managed_system_session_id.get().to_le_bytes());
+        hmac.update(&rakp_message_2.managed_system_guid);
+
+        let integrity = &<[u8; 20]>::try_from(hmac.finalize_fixed()).unwrap()[..12];
+
+        if integrity != rakp_message_4.integrity_check_value {
+            log::error!("Received incorrect/invalid integrity check value in RAKP Message 4.");
+            return Err(ActivationError::RakpMessage4InvalidIntegrityCheckValue);
+        }
+
+        let session_id = rakp_message_3.managed_system_session_id;
         let session_sequence_number = NonZeroU32::new(1).unwrap();
 
         Ok(Self {
@@ -388,15 +355,7 @@ impl State {
         self.session_sequence_number =
             NonZeroU32::new(self.session_sequence_number.get().add(1)).unwrap();
 
-        let payload_data = super::internal::next_ipmb_message(request, &mut self.ipmb_state);
-
-        let mut payload = Vec::new();
-
-        self.state
-            .write_payload(&payload_data, &mut payload)
-            .map_err(|e| RmcpIpmiError::Send(super::RmcpIpmiSendError::V2_0(e)))?;
-
-        println!("{:?}", self.state);
+        let payload = super::internal::next_ipmb_message(request, &mut self.ipmb_state);
 
         let message = Message {
             ty: PayloadType::IpmiMessage,
@@ -406,7 +365,7 @@ impl State {
         };
 
         self.socket
-            .send(|buffer| message.write_data(&mut self.state, buffer))
+            .send(|buffer| self.state.write_message(&message, buffer))
             .unwrap();
 
         Ok(())
@@ -417,16 +376,11 @@ impl State {
     pub fn recv(&mut self) -> Result<crate::connection::Response, RmcpIpmiReceiveError> {
         let data = self.socket.recv()?;
 
-        // TODO: use crypto state, please :)
-        let encapsulated_message =
-            IpmiSessionMessage::from_data(data, None).map_err(RmcpIpmiReceiveError::Session)?;
-
-        let data = match encapsulated_message {
-            IpmiSessionMessage::V2_0(Message { payload, .. }) => payload,
-            IpmiSessionMessage::V1_5 { .. } => {
-                panic!("Received IPMI V1.5 message in V1.5 session.")
-            }
-        };
+        let data = self
+            .state
+            .read_payload(data)
+            .map_err(|e| RmcpIpmiReceiveError::Session(UnwrapSessionError::V2_0(e)))?
+            .payload;
 
         if data.len() < 7 {
             return Err(RmcpIpmiReceiveError::NotEnoughData);
@@ -439,7 +393,7 @@ impl State {
         let _rqseq = data[4];
         let cmd = data[5];
         let response_data: Vec<_> = data[6..data.len()].to_vec();
-        let _checksum2 = data[data.len()];
+        let _checksum2 = data[data.len() - 1];
 
         // TODO: validate sequence, checksums, etc.
 

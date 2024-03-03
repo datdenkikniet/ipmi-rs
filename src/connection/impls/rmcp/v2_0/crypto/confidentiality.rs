@@ -6,13 +6,6 @@ pub enum ConfidentialityAlgorithm {
     Xrc4_40,
 }
 
-impl Default for ConfidentialityAlgorithm {
-    fn default() -> Self {
-        // TODO: default to AesCbc128
-        Self::None
-    }
-}
-
 impl TryFrom<u8> for ConfidentialityAlgorithm {
     type Error = ();
 

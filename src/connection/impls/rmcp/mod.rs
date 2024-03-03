@@ -11,9 +11,8 @@ pub use v1_5::{
 
 mod v2_0;
 pub use v2_0::{
-    ActivationError as V2_0ActivationError, Algorithm, AuthenticationAlgorithm,
-    ConfidentialityAlgorithm, IntegrityAlgorithm, ReadError as V2_0ReadError,
-    WriteError as V2_0WriteError, *,
+    ActivationError as V2_0ActivationError, AuthenticationAlgorithm, ConfidentialityAlgorithm,
+    IntegrityAlgorithm, ReadError as V2_0ReadError, WriteError as V2_0WriteError, *,
 };
 
 mod checksum;
@@ -26,9 +25,6 @@ pub(crate) use asf::*;
 
 mod internal;
 use internal::{Active, RmcpWithState, Unbound};
-
-mod session;
-pub(crate) use session::IpmiSessionMessage;
 
 #[derive(Debug)]
 pub enum RmcpIpmiReceiveError {

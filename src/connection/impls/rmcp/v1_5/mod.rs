@@ -5,7 +5,7 @@ use crate::{
         ActivateSession, AuthError, AuthType, ChannelAuthenticationCapabilities,
         GetSessionChallenge, PrivilegeLevel,
     },
-    connection::{rmcp::IpmiSessionMessage, IpmiConnection, ParseResponseError, Request, Response},
+    connection::{IpmiConnection, ParseResponseError, Request, Response},
     Ipmi, IpmiError,
 };
 
@@ -203,15 +203,9 @@ impl IpmiConnection for State {
     fn recv(&mut self) -> Result<Response, RmcpIpmiReceiveError> {
         let data = self.socket.recv()?;
 
-        let encapsulated_message = IpmiSessionMessage::from_data(data, self.password.as_ref())
-            .map_err(RmcpIpmiReceiveError::Session)?;
-
-        let data = match encapsulated_message {
-            IpmiSessionMessage::V1_5(Message { payload, .. }) => payload,
-            IpmiSessionMessage::V2_0 { .. } => {
-                panic!("Received IPMI V2.0 message in V1.5 session.")
-            }
-        };
+        let data = Message::from_data(self.password.as_ref(), data)
+            .map_err(|e| RmcpIpmiReceiveError::Session(super::UnwrapSessionError::V1_5(e)))?
+            .payload;
 
         if data.len() < 7 {
             return Err(RmcpIpmiReceiveError::NotEnoughData);
@@ -228,17 +222,15 @@ impl IpmiConnection for State {
 
         // TODO: validate sequence, checksums, etc.
 
-        let response = if let Some(resp) = Response::new(
+        if let Some(resp) = Response::new(
             crate::connection::Message::new_raw(netfn, cmd, response_data),
             0,
         ) {
-            resp
+            Ok(resp)
         } else {
             // TODO: need better message here :)
-            return Err(RmcpIpmiReceiveError::EmptyMessage);
-        };
-
-        Ok(response)
+            Err(RmcpIpmiReceiveError::EmptyMessage)
+        }
     }
 
     fn send_recv(&mut self, request: &mut Request) -> Result<Response, Self::Error> {
