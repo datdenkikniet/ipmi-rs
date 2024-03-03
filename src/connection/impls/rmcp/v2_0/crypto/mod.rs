@@ -250,18 +250,10 @@ impl CryptoState {
             return Err(WriteError::PayloadTooLong);
         }
 
-        let extra_len = match self.integrity_algorithm {
-            IntegrityAlgorithm::None => 0,
-            IntegrityAlgorithm::HmacSha1_96 => 12,
-            IntegrityAlgorithm::HmacMd5_128 => todo!(),
-            IntegrityAlgorithm::Md5_128 => todo!(),
-            IntegrityAlgorithm::HmacSha256_128 => todo!(),
-        };
-
         // Confidentiality header
 
         // Length
-        buffer.extend_from_slice(&(data_len as u16 + extra_len).to_le_bytes());
+        buffer.extend_from_slice(&(data_len as u16).to_le_bytes());
 
         // Data
         buffer.extend(data);
@@ -279,21 +271,22 @@ impl CryptoState {
 
             // Next header
             buffer.push(0x07);
+
+            // AuthCode
+            let auth_code_data = &buffer[4..];
+
+            match self.integrity_algorithm {
+                IntegrityAlgorithm::None => {}
+                IntegrityAlgorithm::HmacSha1_96 => {
+                    let integrity_data = hmac_sha1(&self.keys.as_ref().unwrap().k1, auth_code_data);
+
+                    buffer.extend_from_slice(&integrity_data[..12]);
+                }
+                IntegrityAlgorithm::HmacMd5_128 => todo!(),
+                IntegrityAlgorithm::Md5_128 => todo!(),
+                IntegrityAlgorithm::HmacSha256_128 => todo!(),
+            };
         }
-
-        // AuthCode
-        let auth_code_data = &buffer[4..];
-
-        match self.integrity_algorithm {
-            IntegrityAlgorithm::None => {}
-            IntegrityAlgorithm::HmacSha1_96 => {
-                let integrity_data = hmac_sha1(&self.keys.as_ref().unwrap().k1, auth_code_data);
-                buffer.extend_from_slice(&integrity_data[..12]);
-            }
-            IntegrityAlgorithm::HmacMd5_128 => todo!(),
-            IntegrityAlgorithm::Md5_128 => todo!(),
-            IntegrityAlgorithm::HmacSha256_128 => todo!(),
-        };
 
         Ok(())
     }
