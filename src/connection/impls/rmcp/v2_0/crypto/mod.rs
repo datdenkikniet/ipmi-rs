@@ -206,6 +206,13 @@ impl CryptoState {
         let data = &data[2..];
 
         if data_len as usize == data.len() {
+            // Strip off PAD byte when the message is not out-of-session
+            let data = if session_id != 0 && session_sequence_number != 0 {
+                &data[..data.len() - 1]
+            } else {
+                data
+            };
+
             Ok(Message {
                 ty,
                 session_id,
