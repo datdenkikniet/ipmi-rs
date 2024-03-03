@@ -268,15 +268,18 @@ impl CryptoState {
 
         // Confidentiality trailer
 
-        // Integrity PAD
-        let pad_length = 4 - ((buffer.len() - 4) % 4);
-        buffer.extend(std::iter::repeat(0xFF).take(pad_length));
+        // IPMI Session Trailer is only present if packets are authenticated.
+        if self.authenticated() {
+            // Integrity PAD
+            let pad_length = 4 - (buffer.len() % 4);
+            buffer.extend(std::iter::repeat(0xFF).take(pad_length));
 
-        // Pad length
-        buffer.push(pad_length as u8);
+            // Pad length
+            buffer.push(pad_length as u8);
 
-        // Next header
-        buffer.push(0x07);
+            // Next header
+            buffer.push(0x07);
+        }
 
         // AuthCode
         let auth_code_data = &buffer[4..];
