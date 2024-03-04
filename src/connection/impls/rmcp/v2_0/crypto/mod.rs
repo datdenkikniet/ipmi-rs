@@ -200,6 +200,18 @@ impl CryptoState {
         let data_len = u16::from_le_bytes(data[..2].try_into().unwrap());
         let data = &data[2..];
 
+        let data = match self.integrity_algorithm {
+            IntegrityAlgorithm::None => data,
+            IntegrityAlgorithm::HmacSha1_96 => {
+                // TODO: validate
+                let pad_len = data[data.len() - 12 - 2];
+                &data[..data.len() - 12 - 2 - pad_len as usize]
+            }
+            IntegrityAlgorithm::HmacMd5_128 => todo!(),
+            IntegrityAlgorithm::Md5_128 => todo!(),
+            IntegrityAlgorithm::HmacSha256_128 => todo!(),
+        };
+
         if data_len as usize == data.len() {
             // Strip off PAD byte when the message is not out-of-session
             let data = if session_id != 0 && session_sequence_number != 0 {
