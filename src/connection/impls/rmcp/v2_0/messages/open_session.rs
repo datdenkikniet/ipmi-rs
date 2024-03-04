@@ -114,8 +114,6 @@ impl OpenSessionRequest {
         buffer.push(self.requested_max_privilege.map(Into::into).unwrap_or(0));
 
         // Two reserved bytes
-        // These two bytes cause no response to be sent.
-        // Not sending them causes an error response: figure out why!
         buffer.push(0);
         buffer.push(0);
 
@@ -131,6 +129,7 @@ impl OpenSessionRequest {
 pub enum ParseSessionResponseError {
     NotEnoughData,
     HaveErrorCode(Result<OpenSessionResponseErrorStatusCode, u8>),
+    ZeroRemoteConsoleSessionId,
     ZeroManagedSystemSessionId,
     InvalidPrivilegeLevel(u8),
     InvalidAlgorithmPayload,
@@ -140,11 +139,11 @@ pub enum ParseSessionResponseError {
     AlgorithmPayloadError(AlgorithmPayloadError),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct OpenSessionResponse {
     pub message_tag: u8,
     pub maximum_privilege_level: PrivilegeLevel,
-    pub remote_console_session_id: u32,
+    pub remote_console_session_id: NonZeroU32,
     pub managed_system_session_id: NonZeroU32,
     pub authentication_payload: AuthenticationAlgorithm,
     pub integrity_payload: IntegrityAlgorithm,
@@ -176,6 +175,8 @@ impl OpenSessionResponse {
             PrivilegeLevel::try_from(data[2]).map_err(|_| InvalidPrivilegeLevel(data[2]))?;
 
         let remote_console_session_id = u32::from_le_bytes(data[4..8].try_into().unwrap());
+        let remote_console_session_id =
+            NonZeroU32::new(remote_console_session_id).ok_or(ZeroRemoteConsoleSessionId)?;
         let managed_system_session_id = u32::from_le_bytes(data[8..12].try_into().unwrap());
         let managed_system_session_id =
             NonZeroU32::new(managed_system_session_id).ok_or(ZeroManagedSystemSessionId)?;
@@ -248,4 +249,27 @@ impl TryFrom<u8> for OpenSessionResponseErrorStatusCode {
 
         Ok(value)
     }
+}
+
+#[test]
+pub fn from_data() {
+    let data = [
+        0x00, 0x00, 0x04, 0x00, 0xa4, 0xa3, 0xa2, 0x0a, 0xe0, 0x34, 0x71, 0x4a, 0x00, 0x00, 0x00,
+        0x08, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x08, 0x01, 0x00, 0x00, 0x00, 0x02, 0x00,
+        0x00, 0x08, 0x00, 0x00, 0x00, 0x00,
+    ];
+
+    let message = OpenSessionResponse::from_data(&data).unwrap();
+
+    let expected = OpenSessionResponse {
+        message_tag: 0x00,
+        maximum_privilege_level: PrivilegeLevel::Administrator,
+        remote_console_session_id: NonZeroU32::new(0x0aa2a3a4).unwrap(),
+        managed_system_session_id: NonZeroU32::new(0x4a7134e0).unwrap(),
+        authentication_payload: AuthenticationAlgorithm::RakpHmacSha1,
+        integrity_payload: IntegrityAlgorithm::HmacSha1_96,
+        confidentiality_payload: ConfidentialityAlgorithm::None,
+    };
+
+    assert_eq!(message, expected);
 }
