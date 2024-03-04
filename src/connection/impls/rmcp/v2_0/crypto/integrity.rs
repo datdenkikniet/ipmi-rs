@@ -1,7 +1,3 @@
-use hmac::{digest::FixedOutput, Mac};
-
-use crate::connection::rmcp::HmacSha1;
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum IntegrityAlgorithm {
     None,
@@ -38,13 +34,4 @@ impl From<IntegrityAlgorithm> for u8 {
             IntegrityAlgorithm::HmacSha256_128 => 0x04,
         }
     }
-}
-
-pub fn hmac_sha1(key: &[u8], data: &[u8]) -> [u8; 20] {
-    let mut hmac =
-        HmacSha1::new_from_slice(&key).expect("SHA1 HMAC initialization from bytes is infallible");
-
-    hmac.update(data);
-
-    hmac.finalize_fixed().try_into().unwrap()
 }

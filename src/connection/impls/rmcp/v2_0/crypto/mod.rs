@@ -5,7 +5,11 @@ mod confidentiality;
 pub use confidentiality::ConfidentialityAlgorithm;
 
 mod integrity;
-pub use integrity::{hmac_sha1, IntegrityAlgorithm};
+pub use integrity::IntegrityAlgorithm;
+
+mod sha1;
+
+use self::sha1::RunningHmac;
 
 use super::{
     messages::OpenSessionResponse, Message, PayloadType, RakpMessage1, RakpMessage2, ReadError,
@@ -38,9 +42,9 @@ impl Keys {
     pub fn from_sik(sik: [u8; 20]) -> Self {
         Self {
             sik,
-            k1: hmac_sha1(&sik, &[0x01; 20]),
-            k2: hmac_sha1(&sik, &[0x02; 20]),
-            k3: hmac_sha1(&sik, &[0x03; 20]),
+            k1: RunningHmac::new(&sik).feed(&[0x01; 20]).finalize(),
+            k2: RunningHmac::new(&sik).feed(&[0x02; 20]).finalize(),
+            k3: RunningHmac::new(&sik).feed(&[0x03; 20]).finalize(),
         }
     }
 }
@@ -111,7 +115,9 @@ impl CryptoState {
     pub fn validate(&mut self, m1: &RakpMessage1, m2: &RakpMessage2) -> Option<Vec<u8>> {
         match self.authentication_algorithm {
             AuthenticationAlgorithm::RakpNone => todo!(),
-            AuthenticationAlgorithm::RakpHmacSha1 => self.validate_hmac_sha1(m1, m2),
+            AuthenticationAlgorithm::RakpHmacSha1 => {
+                self.validate_hmac_sha1(m1, m2).map(|v| v.to_vec())
+            }
             AuthenticationAlgorithm::RakpHmacMd5 => todo!(),
             AuthenticationAlgorithm::RakpHmacSha256 => todo!(),
         }
@@ -124,48 +130,37 @@ impl CryptoState {
             .unwrap_or(self.password.as_ref())
     }
 
-    fn validate_hmac_sha1(&mut self, m1: &RakpMessage1, m2: &RakpMessage2) -> Option<Vec<u8>> {
-        use hmac::{Hmac, Mac};
-        use sha1::Sha1;
-
-        type HmacSha1 = Hmac<Sha1>;
-
-        let mut hmac = HmacSha1::new_from_slice(&self.password)
-            .expect("SHA1 HMAC initialization from bytes is infallible");
-
+    fn validate_hmac_sha1(&mut self, m1: &RakpMessage1, m2: &RakpMessage2) -> Option<[u8; 20]> {
         let privilege_level_byte = u8::from(m1.requested_maximum_privilege_level);
 
-        hmac.update(&m2.remote_console_session_id.get().to_le_bytes());
-        hmac.update(&m1.managed_system_session_id.get().to_le_bytes());
-        hmac.update(&m1.remote_console_random_number);
-        hmac.update(&m2.managed_system_random_number);
-        hmac.update(&m2.managed_system_guid);
-        hmac.update(&[privilege_level_byte, m1.username.len()]);
-        hmac.update(&m1.username);
+        let hmac_output = RunningHmac::new(&self.password)
+            .feed(&m2.remote_console_session_id.get().to_le_bytes())
+            .feed(&m1.managed_system_session_id.get().to_le_bytes())
+            .feed(&m1.remote_console_random_number)
+            .feed(&m2.managed_system_random_number)
+            .feed(&m2.managed_system_guid)
+            .feed(&[privilege_level_byte, m1.username.len()])
+            .feed(&m1.username)
+            .finalize();
 
-        let hmac_output = hmac.finalize().into_bytes();
+        if &hmac_output == m2.key_exchange_auth_code {
+            let sik = RunningHmac::new(self.kg())
+                .feed(&m1.remote_console_random_number)
+                .feed(&m2.managed_system_random_number)
+                .feed(&[privilege_level_byte, m1.username.len()])
+                .feed(&m1.username)
+                .finalize();
 
-        if hmac_output.as_slice() == m2.key_exchange_auth_code {
-            let mut hmac = HmacSha1::new_from_slice(self.kg())
-                .expect("SHA1 HMAC initialization from bytes is infallible");
-
-            hmac.update(&m1.remote_console_random_number);
-            hmac.update(&m2.managed_system_random_number);
-            hmac.update(&[privilege_level_byte, m1.username.len()]);
-            hmac.update(&m1.username);
-
-            let sik = hmac.finalize().into_bytes().try_into().unwrap();
             self.keys = Some(Keys::from_sik(sik));
 
-            let mut hmac = HmacSha1::new_from_slice(&self.password)
-                .expect("SHA1 HMAC initialization from bytes is infallible");
+            let output = RunningHmac::new(&self.password)
+                .feed(&m2.managed_system_random_number)
+                .feed(&m2.remote_console_session_id.get().to_le_bytes())
+                .feed(&[privilege_level_byte, m1.username.len()])
+                .feed(&m1.username)
+                .finalize();
 
-            hmac.update(&m2.managed_system_random_number);
-            hmac.update(&m2.remote_console_session_id.get().to_le_bytes());
-            hmac.update(&[privilege_level_byte, m1.username.len()]);
-            hmac.update(&m1.username);
-
-            Some(hmac.finalize().into_bytes().to_vec())
+            Some(output)
         } else {
             None
         }
@@ -262,8 +257,13 @@ impl CryptoState {
 
         // IPMI Session Trailer is only present if packets are authenticated.
         if self.authenticated() {
+            // + 2 because pad data and pad length are also covered by
+            // integrity checksum.
+            let auth_code_data_len = buffer[4..].len() + 2;
+
             // Integrity PAD
-            let pad_length = 4 - (buffer.len() % 4);
+            let pad_length = (4 - auth_code_data_len % 4) % 4;
+
             buffer.extend(std::iter::repeat(0xFF).take(pad_length));
 
             // Pad length
@@ -278,7 +278,9 @@ impl CryptoState {
             match self.integrity_algorithm {
                 IntegrityAlgorithm::None => {}
                 IntegrityAlgorithm::HmacSha1_96 => {
-                    let integrity_data = hmac_sha1(&self.keys.as_ref().unwrap().k1, auth_code_data);
+                    let integrity_data = RunningHmac::new(&self.keys.as_ref().unwrap().k1)
+                        .feed(auth_code_data)
+                        .finalize();
 
                     buffer.extend_from_slice(&integrity_data[..12]);
                 }

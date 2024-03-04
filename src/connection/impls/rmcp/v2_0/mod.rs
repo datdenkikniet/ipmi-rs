@@ -186,7 +186,7 @@ impl State {
             remote_console_session_id: 0x0AA2A3A4,
             authentication_algorithms: AuthenticationAlgorithm::RakpHmacSha1,
             confidentiality_algorithms: ConfidentialityAlgorithm::None,
-            integrity_algorithms: IntegrityAlgorithm::None,
+            integrity_algorithms: IntegrityAlgorithm::HmacSha1_96,
         };
 
         log::debug!("Sending RMCP+ Open Session Request. {open_session_request:?}");
