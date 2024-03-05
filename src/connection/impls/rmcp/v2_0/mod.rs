@@ -5,15 +5,9 @@ use crate::{
     connection::{rmcp::socket::RmcpIpmiSocket, Response},
 };
 
-use hmac::{digest::FixedOutput, Hmac, Mac};
-use sha1::Sha1;
-
-pub type HmacSha1 = Hmac<Sha1>;
-
 mod crypto;
-pub use crypto::{
-    AuthenticationAlgorithm, ConfidentialityAlgorithm, CryptoState, IntegrityAlgorithm,
-};
+use crypto::CryptoState;
+pub use crypto::{AuthenticationAlgorithm, ConfidentialityAlgorithm, IntegrityAlgorithm};
 
 mod messages;
 pub(super) use messages::*;
@@ -157,7 +151,6 @@ impl State {
         password: &[u8],
     ) -> Result<Self, ActivationError> {
         fn send(
-            crypto_state: &mut CryptoState,
             socket: &mut RmcpIpmiSocket,
             ty: PayloadType,
             payload: Vec<u8>,
@@ -169,7 +162,7 @@ impl State {
                 payload,
             };
 
-            socket.send(|buffer| crypto_state.write_message(&message, buffer))
+            socket.send(|buffer| CryptoState::write_unencrypted(&message, buffer))
         }
 
         fn recv(data: &[u8]) -> Result<Message, UnwrapSessionError> {
@@ -191,12 +184,9 @@ impl State {
 
         log::debug!("Sending RMCP+ Open Session Request. {open_session_request:?}");
 
-        let mut inactive_crypto_state = CryptoState::default();
-
         let mut payload = Vec::new();
         open_session_request.write_data(&mut payload);
         send(
-            &mut inactive_crypto_state,
             &mut socket,
             PayloadType::RmcpPlusOpenSessionRequest,
             payload,
@@ -224,7 +214,7 @@ impl State {
         let mut rng = rand::thread_rng();
         let random_data = rng.gen();
 
-        let rakp_message_1 = RakpMessage1 {
+        let rm1 = RakpMessage1 {
             message_tag: 0x0D,
             managed_system_session_id: response.managed_system_session_id,
             remote_console_random_number: random_data,
@@ -233,29 +223,24 @@ impl State {
         };
 
         let mut payload = Vec::new();
-        rakp_message_1.write(&mut payload);
+        rm1.write(&mut payload);
 
         log::debug!("Sending RMCP+ RAKP Message 1.");
 
-        send(
-            &mut inactive_crypto_state,
-            &mut socket,
-            PayloadType::RakpMessage1,
-            payload,
-        )
-        .map_err(ActivationError::SendRakpMessage1)?;
+        send(&mut socket, PayloadType::RakpMessage1, payload)
+            .map_err(ActivationError::SendRakpMessage1)?;
 
         let data = socket
             .recv()
             .map_err(ActivationError::RakpMessage2Receive)?;
 
         let v2_message = recv(data).map_err(ActivationError::RakpMessage2Read)?;
-        let rakp_message_2 = RakpMessage2::from_data(&v2_message.payload)
+        let rm2 = RakpMessage2::from_data(&v2_message.payload)
             .map_err(ActivationError::RakpMessage2Parse)?;
 
-        log::debug!("Received RMCP+ RAKP Message 2. {rakp_message_2:X?}");
+        log::debug!("Received RMCP+ RAKP Message 2. {rm2:X?}");
 
-        let kex_auth_code = rakp_message_2.key_exchange_auth_code;
+        let kex_auth_code = rm2.key_exchange_auth_code;
 
         let required_kex_auth_code_len = match response.authentication_payload {
             AuthenticationAlgorithm::RakpNone => 0,
@@ -271,10 +256,10 @@ impl State {
             ));
         }
 
-        let mut crypto_state = CryptoState::new(None, password, &response);
-        let message_3_value = crypto_state.validate(&rakp_message_1, &rakp_message_2);
+        let mut crypto_state = CryptoState::new(None, password);
+        let message_3_value = crypto_state.calculate_rakp3_data(&response, &rm1, &rm2);
 
-        let rakp_message_3 = if let Some(m3) = message_3_value.as_ref() {
+        let rm3 = if let Some(m3) = message_3_value.as_ref() {
             RakpMessage3 {
                 message_tag: 0x0A,
                 managed_system_session_id: response.managed_system_session_id,
@@ -293,19 +278,14 @@ impl State {
         };
 
         let mut payload = Vec::new();
-        rakp_message_3.write(&mut payload);
+        rm3.write(&mut payload);
 
-        log::debug!("Sending RAKP message 3.");
+        log::debug!("Sending RAKP message 3. {rm3:?}");
 
-        send(
-            &mut inactive_crypto_state,
-            &mut socket,
-            PayloadType::RakpMessage3,
-            payload,
-        )
-        .map_err(ActivationError::RakpMessage3Send)?;
+        send(&mut socket, PayloadType::RakpMessage3, payload)
+            .map_err(ActivationError::RakpMessage3Send)?;
 
-        if rakp_message_3.is_failure() {
+        if rm3.is_failure() {
             return Err(ActivationError::ServerAuthenticationFailed)?;
         }
 
@@ -314,26 +294,23 @@ impl State {
             .map_err(ActivationError::RakpMessage4Receive)?;
 
         let message = recv(data).unwrap();
-        let rakp_message_4 = RakpMessage4::from_data(&message.payload)
+        let rm4 = RakpMessage4::from_data(&message.payload)
             .map_err(ActivationError::RakpMessage4Parse)?;
 
-        log::debug!("Received RAKP Message 4: {rakp_message_4:02X?}");
+        log::debug!("Received RAKP Message 4: {rm4:02X?}");
 
-        let mut hmac = HmacSha1::new_from_slice(crypto_state.sik())
-            .expect("SHA1 HMAC initialization from bytes is infallible");
-
-        hmac.update(&rakp_message_1.remote_console_random_number);
-        hmac.update(&rakp_message_3.managed_system_session_id.get().to_le_bytes());
-        hmac.update(&rakp_message_2.managed_system_guid);
-
-        let integrity = &<[u8; 20]>::try_from(hmac.finalize_fixed()).unwrap()[..12];
-
-        if integrity != rakp_message_4.integrity_check_value {
+        if !crypto_state.verify(
+            response.authentication_payload,
+            &rm1.remote_console_random_number,
+            rm3.managed_system_session_id.get(),
+            &rm2.managed_system_guid,
+            rm4.integrity_check_value,
+        ) {
             log::error!("Received incorrect/invalid integrity check value in RAKP Message 4.");
             return Err(ActivationError::RakpMessage4InvalidIntegrityCheckValue);
         }
 
-        let session_id = rakp_message_3.managed_system_session_id;
+        let session_id = rm3.managed_system_session_id;
         let session_sequence_number = NonZeroU32::new(1).unwrap();
 
         Ok(Self {
