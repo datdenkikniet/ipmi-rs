@@ -88,6 +88,10 @@ impl SubState {
             IntegrityAlgorithm::HmacSha256_128 => todo!(),
         };
 
+        if data_len as usize != data.len() {
+            return Err(CryptoUnwrapError::IncorrectPayloadLen.into());
+        }
+
         let data = match self.confidentiality_algorithm {
             ConfidentialityAlgorithm::None => data,
             ConfidentialityAlgorithm::AesCbc128 => {
@@ -114,24 +118,12 @@ impl SubState {
             ConfidentialityAlgorithm::Xrc4_40 => todo!(),
         };
 
-        // TODO: validate data len
-        // if data_len as usize == data.len() {
-        // Strip off PAD byte when the message is not out-of-session
-        let data = if session_id != 0 && session_sequence_number != 0 {
-            &data[..data.len() - 1]
-        } else {
-            data
-        };
-
         Ok(Message {
             ty,
             session_id,
             session_sequence_number,
             payload: data.to_vec(),
         })
-        // } else {
-        //     Err(CryptoUnwrapError::IncorrectPayloadLen.into())
-        // }
     }
 
     fn write_payload_data(&mut self, data: &[u8], buffer: &mut Vec<u8>) -> Result<(), WriteError> {

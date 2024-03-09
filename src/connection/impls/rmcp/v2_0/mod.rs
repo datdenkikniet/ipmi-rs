@@ -370,7 +370,7 @@ impl State {
         let _rs_addr = data[3];
         let _rqseq = data[4];
         let cmd = data[5];
-        let response_data: Vec<_> = data[6..data.len()].to_vec();
+        let response_data: Vec<_> = data[6..data.len() - 1].to_vec();
         let _checksum2 = data[data.len() - 1];
 
         // TODO: validate sequence, checksums, etc.
