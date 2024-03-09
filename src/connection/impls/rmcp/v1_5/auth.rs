@@ -61,9 +61,6 @@ pub fn verify(
         }
         (AuthType::MD5, Some(password)) => {
             let calc_digest = calculate_md5(password, session_id, session_seq, data);
-
-            println!("{:02X?}, {:02X?}", calc_digest, digest);
-
             calc_digest == digest
         }
         (AuthType::Key, Some(password)) => password == &digest,

@@ -230,8 +230,6 @@ impl SubState {
 
         self.write_trailer(buffer)?;
 
-        println!("{:02X?}", buffer);
-
         Ok(())
     }
 }
