@@ -50,6 +50,7 @@ impl From<ParseSessionResponseError> for ActivationError {
 pub enum WriteError {
     Io(std::io::Error),
     PayloadTooLong,
+    EncryptedPayloadTooLong,
 }
 
 impl From<std::io::Error> for WriteError {
@@ -178,7 +179,7 @@ impl State {
             requested_max_privilege: privilege_level,
             remote_console_session_id: 0x0AA2A3A4,
             authentication_algorithms: AuthenticationAlgorithm::RakpHmacSha1,
-            confidentiality_algorithms: ConfidentialityAlgorithm::None,
+            confidentiality_algorithms: ConfidentialityAlgorithm::AesCbc128,
             integrity_algorithms: IntegrityAlgorithm::HmacSha1_96,
         };
 

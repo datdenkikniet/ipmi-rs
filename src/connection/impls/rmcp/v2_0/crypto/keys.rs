@@ -4,7 +4,7 @@ use super::sha1::RunningHmac;
 pub struct Keys {
     pub(super) sik: [u8; 20],
     pub(super) k1: [u8; 20],
-    k2: [u8; 20],
+    pub(super) k2: [u8; 20],
     k3: [u8; 20],
 }
 

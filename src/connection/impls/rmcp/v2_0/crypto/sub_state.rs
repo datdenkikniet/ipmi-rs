@@ -1,3 +1,5 @@
+use aes::cipher::{block_padding::NoPadding, BlockEncryptMut, KeyIvInit};
+
 use crate::connection::rmcp::{v2_0::crypto::sha1::RunningHmac, Message, PayloadType};
 
 use super::{
@@ -104,54 +106,70 @@ impl SubState {
         }
     }
 
-    pub fn write_payload(
-        &mut self,
-        message: &Message,
-        buffer: &mut Vec<u8>,
-    ) -> Result<(), WriteError> {
-        assert_eq!(buffer.len(), 4, "Buffer must only contain RMCP header.");
-
-        buffer.push(0x06);
-
-        let encrypted = (self.encrypted() as u8) << 7;
-        let authenticated = (self.authenticated() as u8) << 6;
-        buffer.push(encrypted | authenticated | u8::from(message.ty));
-
-        // TODO: support OEM IANA and OEM payload ID? Ignore for now: unsupported payload type
-
-        buffer.extend_from_slice(&message.session_id.to_le_bytes());
-        buffer.extend_from_slice(&message.session_sequence_number.to_le_bytes());
-
-        let data = &message.payload;
-
+    fn write_payload_data(&mut self, data: &[u8], buffer: &mut Vec<u8>) -> Result<(), WriteError> {
         let data_len = data.len();
 
         if data_len > u16::MAX as usize {
             return Err(WriteError::PayloadTooLong);
         }
 
-        // Confidentiality header
         match self.confidentiality_algorithm {
-            ConfidentialityAlgorithm::None => {}
-            ConfidentialityAlgorithm::AesCbc128 => todo!(),
+            ConfidentialityAlgorithm::None => {
+                // Length
+                buffer.extend_from_slice(&(data_len as u16).to_le_bytes());
+
+                // Data
+                buffer.extend(data)
+            }
+            ConfidentialityAlgorithm::AesCbc128 => {
+                // TODO: make random :)
+                let iv = [145u8; 16];
+
+                // Length
+                // Data + Pad byte
+                let non_pad_len = data_len + 1;
+                let pad_len = (16 - (non_pad_len % 16)) % 16;
+                let padded_len = non_pad_len + pad_len;
+
+                if padded_len > u16::MAX as usize {
+                    return Err(WriteError::EncryptedPayloadTooLong);
+                }
+
+                buffer.extend((padded_len as u16).to_le_bytes());
+
+                // Confidentiality header
+                buffer.extend(iv);
+
+                let encryptor = cbc::Encryptor::<aes::Aes128>::new(
+                    self.keys.k2[..16].try_into().unwrap(),
+                    &iv.try_into().unwrap(),
+                );
+
+                let dont_encrypt_len = buffer.len();
+
+                // Data
+                buffer.extend(data);
+
+                // Confidentiality trailer
+                buffer.extend((1u8..).take(pad_len));
+                buffer.push(pad_len as u8);
+
+                let buffer_to_encrypt = &mut buffer[dont_encrypt_len..];
+
+                let encrypted = encryptor
+                    .encrypt_padded_mut::<NoPadding>(buffer_to_encrypt, padded_len)
+                    .unwrap();
+
+                assert_eq!(encrypted.len(), padded_len);
+            }
             ConfidentialityAlgorithm::Xrc4_128 => todo!(),
             ConfidentialityAlgorithm::Xrc4_40 => todo!(),
         }
 
-        // Length
-        buffer.extend_from_slice(&(data_len as u16).to_le_bytes());
+        Ok(())
+    }
 
-        // Data
-        buffer.extend(data);
-
-        // Confidentiality trailer
-        match self.confidentiality_algorithm {
-            ConfidentialityAlgorithm::None => {}
-            ConfidentialityAlgorithm::AesCbc128 => todo!(),
-            ConfidentialityAlgorithm::Xrc4_128 => todo!(),
-            ConfidentialityAlgorithm::Xrc4_40 => todo!(),
-        }
-
+    fn write_trailer(&mut self, buffer: &mut Vec<u8>) -> Result<(), WriteError> {
         // IPMI Session Trailer is only present if packets are authenticated.
         if self.authenticated() {
             // + 2 because pad data and pad length are also covered by
@@ -186,6 +204,33 @@ impl SubState {
                 IntegrityAlgorithm::HmacSha256_128 => todo!(),
             };
         }
+
+        Ok(())
+    }
+
+    pub fn write_payload(
+        &mut self,
+        message: &Message,
+        buffer: &mut Vec<u8>,
+    ) -> Result<(), WriteError> {
+        assert_eq!(buffer.len(), 4, "Buffer must only contain RMCP header.");
+
+        buffer.push(0x06);
+
+        let encrypted = (self.encrypted() as u8) << 7;
+        let authenticated = (self.authenticated() as u8) << 6;
+        buffer.push(encrypted | authenticated | u8::from(message.ty));
+
+        // TODO: support OEM IANA and OEM payload ID? Ignore for now: unsupported payload type
+
+        buffer.extend_from_slice(&message.session_id.to_le_bytes());
+        buffer.extend_from_slice(&message.session_sequence_number.to_le_bytes());
+
+        self.write_payload_data(&message.payload, buffer)?;
+
+        self.write_trailer(buffer)?;
+
+        println!("{:02X?}", buffer);
 
         Ok(())
     }
