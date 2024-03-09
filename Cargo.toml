@@ -25,6 +25,7 @@ sha1 = "0.10.6"
 rand = "0.8.5"
 aes = "0.8.4"
 cbc = "0.1.2"
+getrandom = "0.2.12"
 
 [features]
 default = [ "time", "unix-file", "log-to-file" ]

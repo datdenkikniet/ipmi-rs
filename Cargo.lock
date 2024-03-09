@@ -381,6 +381,7 @@ dependencies = [
  "bitflags",
  "cbc",
  "clap",
+ "getrandom",
  "hex",
  "hmac",
  "indicatif",

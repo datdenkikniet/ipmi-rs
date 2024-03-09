@@ -122,12 +122,12 @@ impl SubState {
                 buffer.extend(data)
             }
             ConfidentialityAlgorithm::AesCbc128 => {
-                // TODO: make random :)
-                let iv = [145u8; 16];
+                let mut iv = [0u8; 16];
+                getrandom::getrandom(&mut iv).unwrap();
 
                 // Length
-                // Data + Pad byte
-                let non_pad_len = data_len + 1;
+                // Data + Confidentiality pad length + header
+                let non_pad_len = data_len + 1 + 16;
                 let pad_len = (16 - (non_pad_len % 16)) % 16;
                 let padded_len = non_pad_len + pad_len;
 
@@ -157,10 +157,10 @@ impl SubState {
                 let buffer_to_encrypt = &mut buffer[dont_encrypt_len..];
 
                 let encrypted = encryptor
-                    .encrypt_padded_mut::<NoPadding>(buffer_to_encrypt, padded_len)
+                    .encrypt_padded_mut::<NoPadding>(buffer_to_encrypt, buffer_to_encrypt.len())
                     .unwrap();
 
-                assert_eq!(encrypted.len(), padded_len);
+                assert_eq!(16 + encrypted.len(), padded_len);
             }
             ConfidentialityAlgorithm::Xrc4_128 => todo!(),
             ConfidentialityAlgorithm::Xrc4_40 => todo!(),
