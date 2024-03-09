@@ -1,4 +1,4 @@
-use aes::cipher::{block_padding::NoPadding, BlockEncryptMut, KeyIvInit};
+use aes::cipher::{block_padding::NoPadding, BlockDecryptMut, BlockEncryptMut, KeyIvInit};
 
 use crate::connection::rmcp::{v2_0::crypto::sha1::RunningHmac, Message, PayloadType};
 
@@ -41,7 +41,7 @@ impl SubState {
         self.integrity_algorithm != IntegrityAlgorithm::None
     }
 
-    pub fn read_payload(&mut self, data: &[u8]) -> Result<Message, ReadError> {
+    pub fn read_payload(&mut self, data: &mut [u8]) -> Result<Message, ReadError> {
         if data.len() < 10 {
             return Err(ReadError::NotEnoughData);
         }
@@ -58,7 +58,7 @@ impl SubState {
         let session_id = u32::from_le_bytes(data[2..6].try_into().unwrap());
         let session_sequence_number = u32::from_le_bytes(data[6..10].try_into().unwrap());
 
-        let data = &data[10..];
+        let data = &mut data[10..];
 
         if data.len() < 2 {
             return Err(CryptoUnwrapError::NotEnoughData.into());
@@ -73,37 +73,65 @@ impl SubState {
         }
 
         let data_len = u16::from_le_bytes(data[..2].try_into().unwrap());
-        let data = &data[2..];
+        let data = &mut data[2..];
 
         let data = match self.integrity_algorithm {
             IntegrityAlgorithm::None => data,
             IntegrityAlgorithm::HmacSha1_96 => {
+                let data_len = data.len();
                 // TODO: validate
-                let pad_len = data[data.len() - 12 - 2];
-                &data[..data.len() - 12 - 2 - pad_len as usize]
+                let pad_len = data[data_len - 12 - 2];
+                &mut data[..data_len - 12 - 2 - pad_len as usize]
             }
             IntegrityAlgorithm::HmacMd5_128 => todo!(),
             IntegrityAlgorithm::Md5_128 => todo!(),
             IntegrityAlgorithm::HmacSha256_128 => todo!(),
         };
 
-        if data_len as usize == data.len() {
-            // Strip off PAD byte when the message is not out-of-session
-            let data = if session_id != 0 && session_sequence_number != 0 {
-                &data[..data.len() - 1]
-            } else {
-                data
-            };
+        let data = match self.confidentiality_algorithm {
+            ConfidentialityAlgorithm::None => data,
+            ConfidentialityAlgorithm::AesCbc128 => {
+                let (iv, data_and_trailer) = data.split_at_mut(16);
+                let iv: [u8; 16] = iv.try_into().unwrap();
 
-            Ok(Message {
-                ty,
-                session_id,
-                session_sequence_number,
-                payload: data.to_vec(),
-            })
+                let decryptor: cbc::Decryptor<aes::Aes128> = cbc::Decryptor::<aes::Aes128>::new(
+                    self.keys.k2[..16].try_into().unwrap(),
+                    &iv.try_into().unwrap(),
+                );
+
+                decryptor
+                    .decrypt_padded_mut::<NoPadding>(data_and_trailer)
+                    .unwrap();
+
+                let trailer_len = data_and_trailer[data_and_trailer.len() - 1] as usize;
+                let data_len = data_and_trailer.len() - trailer_len - 1;
+
+                // TODO: validate trailer
+
+                &mut data_and_trailer[..data_len]
+            }
+            ConfidentialityAlgorithm::Xrc4_128 => todo!(),
+            ConfidentialityAlgorithm::Xrc4_40 => todo!(),
+        };
+
+        // TODO: validate data len
+        // if data_len as usize == data.len() {
+        // Strip off PAD byte when the message is not out-of-session
+        let data = if session_id != 0 && session_sequence_number != 0 {
+            &data[..data.len() - 1]
         } else {
-            Err(CryptoUnwrapError::IncorrectPayloadLen.into())
-        }
+            data
+        };
+
+        Ok(Message {
+            ty,
+            session_id,
+            session_sequence_number,
+            payload: data.to_vec(),
+        })
+        // } else {
+        //     Err(CryptoUnwrapError::IncorrectPayloadLen.into())
+        // }
     }
 
     fn write_payload_data(&mut self, data: &[u8], buffer: &mut Vec<u8>) -> Result<(), WriteError> {

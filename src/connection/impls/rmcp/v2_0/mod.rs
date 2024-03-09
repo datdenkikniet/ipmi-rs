@@ -166,7 +166,7 @@ impl State {
             socket.send(|buffer| CryptoState::write_unencrypted(&message, buffer))
         }
 
-        fn recv(data: &[u8]) -> Result<Message, UnwrapSessionError> {
+        fn recv(data: &mut [u8]) -> Result<Message, UnwrapSessionError> {
             CryptoState::default()
                 .read_payload(data)
                 .map_err(UnwrapSessionError::V2_0)

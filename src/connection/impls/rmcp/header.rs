@@ -118,7 +118,7 @@ impl RmcpHeader {
         Ok(bytes)
     }
 
-    pub fn from_bytes<'a>(data: &'a [u8]) -> Result<(Self, &'a [u8]), RmcpHeaderError> {
+    pub fn from_bytes<'a>(data: &'a mut [u8]) -> Result<(Self, &'a mut [u8]), RmcpHeaderError> {
         if data.len() < 4 {
             return Err(RmcpHeaderError::NotEnoughData);
         }
@@ -127,7 +127,7 @@ impl RmcpHeader {
         let sequence_number = data[2];
         let class = data[3];
 
-        let data = &data[4..];
+        let data = &mut data[4..];
 
         let class = RmcpClass::try_from(class).map_err(|_| RmcpHeaderError::InvalidRmcpClass)?;
 

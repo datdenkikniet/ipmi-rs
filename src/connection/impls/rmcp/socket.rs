@@ -22,10 +22,10 @@ impl RmcpIpmiSocket {
         self.socket
     }
 
-    pub fn recv(&mut self) -> Result<&[u8], RmcpIpmiReceiveError> {
+    pub fn recv(&mut self) -> Result<&mut [u8], RmcpIpmiReceiveError> {
         let received = self.socket.recv(&mut self.buffer).map_err(RecvError::Io)?;
 
-        let data = &self.buffer[..received];
+        let data = &mut self.buffer[..received];
         let (header, data) = RmcpHeader::from_bytes(data).map_err(RecvError::RmcpHeader)?;
 
         if header.class().ty != RmcpType::Ipmi {

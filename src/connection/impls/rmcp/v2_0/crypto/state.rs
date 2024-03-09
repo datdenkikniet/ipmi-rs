@@ -126,7 +126,7 @@ impl CryptoState {
 }
 
 impl CryptoState {
-    pub fn read_payload(&mut self, data: &[u8]) -> Result<Message, ReadError> {
+    pub fn read_payload(&mut self, data: &mut [u8]) -> Result<Message, ReadError> {
         self.state.read_payload(data)
     }
 

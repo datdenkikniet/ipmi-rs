@@ -132,7 +132,7 @@ impl RmcpWithState<Inactive> {
             .map_err(ActivationError::PongReceive)?;
 
         let (pong_header, pong_data) =
-            RmcpHeader::from_bytes(&buf[..received]).map_err(|_| ActivationError::PongRead)?;
+            RmcpHeader::from_bytes(&mut buf[..received]).map_err(|_| ActivationError::PongRead)?;
 
         let (supported_entities, _) = if pong_header.class().ty == RmcpType::Asf {
             let message = ASFMessage::from_bytes(pong_data).ok_or(ActivationError::PongRead)?;
