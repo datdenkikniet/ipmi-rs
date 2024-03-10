@@ -101,8 +101,6 @@ pub struct OpenSessionRequest {
     // TODO: technically these support vectors of algorithms, but
     // the testing platform we're trying doesn't seem to support
     // that very well.
-    //
-    // Use options for now.
     pub authentication_algorithms: AuthenticationAlgorithm,
     pub integrity_algorithms: IntegrityAlgorithm,
     pub confidentiality_algorithms: ConfidentialityAlgorithm,

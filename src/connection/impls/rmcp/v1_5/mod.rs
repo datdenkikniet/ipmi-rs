@@ -54,8 +54,6 @@ pub enum ReadError {
     AuthcodeError,
 }
 
-// TODO: override debug to avoid printing password
-#[derive(Debug)]
 pub struct State {
     socket: RmcpIpmiSocket,
     ipmb_state: IpmbState,
@@ -63,6 +61,19 @@ pub struct State {
     auth_type: crate::app::auth::AuthType,
     password: Option<[u8; 16]>,
     session_sequence: u32,
+}
+
+impl core::fmt::Debug for State {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("State")
+            .field("socket", &self.socket)
+            .field("ipmb_state", &self.ipmb_state)
+            .field("session_id", &self.session_id)
+            .field("auth_type", &self.auth_type)
+            .field("password", &"<redacted>")
+            .field("session_sequence", &self.session_sequence)
+            .finish()
+    }
 }
 
 impl State {
@@ -144,7 +155,6 @@ impl State {
         self.session_sequence = activation_info.initial_sequence_number;
         self.session_id = Some(activation_info.session_id);
 
-        // TODO: assert the correct thing here
         assert_eq!(activate_session.auth_type, activation_auth_type);
 
         Ok(self)

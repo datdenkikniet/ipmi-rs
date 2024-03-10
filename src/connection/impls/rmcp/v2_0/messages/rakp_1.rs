@@ -48,7 +48,6 @@ impl core::ops::Deref for Username {
     }
 }
 
-// TODO: override debug to hide crypto info
 #[derive(Debug)]
 pub struct RakpMessage1<'a> {
     pub message_tag: u8,
