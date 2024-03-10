@@ -259,7 +259,7 @@ pub fn next_ipmb_message(
     let netfn_rslun: u8 = (request.netfn().request_value() << 2) | request.target().lun().value();
     let first_part = [*rs_addr, netfn_rslun];
 
-    all_data.extend(first_part.into_iter());
+    all_data.extend(first_part);
     all_data.push(Checksum::from_iter(first_part.into_iter()));
 
     let req_addr = *requestor_addr;
@@ -274,7 +274,7 @@ pub fn next_ipmb_message(
     let second_end = request.data().iter().copied();
     let second_part_chk = Checksum::from_iter(second_start.into_iter().chain(second_end.clone()));
 
-    all_data.extend(second_start.into_iter());
+    all_data.extend(second_start);
     all_data.extend(second_end);
     all_data.push(second_part_chk);
 

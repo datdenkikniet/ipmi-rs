@@ -155,7 +155,7 @@ impl Rmcp {
         username: Option<&str>,
         password: Option<&[u8]>,
     ) -> Result<(), ActivationError> {
-        if let Some(_) = self.active_state.take() {
+        if self.active_state.take().is_some() {
             // TODO: shut down currently active state.
             log::info!("De-activating RMCP connection for re-activation");
         }

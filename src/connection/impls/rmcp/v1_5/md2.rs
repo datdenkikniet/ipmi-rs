@@ -53,11 +53,12 @@ where
 {
     type Item = [u8; 16];
 
+    #[allow(clippy::needless_range_loop)]
     fn next(&mut self) -> Option<Self::Item> {
         let mut chunk = [0u8; 16];
         let mut chunk_len = 0;
 
-        while let Some(value) = self.data.next() {
+        for value in &mut self.data {
             chunk[chunk_len] = value;
             chunk_len += 1;
             if chunk_len == 16 {
@@ -79,6 +80,7 @@ where
     }
 }
 
+#[allow(clippy::needless_range_loop)]
 fn md2_step(chunk: &[u8; 16], digest: &mut [u8; 48]) {
     digest[16..32].copy_from_slice(chunk);
     for j in 0..16 {

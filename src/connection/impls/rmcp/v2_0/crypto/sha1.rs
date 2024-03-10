@@ -19,6 +19,6 @@ impl RunningHmac {
     }
 
     pub fn finalize(self) -> [u8; 20] {
-        self.state.finalize().into_bytes().try_into().unwrap()
+        self.state.finalize().into_bytes().into()
     }
 }

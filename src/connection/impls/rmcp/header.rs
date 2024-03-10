@@ -118,7 +118,7 @@ impl RmcpHeader {
         Ok(bytes)
     }
 
-    pub fn from_bytes<'a>(data: &'a mut [u8]) -> Result<(Self, &'a mut [u8]), RmcpHeaderError> {
+    pub fn from_bytes(data: &mut [u8]) -> Result<(Self, &mut [u8]), RmcpHeaderError> {
         if data.len() < 4 {
             return Err(RmcpHeaderError::NotEnoughData);
         }

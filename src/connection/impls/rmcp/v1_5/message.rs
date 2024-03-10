@@ -90,11 +90,10 @@ impl Message {
         let data_len = data[0];
         let data = &data[1..];
 
-        let payload = if data_len == 0 && data.is_empty() {
-            Vec::new()
-        }
-        // Only legacy PAD
-        else if data_len == 0 && data.len() == 1 {
+        let empty = data_len == 0 && data.is_empty();
+        let only_legacy_pad = data_len == 0 && data.len() == 1;
+
+        let payload = if empty || only_legacy_pad {
             Vec::new()
         } else if data.len() == data_len as usize {
             data.to_vec()

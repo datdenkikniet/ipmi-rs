@@ -16,9 +16,9 @@ fn calculate_md2(password: &[u8; 16], session_id: u32, session_seq: u32, data: &
     let data = password
         .iter()
         .copied()
-        .chain(session_id.to_le_bytes().into_iter())
+        .chain(session_id.to_le_bytes())
         .chain(data.iter().copied())
-        .chain(session_seq.to_le_bytes().into_iter())
+        .chain(session_seq.to_le_bytes())
         .chain(password.iter().copied());
 
     md2(data)

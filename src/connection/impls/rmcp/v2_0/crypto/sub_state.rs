@@ -27,7 +27,7 @@ impl core::fmt::Debug for SubState {
 impl SubState {
     pub fn empty() -> Self {
         Self {
-            keys: Keys::default(),
+            keys: Keys::from_sik([0u8; 20]),
             confidentiality_algorithm: ConfidentialityAlgorithm::None,
             integrity_algorithm: IntegrityAlgorithm::None,
         }
@@ -98,10 +98,8 @@ impl SubState {
                 let (iv, data_and_trailer) = data.split_at_mut(16);
                 let iv: [u8; 16] = iv.try_into().unwrap();
 
-                let decryptor: cbc::Decryptor<aes::Aes128> = cbc::Decryptor::<aes::Aes128>::new(
-                    self.keys.k2[..16].try_into().unwrap(),
-                    &iv.try_into().unwrap(),
-                );
+                let decryptor: cbc::Decryptor<aes::Aes128> =
+                    cbc::Decryptor::<aes::Aes128>::new(self.keys.aes_key(), &iv.into());
 
                 decryptor
                     .decrypt_padded_mut::<NoPadding>(data_and_trailer)
@@ -160,10 +158,7 @@ impl SubState {
                 // Confidentiality header
                 buffer.extend(iv);
 
-                let encryptor = cbc::Encryptor::<aes::Aes128>::new(
-                    self.keys.k2[..16].try_into().unwrap(),
-                    &iv.try_into().unwrap(),
-                );
+                let encryptor = cbc::Encryptor::<aes::Aes128>::new(self.keys.aes_key(), &iv.into());
 
                 let dont_encrypt_len = buffer.len();
 

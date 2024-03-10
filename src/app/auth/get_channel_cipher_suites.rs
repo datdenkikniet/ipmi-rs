@@ -99,7 +99,7 @@ impl ChannelCipherSuites {
                 } else {
                     log::debug!("Got a non-standard start of record: {start_of_record:02X}");
                     self.failed = true;
-                    return None;
+                    None
                 }
             }
         }

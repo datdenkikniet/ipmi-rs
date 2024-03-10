@@ -78,10 +78,10 @@ impl RakpMessage1<'_> {
         buffer.extend_from_slice(&[0x00, 0x00]);
 
         // User name length
-        buffer.push(self.username.len() as u8);
+        buffer.push(self.username.len());
 
         // User name data
-        buffer.extend_from_slice(&self.username);
+        buffer.extend_from_slice(self.username);
     }
 }
 

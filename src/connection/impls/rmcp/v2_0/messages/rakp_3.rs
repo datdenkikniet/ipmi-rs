@@ -22,7 +22,7 @@ impl RakpMessage3<'_> {
         buffer.push(status);
         buffer.extend_from_slice(&[0x00, 0x00]);
         buffer.extend_from_slice(&self.managed_system_session_id.get().to_le_bytes());
-        buffer.extend_from_slice(&after_id);
+        buffer.extend_from_slice(after_id);
     }
 
     pub fn is_failure(&self) -> bool {

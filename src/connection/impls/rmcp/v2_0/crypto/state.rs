@@ -92,22 +92,22 @@ impl CryptoState {
             .feed(&m2.managed_system_random_number)
             .feed(&m2.managed_system_guid)
             .feed(&[privilege_level_byte, m1.username.len()])
-            .feed(&m1.username)
+            .feed(m1.username)
             .finalize();
 
-        if &hmac_output == m2.key_exchange_auth_code {
+        if hmac_output == m2.key_exchange_auth_code {
             let sik = RunningHmac::new(self.kg())
                 .feed(&m1.remote_console_random_number)
                 .feed(&m2.managed_system_random_number)
                 .feed(&[privilege_level_byte, m1.username.len()])
-                .feed(&m1.username)
+                .feed(m1.username)
                 .finalize();
 
             let output = RunningHmac::new(&self.password)
                 .feed(&m2.managed_system_random_number)
                 .feed(&m2.remote_console_session_id.get().to_le_bytes())
                 .feed(&[privilege_level_byte, m1.username.len()])
-                .feed(&m1.username)
+                .feed(m1.username)
                 .finalize();
 
             let new_state = SubState {

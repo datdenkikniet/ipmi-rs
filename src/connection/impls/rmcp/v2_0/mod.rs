@@ -198,7 +198,7 @@ impl State {
             .recv()
             .map_err(ActivationError::OpenSessionResponseReceive)?;
 
-        let response_data = recv(data).map_err(|e| ActivationError::OpenSessionResponseRead(e))?;
+        let response_data = recv(data).map_err(ActivationError::OpenSessionResponseRead)?;
 
         let response = match OpenSessionResponse::from_data(&response_data.payload) {
             Ok(r) => r,
