@@ -23,11 +23,16 @@ This example will, using the `/dev/ipmi0` file:
 - [x] SDR repository info
 - [x] Get SDR repository entries
 - [x] Read sensor data from sensors obtained from SDR repository
+- [ ] FRU information lookup
 - [x] `ioctl`-based IPMI device file interface support
-- [x] RMCP
-- [x] Allow running of example with any of the supported IPMI interfaces
-- [ ] Other IPMI interfaces
-- [ ] More?
+    - Supports bridging IPMI requests to other IPMBs.
+- [ ] RMCP
+    Supported auth types:
+    - [x] Unauthenticated
+    - [ ] MD5
+    - [ ] MD2
+    - [ ] Key
+- [ ] RMCP+
 
 ## License
 

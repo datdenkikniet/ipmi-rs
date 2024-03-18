@@ -24,10 +24,7 @@ impl GetSessionChallenge {
         }
 
         let mut username = [0u8; 16];
-        bytes
-            .iter()
-            .enumerate()
-            .for_each(|(idx, b)| username[idx] = *b);
+        username[..bytes.len()].copy_from_slice(bytes);
 
         Some(Self {
             auth_type,

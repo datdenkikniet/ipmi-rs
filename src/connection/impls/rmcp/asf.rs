@@ -1,5 +1,3 @@
-use super::encapsulation::EncapsulatedMessage;
-
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SupportedInteractions {
     pub rcmp_security: bool,
@@ -138,7 +136,7 @@ pub struct ASFMessage {
 }
 
 impl ASFMessage {
-    fn write_data(&self, buffer: &mut Vec<u8>) {
+    pub(crate) fn write_data(&self, buffer: &mut Vec<u8>) {
         buffer.extend_from_slice(&4542u32.to_le_bytes());
 
         buffer.push(self.message_type.type_byte());
@@ -148,7 +146,7 @@ impl ASFMessage {
         self.message_type.write_data(buffer);
     }
 
-    fn from_bytes(data: &[u8]) -> Option<Self> {
+    pub(crate) fn from_bytes(data: &[u8]) -> Option<Self> {
         if data.len() < 8 {
             return None;
         }
@@ -169,95 +167,6 @@ impl ASFMessage {
         Some(Self {
             message_tag,
             message_type,
-        })
-    }
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub enum RmcpClass {
-    Ack(u8),
-    Asf(ASFMessage),
-    Ipmi(EncapsulatedMessage),
-    OemDefined,
-}
-
-impl RmcpClass {
-    fn write_data(&self, buffer: &mut Vec<u8>) {
-        match self {
-            // No data
-            RmcpClass::Ack(_) => {}
-            // ASF data
-            RmcpClass::Asf(message) => message.write_data(buffer),
-            // TODO: IPMI data
-            RmcpClass::Ipmi(message) => message.write_data(buffer),
-            // TODO: OEMDefined data
-            RmcpClass::OemDefined => todo!(),
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct RmcpMessage {
-    pub version: u8,
-    pub sequence_number: u8,
-    pub class_and_contents: RmcpClass,
-}
-
-impl RmcpMessage {
-    pub fn new(sequence_number: u8, contents: RmcpClass) -> Self {
-        Self {
-            version: 6,
-            sequence_number,
-            class_and_contents: contents,
-        }
-    }
-
-    pub fn to_bytes(&self) -> Vec<u8> {
-        let class = match self.class_and_contents {
-            RmcpClass::Ack(value) => value | 0x80,
-            RmcpClass::Asf(_) => 0x06,
-            RmcpClass::Ipmi(_) => 0x07,
-            RmcpClass::OemDefined => 0x08,
-        };
-
-        let sequence_number = if matches!(self.class_and_contents, RmcpClass::Ipmi(_)) {
-            0xFF
-        } else {
-            self.sequence_number
-        };
-
-        let mut bytes = vec![self.version, 0, sequence_number, class];
-
-        self.class_and_contents.write_data(&mut bytes);
-
-        bytes
-    }
-
-    pub fn from_bytes(data: &[u8]) -> Option<Self> {
-        if data.len() < 4 {
-            return None;
-        }
-
-        let version = data[0];
-        let sequence_number = data[2];
-        let class = data[3];
-
-        let data = &data[4..];
-
-        let class = match class {
-            0x06 => RmcpClass::Asf(ASFMessage::from_bytes(data)?),
-            0x07 => RmcpClass::Ipmi(EncapsulatedMessage::from_bytes(data).ok()?),
-            0x08 => RmcpClass::OemDefined,
-            _ if class & 0x80 == 0x80 => RmcpClass::Ack(class & 0x7F),
-            _ => {
-                return None;
-            }
-        };
-
-        Some(Self {
-            version,
-            sequence_number,
-            class_and_contents: class,
         })
     }
 }

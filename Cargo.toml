@@ -20,6 +20,12 @@ md5 = "0.7"
 
 # For unix-file IPMI
 nix = { version = "0.26", default-features = false, features = [ "ioctl" ], optional = true }
+hmac = "0.12.1"
+sha1 = "0.10.6"
+rand = "0.8.5"
+aes = "0.8.4"
+cbc = "0.1.2"
+getrandom = "0.2.12"
 
 [features]
 default = [ "time", "unix-file", "log-to-file" ]
@@ -32,6 +38,7 @@ unix-file = [ "nix" ]
 pretty_env_logger = "0.4"
 indicatif = "0.17"
 clap = { version = "4.3", features = [ "derive" ]}
+hex = "0.4.3"
 
 [[example]]
 name = "get-info"

@@ -11,6 +11,9 @@ pub use get_session_challenge::{GetSessionChallenge, SessionChallenge};
 mod activate_session;
 pub use activate_session::{ActivateSession, BeginSessionInfo};
 
+mod get_channel_cipher_suites;
+pub use get_channel_cipher_suites::{ChannelCipherSuites, CipherSuite, GetChannelCipherSuites};
+
 #[derive(Debug, Clone)]
 pub enum AuthError {
     /// A non-zero session ID was received at a stage where
