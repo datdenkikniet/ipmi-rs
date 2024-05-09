@@ -10,8 +10,9 @@ use crate::{
 };
 
 use super::{
-    internal::IpmbState, socket::RmcpIpmiSocket, RmcpIpmiError, RmcpIpmiReceiveError,
-    RmcpIpmiSendError,
+    internal::{validate_ipmb_checksums, IpmbState},
+    socket::RmcpIpmiSocket,
+    RmcpIpmiError, RmcpIpmiReceiveError, RmcpIpmiSendError,
 };
 
 pub use message::Message;
@@ -230,7 +231,11 @@ impl IpmiConnection for State {
         let response_data: Vec<_> = data[6..data.len() - 1].to_vec();
         let _checksum2 = data[data.len() - 1];
 
-        // TODO: validate sequence, checksums, etc.
+        if !validate_ipmb_checksums(&data) {
+            return Err(RmcpIpmiReceiveError::IpmbChecksumFailed);
+        }
+
+        // TODO: validate sequence number
 
         if let Some(resp) = Response::new(
             crate::connection::Message::new_raw(netfn, cmd, response_data),

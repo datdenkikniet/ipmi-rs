@@ -13,10 +13,10 @@ impl Checksum {
         Self { state: 0 }
     }
 
-    pub fn from_iter(data: impl Iterator<Item = u8>) -> u8 {
+    pub fn from_iter(data: impl IntoIterator<Item = u8>) -> u8 {
         let mut me = Self::default();
 
-        data.for_each(|v| me.feed(v));
+        data.into_iter().for_each(|v| me.feed(v));
 
         me.finalize()
     }

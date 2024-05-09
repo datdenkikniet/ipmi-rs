@@ -34,6 +34,7 @@ pub enum RmcpIpmiReceiveError {
     NotIpmi,
     NotEnoughData,
     EmptyMessage,
+    IpmbChecksumFailed,
 }
 
 #[derive(Debug)]

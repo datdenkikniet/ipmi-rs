@@ -240,6 +240,22 @@ impl IpmiConnection for RmcpWithState<Active> {
     }
 }
 
+pub fn validate_ipmb_checksums(data: &[u8]) -> bool {
+    if data.len() < 4 {
+        return false;
+    }
+
+    let first_checksum = Checksum::from_iter([data[0], data[1]]);
+
+    if first_checksum != data[2] {
+        return false;
+    }
+
+    let second_checksum = Checksum::from_iter(data[3..data.len() - 1].iter().copied());
+
+    second_checksum == data[data.len() - 1]
+}
+
 // TODO: `ExactSizeIterator` to avoid/postpone allocation?
 pub fn next_ipmb_message(
     request: &crate::connection::Request,
@@ -260,7 +276,7 @@ pub fn next_ipmb_message(
     let first_part = [*rs_addr, netfn_rslun];
 
     all_data.extend(first_part);
-    all_data.push(Checksum::from_iter(first_part.into_iter()));
+    all_data.push(Checksum::from_iter(first_part));
 
     let req_addr = *requestor_addr;
 
