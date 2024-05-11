@@ -19,6 +19,8 @@ pub use message::Message;
 
 mod auth;
 mod md2;
+#[cfg(feature = "md5")]
+mod md5;
 mod message;
 
 #[derive(Debug)]
@@ -40,6 +42,8 @@ pub enum WriteError {
     /// The payload length of for the V1_5 packet is larger than the maximum
     /// allowed size (256 bytes).
     PayloadTooLarge(usize),
+    /// The requested auth type is not supported.
+    UnsupportedAuthType(AuthType),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]

@@ -1,6 +1,6 @@
 use aes::cipher::{block_padding::NoPadding, BlockDecryptMut, BlockEncryptMut, KeyIvInit};
 
-use crate::connection::rmcp::{v2_0::crypto::sha1::RunningHmac, Message, PayloadType};
+use crate::connection::rmcp::{v2_0::crypto::sha1::Sha1Hmac, Message, PayloadType};
 
 use super::{
     super::{ReadError, WriteError},
@@ -65,9 +65,8 @@ impl SubState {
             match self.integrity_algorithm {
                 IntegrityAlgorithm::None => {}
                 IntegrityAlgorithm::HmacSha1_96 => {
-                    let integrity_data = RunningHmac::new(&self.keys.k1)
-                        .feed(auth_code_data)
-                        .finalize();
+                    let integrity_data =
+                        Sha1Hmac::new(&self.keys.k1).feed(auth_code_data).finalize();
 
                     buffer.extend_from_slice(&integrity_data[..12]);
                 }
@@ -86,7 +85,7 @@ impl SubState {
             IntegrityAlgorithm::HmacSha1_96 => {
                 let (data, checksum_data) = data.split_at_mut(data.len() - 12);
 
-                let checksum = RunningHmac::new(&self.keys.k1).feed(data).finalize();
+                let checksum = Sha1Hmac::new(&self.keys.k1).feed(data).finalize();
 
                 if &checksum[..12] != checksum_data {
                     return Err(CryptoUnwrapError::AuthCodeMismatch);

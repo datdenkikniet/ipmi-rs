@@ -1,11 +1,11 @@
 use hmac::{Hmac, Mac};
 use sha1::Sha1;
 
-pub struct RunningHmac {
+pub struct Sha1Hmac {
     state: Hmac<Sha1>,
 }
 
-impl RunningHmac {
+impl Sha1Hmac {
     pub fn new(key: &[u8]) -> Self {
         Self {
             state: Hmac::new_from_slice(key)

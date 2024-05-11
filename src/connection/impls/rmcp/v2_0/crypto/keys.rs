@@ -1,6 +1,6 @@
 use aes::cipher::{consts::U16, generic_array::GenericArray};
 
-use super::sha1::RunningHmac;
+use super::sha1::Sha1Hmac;
 
 #[allow(unused)]
 pub struct Keys {
@@ -19,12 +19,12 @@ impl core::fmt::Debug for Keys {
 
 impl Keys {
     pub fn from_sik(sik: [u8; 20]) -> Self {
-        let k2 = RunningHmac::new(&sik).feed(&[0x02; 20]).finalize();
+        let k2 = Sha1Hmac::new(&sik).feed(&[0x02; 20]).finalize();
         Self {
             sik,
-            k1: RunningHmac::new(&sik).feed(&[0x01; 20]).finalize(),
+            k1: Sha1Hmac::new(&sik).feed(&[0x01; 20]).finalize(),
             k2,
-            k3: RunningHmac::new(&sik).feed(&[0x03; 20]).finalize(),
+            k3: Sha1Hmac::new(&sik).feed(&[0x03; 20]).finalize(),
             aes_key: <[u8; 16]>::try_from(&k2[..16]).unwrap().into(),
         }
     }

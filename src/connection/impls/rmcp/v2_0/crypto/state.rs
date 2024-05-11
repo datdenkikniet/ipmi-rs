@@ -1,5 +1,5 @@
 use crate::connection::rmcp::{
-    v2_0::{crypto::sha1::RunningHmac, ReadError, WriteError},
+    v2_0::{crypto::sha1::Sha1Hmac, ReadError, WriteError},
     Message, OpenSessionResponse as OSR, RakpMessage1 as RM1, RakpMessage2 as RM2,
 };
 
@@ -69,7 +69,7 @@ impl CryptoState {
         match algorithm {
             AuthenticationAlgorithm::RakpNone => integrity_check_value.is_empty(),
             AuthenticationAlgorithm::RakpHmacSha1 => {
-                let integrity = &RunningHmac::new(&self.state.keys.sik)
+                let integrity = &Sha1Hmac::new(&self.state.keys.sik)
                     .feed(remote_console_random_number)
                     .feed(&managed_system_session_id.to_le_bytes())
                     .feed(managed_system_guid)
@@ -85,7 +85,7 @@ impl CryptoState {
     fn validate_hmac_sha1(&mut self, osr: &OSR, m1: &RM1, m2: &RM2) -> Option<Vec<u8>> {
         let privilege_level_byte = u8::from(m1.requested_maximum_privilege_level);
 
-        let hmac_output = RunningHmac::new(&self.password)
+        let hmac_output = Sha1Hmac::new(&self.password)
             .feed(&m2.remote_console_session_id.get().to_le_bytes())
             .feed(&m1.managed_system_session_id.get().to_le_bytes())
             .feed(&m1.remote_console_random_number)
@@ -96,14 +96,14 @@ impl CryptoState {
             .finalize();
 
         if hmac_output == m2.key_exchange_auth_code {
-            let sik = RunningHmac::new(self.kg())
+            let sik = Sha1Hmac::new(self.kg())
                 .feed(&m1.remote_console_random_number)
                 .feed(&m2.managed_system_random_number)
                 .feed(&[privilege_level_byte, m1.username.len()])
                 .feed(m1.username)
                 .finalize();
 
-            let output = RunningHmac::new(&self.password)
+            let output = Sha1Hmac::new(&self.password)
                 .feed(&m2.managed_system_random_number)
                 .feed(&m2.remote_console_session_id.get().to_le_bytes())
                 .feed(&[privilege_level_byte, m1.username.len()])
