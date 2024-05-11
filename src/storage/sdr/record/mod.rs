@@ -620,7 +620,7 @@ impl TryFrom<u8> for Direction {
             0b00 => Self::UnspecifiedNotApplicable,
             0b01 => Self::Input,
             0b10 => Self::Output,
-            _ => return Err(ParseError::InvalidDirection),
+            _ => return Err(ParseError::InvalidSensorDirection),
         };
         Ok(dir)
     }
@@ -631,11 +631,9 @@ pub enum ParseError {
     NotEnoughData,
     IncorrectRecordLength,
     InvalidSensorId,
-    SensorRecordCommon,
-    InvalidSensorKey,
     InvalidIdStringModifier(u8),
     InvalidSensorNumber,
-    InvalidDirection,
+    InvalidSensorDirection,
 }
 
 #[derive(Debug, Clone, PartialEq)]
