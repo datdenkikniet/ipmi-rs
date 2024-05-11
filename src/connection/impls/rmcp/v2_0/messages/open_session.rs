@@ -97,7 +97,7 @@ impl AlgorithmPayload {
 pub struct OpenSessionRequest {
     pub message_tag: u8,
     pub requested_max_privilege: Option<PrivilegeLevel>,
-    pub remote_console_session_id: u32,
+    pub remote_console_session_id: NonZeroU32,
     // TODO: technically these support vectors of algorithms, but
     // the testing platform we're trying doesn't seem to support
     // that very well.
@@ -115,7 +115,7 @@ impl OpenSessionRequest {
         buffer.push(0);
         buffer.push(0);
 
-        buffer.extend_from_slice(&self.remote_console_session_id.to_le_bytes());
+        buffer.extend_from_slice(&self.remote_console_session_id.get().to_le_bytes());
 
         AlgorithmPayload::Authentication(self.authentication_algorithms).write(false, buffer);
         AlgorithmPayload::Integrity(self.integrity_algorithms).write(false, buffer);

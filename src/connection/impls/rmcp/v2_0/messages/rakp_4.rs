@@ -1,3 +1,5 @@
+use std::num::NonZeroU32;
+
 use super::RakpErrorStatusCode;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -5,13 +7,14 @@ pub enum ParseError {
     NotEnoughData,
     ErrorStatusCode(ErrorStatusCode),
     UnknownErrorStatusCode(u8),
+    ZeroManagedSystemSessionId,
 }
 
 #[derive(Debug, Clone)]
 pub struct RakpMessage4<'a> {
     pub message_tag: u8,
     pub status_code: u8,
-    pub management_console_session_id: u32,
+    pub managed_system_session_id: NonZeroU32,
     pub integrity_check_value: &'a [u8],
 }
 
@@ -35,13 +38,18 @@ impl<'a> RakpMessage4<'a> {
             return Err(ParseError::NotEnoughData);
         }
 
-        let management_console_session_id = u32::from_le_bytes(data[4..8].try_into().unwrap());
+        let managed_system_session_id =
+            if let Ok(v) = u32::from_le_bytes(data[4..8].try_into().unwrap()).try_into() {
+                v
+            } else {
+                return Err(ParseError::ZeroManagedSystemSessionId);
+            };
         let integrity_check_value = &data[8..];
 
         Ok(Self {
             message_tag,
             status_code,
-            management_console_session_id,
+            managed_system_session_id,
             integrity_check_value,
         })
     }

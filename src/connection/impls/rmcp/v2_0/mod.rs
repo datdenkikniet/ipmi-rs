@@ -21,6 +21,24 @@ use self::crypto::CryptoUnwrapError;
 use super::{internal::IpmbState, v1_5, RmcpIpmiError, RmcpIpmiReceiveError, UnwrapSessionError};
 
 #[derive(Debug)]
+pub enum ValidateSessionResponseError {
+    MessageTagMismatch,
+    RemoteConsoleSessionIdMismatch,
+}
+
+#[derive(Debug)]
+pub enum ValidateRakpMessage2Error {
+    MessageTagMismatch,
+    RemoteConsoleSessionIdMismatch,
+}
+
+#[derive(Debug)]
+pub enum ValidateRakpMessage4Error {
+    MessageTagMismatch,
+    ManagedSystemSessionIdMismatch,
+}
+
+#[derive(Debug)]
 pub enum ActivationError {
     Io(std::io::Error),
     InvalidKeyExchangeAuthCodeLen(usize, AuthenticationAlgorithm),
@@ -28,14 +46,17 @@ pub enum ActivationError {
     OpenSessionResponseReceive(RmcpIpmiReceiveError),
     OpenSessionResponseRead(UnwrapSessionError),
     OpenSessionResponseParse(ParseSessionResponseError),
+    OpenSessionResponseValidate(ValidateSessionResponseError),
     SendRakpMessage1(WriteError),
     RakpMessage2Receive(RmcpIpmiReceiveError),
     RakpMessage2Read(UnwrapSessionError),
     RakpMessage2Parse(RakpMessage2ParseError),
+    RakpMessage2Validate(ValidateRakpMessage2Error),
     RakpMessage3Send(WriteError),
     RakpMessage4Receive(RmcpIpmiReceiveError),
     RakpMessage4Read(UnwrapSessionError),
     RakpMessage4Parse(RakpMessage4ParseError),
+    RakpMessage4Validate(ValidateRakpMessage4Error),
     RakpMessage4InvalidIntegrityCheckValue,
     ServerAuthenticationFailed,
 }
@@ -43,6 +64,24 @@ pub enum ActivationError {
 impl From<ParseSessionResponseError> for ActivationError {
     fn from(value: ParseSessionResponseError) -> Self {
         Self::OpenSessionResponseParse(value)
+    }
+}
+
+impl From<ValidateSessionResponseError> for ActivationError {
+    fn from(value: ValidateSessionResponseError) -> Self {
+        Self::OpenSessionResponseValidate(value)
+    }
+}
+
+impl From<ValidateRakpMessage2Error> for ActivationError {
+    fn from(value: ValidateRakpMessage2Error) -> Self {
+        Self::RakpMessage2Validate(value)
+    }
+}
+
+impl From<ValidateRakpMessage4Error> for ActivationError {
+    fn from(value: ValidateRakpMessage4Error) -> Self {
+        Self::RakpMessage4Validate(value)
     }
 }
 
@@ -139,10 +178,53 @@ pub struct State {
 }
 
 impl State {
-    // TODO: validate message tags
-    // TODO: validate sequence numbers
-    // TODO: validate remote console session ID
-    // TODO: validate managed system session ID
+    fn validate_open_session(
+        req: &OpenSessionRequest,
+        resp: &OpenSessionResponse,
+    ) -> Result<(), ValidateSessionResponseError> {
+        if resp.message_tag != req.message_tag {
+            return Err(ValidateSessionResponseError::MessageTagMismatch);
+        }
+
+        if resp.remote_console_session_id != req.remote_console_session_id {
+            return Err(ValidateSessionResponseError::RemoteConsoleSessionIdMismatch);
+        }
+
+        Ok(())
+    }
+
+    fn validate_rm1_rm2(
+        remote_console_session_id: NonZeroU32,
+        rm1: &RakpMessage1,
+        rm2: &RakpMessage2,
+    ) -> Result<(), ValidateRakpMessage2Error> {
+        if rm1.message_tag != rm2.message_tag {
+            return Err(ValidateRakpMessage2Error::MessageTagMismatch);
+        }
+
+        if remote_console_session_id != rm2.remote_console_session_id {
+            return Err(ValidateRakpMessage2Error::RemoteConsoleSessionIdMismatch);
+        }
+
+        Ok(())
+    }
+
+    fn validate_rm3_rm4(
+        managed_system_session_id: NonZeroU32,
+        rm3: &RakpMessage3,
+        rm4: &RakpMessage4,
+    ) -> Result<(), ValidateRakpMessage4Error> {
+        if rm3.message_tag != rm4.message_tag {
+            return Err(ValidateRakpMessage4Error::MessageTagMismatch);
+        }
+
+        if rm4.managed_system_session_id != managed_system_session_id {
+            return Err(ValidateRakpMessage4Error::ManagedSystemSessionIdMismatch);
+        }
+
+        Ok(())
+    }
+
     // TODO: validate RAKP message 4
     // TODO: assert that rng is always CryptoRng
     pub fn activate(
@@ -151,6 +233,9 @@ impl State {
         username: &Username,
         password: &[u8],
     ) -> Result<Self, ActivationError> {
+        use rand::Rng;
+        let mut rng = rand::thread_rng();
+
         fn send(
             socket: &mut RmcpIpmiSocket,
             ty: PayloadType,
@@ -174,16 +259,18 @@ impl State {
 
         let mut socket = RmcpIpmiSocket::new(state.release_socket());
 
+        let remote_console_session_id: NonZeroU32 = rng.gen();
+
         let open_session_request = OpenSessionRequest {
             message_tag: 0,
             requested_max_privilege: privilege_level,
-            remote_console_session_id: 0x0AA2A3A4,
+            remote_console_session_id,
             authentication_algorithms: AuthenticationAlgorithm::RakpHmacSha1,
             confidentiality_algorithms: ConfidentialityAlgorithm::AesCbc128,
             integrity_algorithms: IntegrityAlgorithm::HmacSha1_96,
         };
 
-        log::debug!("Sending RMCP+ Open Session Request. {open_session_request:?}");
+        log::debug!("Sending RMCP+ Open Session Request. {open_session_request:X?}");
 
         let mut payload = Vec::new();
         open_session_request.write_data(&mut payload);
@@ -209,10 +296,10 @@ impl State {
             Err(e) => return Err(e.into()),
         };
 
-        log::debug!("Received RMCP+ Open Session Response: {response:?}.");
+        log::debug!("Received RMCP+ Open Session Response: {response:X?}.");
 
-        use rand::Rng;
-        let mut rng = rand::thread_rng();
+        Self::validate_open_session(&open_session_request, &response)?;
+
         let random_data = rng.gen();
 
         let rm1 = RakpMessage1 {
@@ -226,7 +313,7 @@ impl State {
         let mut payload = Vec::new();
         rm1.write(&mut payload);
 
-        log::debug!("Sending RMCP+ RAKP Message 1.");
+        log::debug!("Sending RMCP+ RAKP Message 1. {rm1:X?}");
 
         send(&mut socket, PayloadType::RakpMessage1, payload)
             .map_err(ActivationError::SendRakpMessage1)?;
@@ -240,6 +327,8 @@ impl State {
             .map_err(ActivationError::RakpMessage2Parse)?;
 
         log::debug!("Received RMCP+ RAKP Message 2. {rm2:X?}");
+
+        Self::validate_rm1_rm2(remote_console_session_id, &rm1, &rm2)?;
 
         let kex_auth_code = rm2.key_exchange_auth_code;
 
@@ -281,7 +370,7 @@ impl State {
         let mut payload = Vec::new();
         rm3.write(&mut payload);
 
-        log::debug!("Sending RAKP message 3. {rm3:?}");
+        log::debug!("Sending RAKP message 3. {rm3:X?}");
 
         send(&mut socket, PayloadType::RakpMessage3, payload)
             .map_err(ActivationError::RakpMessage3Send)?;
@@ -298,7 +387,9 @@ impl State {
         let rm4 = RakpMessage4::from_data(&message.payload)
             .map_err(ActivationError::RakpMessage4Parse)?;
 
-        log::debug!("Received RAKP Message 4: {rm4:02X?}");
+        log::debug!("Received RAKP Message 4: {rm4:X?}");
+
+        Self::validate_rm3_rm4(response.remote_console_session_id, &rm3, &rm4)?;
 
         if !crypto_state.verify(
             response.authentication_payload,
