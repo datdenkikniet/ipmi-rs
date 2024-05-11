@@ -1,0 +1,35 @@
+name: Check format, check, build
+run-name: Check format, check, build
+on:
+  pull_request:
+  push:
+    branches: [main]
+jobs:
+  check-format:
+    runs-on: ubuntu-latest
+    name: Check formatting of the project
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Run `cargo fmt --check`
+        run: cargo fmt --check
+  
+  check:
+    runs-on: ubuntu-latest
+    name: Check that the project builds with feature combinations
+
+    strategy:
+      matrix:
+        features:
+          - ""
+          - "md5"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+      
+      - name: Run `cargo check --no-default-features --features "${{ matrix.features }}"`
+        run: cargo check --no-default-features --features "${{ matrix.features }}"
