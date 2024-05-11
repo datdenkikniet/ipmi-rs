@@ -92,8 +92,11 @@ impl SubState {
             return Err(CryptoUnwrapError::IncorrectPayloadLen.into());
         }
 
-        let data = match self.confidentiality_algorithm {
-            ConfidentialityAlgorithm::None => data,
+        let (data, trailer) = match self.confidentiality_algorithm {
+            ConfidentialityAlgorithm::None => {
+                const TRAILER: &[u8] = &[];
+                (data, TRAILER)
+            }
             ConfidentialityAlgorithm::AesCbc128 => {
                 let (iv, data_and_trailer) = data.split_at_mut(16);
                 let iv: [u8; 16] = iv.try_into().unwrap();
@@ -108,13 +111,27 @@ impl SubState {
                 let trailer_len = data_and_trailer[data_and_trailer.len() - 1] as usize;
                 let data_len = data_and_trailer.len() - trailer_len - 1;
 
-                // TODO: validate trailer
+                let (data, trailer) = data_and_trailer.split_at_mut(data_len);
 
-                &mut data_and_trailer[..data_len]
+                let trailer = &trailer[..trailer.len() - 1];
+                let trailer_len_desc = trailer[trailer.len() - 1] as usize;
+
+                if trailer.len() != trailer_len
+                    || trailer.len() != trailer_len_desc
+                    || trailer_len != trailer_len_desc
+                {
+                    return Err(CryptoUnwrapError::IncorrectTrailerLen.into());
+                }
+
+                (data, trailer)
             }
             ConfidentialityAlgorithm::Xrc4_128 => todo!(),
             ConfidentialityAlgorithm::Xrc4_40 => todo!(),
         };
+
+        if trailer.iter().zip(1..).any(|(l, r)| *l != r) {
+            return Err(CryptoUnwrapError::InvalidTrailer.into());
+        }
 
         Ok(Message {
             ty,

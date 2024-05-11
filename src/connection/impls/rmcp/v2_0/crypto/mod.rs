@@ -23,4 +23,6 @@ pub enum CryptoUnwrapError {
     MismatchingEncryptionState,
     MismatchingAuthenticationState,
     IncorrectPayloadLen,
+    IncorrectTrailerLen,
+    InvalidTrailer,
 }
