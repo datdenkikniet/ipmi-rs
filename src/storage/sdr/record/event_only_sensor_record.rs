@@ -21,6 +21,10 @@ pub struct EventOnlySensorRecord {
 
 impl EventOnlySensorRecord {
     pub fn parse(record_data: &[u8]) -> Result<Self, ParseError> {
+        if record_data.len() < 12 {
+            return Err(ParseError::NotEnoughData);
+        }
+
         let key = SensorKey::parse(&record_data[..3])?;
 
         let entity_id = record_data[3];

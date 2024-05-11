@@ -652,21 +652,21 @@ impl<'a> TryFrom<TypeLengthRaw<'a>> for SensorId {
 
     fn try_from(value: TypeLengthRaw<'a>) -> Result<Self, Self::Error> {
         let TypeLengthRaw(value, data) = value;
-        let type_code = (value >> 6) & 0x3;
+        let type_code = (value >> 6) & 0b11;
 
         let length = value & 0x1F;
 
         let data = &data[..(length as usize).min(data.len())];
 
-        let str = core::str::from_utf8(data)
-            .map_err(|_| ParseError::InvalidSensorId)
-            .map(str::to_string);
-
         let id = match type_code {
-            0b00 => SensorId::Unicode(str?),
+            0b00 => SensorId::Unicode(
+                core::str::from_utf8(data)
+                    .map_err(|_| ParseError::InvalidSensorId)
+                    .map(str::to_string)?,
+            ),
             0b01 => SensorId::BCDPlus(data.to_vec()),
             0b10 => SensorId::Ascii6BPacked(data.to_vec()),
-            0b11 => SensorId::Ascii8BAndLatin1(str.unwrap()),
+            0b11 => SensorId::Ascii8BAndLatin1(data.iter().map(|v| *v as char).collect()),
             _ => unreachable!(),
         };
 
@@ -687,7 +687,8 @@ impl core::fmt::Display for SensorId {
         match self {
             SensorId::Unicode(v) => write!(f, "{}", v),
             SensorId::Ascii8BAndLatin1(v) => write!(f, "{}", v),
-            _ => todo!(),
+            SensorId::Ascii6BPacked(data) => write!(f, "{:02X?}", data),
+            SensorId::BCDPlus(data) => write!(f, "{:02X?}", data),
         }
     }
 }
