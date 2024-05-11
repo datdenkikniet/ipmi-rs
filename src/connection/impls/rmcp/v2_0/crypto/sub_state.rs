@@ -41,40 +41,55 @@ impl SubState {
         self.integrity_algorithm != IntegrityAlgorithm::None
     }
 
-    pub fn read_payload(&mut self, data: &mut [u8]) -> Result<Message, ReadError> {
-        if data.len() < 10 {
-            return Err(ReadError::NotEnoughData);
+    fn write_trailer(&mut self, buffer: &mut Vec<u8>) -> Result<(), WriteError> {
+        // IPMI Session Trailer is only present if packets are authenticated.
+        if self.authenticated() {
+            // + 2 because pad data and pad length are also covered by
+            // integrity checksum.
+            let auth_code_data_len = buffer[4..].len() + 2;
+
+            // Integrity PAD
+            let pad_length = (4 - auth_code_data_len % 4) % 4;
+
+            buffer.extend(std::iter::repeat(0xFF).take(pad_length));
+
+            // Pad length
+            buffer.push(pad_length as u8);
+
+            // Next header
+            buffer.push(0x07);
+
+            // AuthCode
+            let auth_code_data = &buffer[4..];
+
+            match self.integrity_algorithm {
+                IntegrityAlgorithm::None => {}
+                IntegrityAlgorithm::HmacSha1_96 => {
+                    let integrity_data = RunningHmac::new(&self.keys.k1)
+                        .feed(auth_code_data)
+                        .finalize();
+
+                    buffer.extend_from_slice(&integrity_data[..12]);
+                }
+                IntegrityAlgorithm::HmacMd5_128 => todo!(),
+                IntegrityAlgorithm::Md5_128 => todo!(),
+                IntegrityAlgorithm::HmacSha256_128 => todo!(),
+            };
         }
 
-        if data[0] != 0x06 {
-            return Err(ReadError::NotIpmiV2_0);
-        }
+        Ok(())
+    }
 
-        let encrypted = (data[1] & 0x80) == 0x80;
-        let authenticated = (data[1] & 0x40) == 0x40;
-        let ty = PayloadType::try_from(data[1] & 0x3F)
-            .map_err(|_| ReadError::InvalidPayloadType(data[1] & 0x3F))?;
-
-        if self.encrypted() != encrypted {
-            return Err(CryptoUnwrapError::MismatchingEncryptionState.into());
-        }
-
-        if self.authenticated() != authenticated {
-            return Err(CryptoUnwrapError::MismatchingAuthenticationState.into());
-        }
-
-        let session_id = u32::from_le_bytes(data[2..6].try_into().unwrap());
-        let session_sequence_number = u32::from_le_bytes(data[6..10].try_into().unwrap());
-
-        let data = match self.integrity_algorithm {
-            IntegrityAlgorithm::None => data,
+    fn validate_trailer<'a>(&self, data: &'a mut [u8]) -> Result<&'a mut [u8], CryptoUnwrapError> {
+        match self.integrity_algorithm {
+            IntegrityAlgorithm::None => Ok(data),
             IntegrityAlgorithm::HmacSha1_96 => {
                 let (data, checksum_data) = data.split_at_mut(data.len() - 12);
 
                 let checksum = RunningHmac::new(&self.keys.k1).feed(data).finalize();
 
                 if &checksum[..12] != checksum_data {
-                    return Err(CryptoUnwrapError::AuthCodeMismatch.into());
+                    return Err(CryptoUnwrapError::AuthCodeMismatch);
                 }
 
                 let data_len = data.len();
@@ -82,83 +97,26 @@ impl SubState {
                 let next_header = data[data_len - 1];
 
                 if next_header != 0x07 {
-                    return Err(CryptoUnwrapError::UnknownNextHeader(next_header).into());
+                    return Err(CryptoUnwrapError::UnknownNextHeader(next_header));
                 }
 
                 // strip 2 bytes (pad_len and next_header) and the length
                 // of the pad.
-                &mut data[..data_len - 2 - pad_len]
+                Ok(&mut data[..data_len - 2 - pad_len])
             }
             IntegrityAlgorithm::HmacMd5_128 => todo!(),
             IntegrityAlgorithm::Md5_128 => todo!(),
             IntegrityAlgorithm::HmacSha256_128 => todo!(),
-        };
-
-        let data = &mut data[10..];
-
-        if data.len() < 2 {
-            return Err(CryptoUnwrapError::NotEnoughData.into());
         }
-
-        let data_len = u16::from_le_bytes(data[..2].try_into().unwrap());
-        let data = &mut data[2..];
-
-        if data_len as usize != data.len() {
-            return Err(CryptoUnwrapError::IncorrectPayloadLen.into());
-        }
-
-        let (data, trailer) = match self.confidentiality_algorithm {
-            ConfidentialityAlgorithm::None => {
-                const TRAILER: &[u8] = &[];
-                (data, TRAILER)
-            }
-            ConfidentialityAlgorithm::AesCbc128 => {
-                let (iv, data_and_trailer) = data.split_at_mut(16);
-                let iv: [u8; 16] = iv.try_into().unwrap();
-
-                let decryptor: cbc::Decryptor<aes::Aes128> =
-                    cbc::Decryptor::<aes::Aes128>::new(self.keys.aes_key(), &iv.into());
-
-                decryptor
-                    .decrypt_padded_mut::<NoPadding>(data_and_trailer)
-                    .unwrap();
-
-                let trailer_len = data_and_trailer[data_and_trailer.len() - 1] as usize;
-                let data_len = data_and_trailer.len() - trailer_len - 1;
-
-                let (data, trailer) = data_and_trailer.split_at_mut(data_len);
-
-                let trailer = &trailer[..trailer.len() - 1];
-                let trailer_len_desc = trailer[trailer.len() - 1] as usize;
-
-                if trailer.len() != trailer_len
-                    || trailer.len() != trailer_len_desc
-                    || trailer_len != trailer_len_desc
-                {
-                    return Err(CryptoUnwrapError::IncorrectConfidentialityTrailerLen.into());
-                }
-
-                (data, trailer)
-            }
-            ConfidentialityAlgorithm::Xrc4_128 => todo!(),
-            ConfidentialityAlgorithm::Xrc4_40 => todo!(),
-        };
-
-        if trailer.iter().zip(1..).any(|(l, r)| *l != r) {
-            return Err(CryptoUnwrapError::InvalidConfidentialityTrailer.into());
-        }
-
-        Ok(Message {
-            ty,
-            session_id,
-            session_sequence_number,
-            payload: data.to_vec(),
-        })
     }
 
     /// Write payload data `data` to `buffer`, potentially encrypting and adding
     /// headers or trailers as necessary.
-    fn write_payload_data(&mut self, data: &[u8], buffer: &mut Vec<u8>) -> Result<(), WriteError> {
+    fn write_data_encrypted(
+        &mut self,
+        data: &[u8],
+        buffer: &mut Vec<u8>,
+    ) -> Result<(), WriteError> {
         let data_len = data.len();
 
         if data_len > u16::MAX as usize {
@@ -218,43 +176,103 @@ impl SubState {
         Ok(())
     }
 
-    fn write_trailer(&mut self, buffer: &mut Vec<u8>) -> Result<(), WriteError> {
-        // IPMI Session Trailer is only present if packets are authenticated.
-        if self.authenticated() {
-            // + 2 because pad data and pad length are also covered by
-            // integrity checksum.
-            let auth_code_data_len = buffer[4..].len() + 2;
+    /// Read the (potentially encrypted) payload data from `data`, and return
+    /// a buffer containing the decrypted data.
+    fn read_data_encrypted<'a>(
+        &self,
+        data: &'a mut [u8],
+    ) -> Result<&'a mut [u8], CryptoUnwrapError> {
+        let (data, trailer) = match self.confidentiality_algorithm {
+            ConfidentialityAlgorithm::None => {
+                const EMPTY_TRAILER: &[u8] = &[];
+                (data, EMPTY_TRAILER)
+            }
+            ConfidentialityAlgorithm::AesCbc128 => {
+                let (iv, data_and_trailer) = data.split_at_mut(16);
+                let iv: [u8; 16] = iv.try_into().unwrap();
 
-            // Integrity PAD
-            let pad_length = (4 - auth_code_data_len % 4) % 4;
+                let decryptor: cbc::Decryptor<aes::Aes128> =
+                    cbc::Decryptor::<aes::Aes128>::new(self.keys.aes_key(), &iv.into());
 
-            buffer.extend(std::iter::repeat(0xFF).take(pad_length));
+                decryptor
+                    .decrypt_padded_mut::<NoPadding>(data_and_trailer)
+                    .unwrap();
 
-            // Pad length
-            buffer.push(pad_length as u8);
+                let trailer_len = data_and_trailer[data_and_trailer.len() - 1] as usize;
+                let data_len = data_and_trailer.len() - trailer_len - 1;
 
-            // Next header
-            buffer.push(0x07);
+                let (data, trailer) = data_and_trailer.split_at_mut(data_len);
 
-            // AuthCode
-            let auth_code_data = &buffer[4..];
+                let trailer = &trailer[..trailer.len() - 1];
+                let trailer_len_desc = trailer[trailer.len() - 1] as usize;
 
-            match self.integrity_algorithm {
-                IntegrityAlgorithm::None => {}
-                IntegrityAlgorithm::HmacSha1_96 => {
-                    let integrity_data = RunningHmac::new(&self.keys.k1)
-                        .feed(auth_code_data)
-                        .finalize();
-
-                    buffer.extend_from_slice(&integrity_data[..12]);
+                if trailer.len() != trailer_len
+                    || trailer.len() != trailer_len_desc
+                    || trailer_len != trailer_len_desc
+                {
+                    return Err(CryptoUnwrapError::IncorrectConfidentialityTrailerLen);
                 }
-                IntegrityAlgorithm::HmacMd5_128 => todo!(),
-                IntegrityAlgorithm::Md5_128 => todo!(),
-                IntegrityAlgorithm::HmacSha256_128 => todo!(),
-            };
+
+                (data, trailer)
+            }
+            ConfidentialityAlgorithm::Xrc4_128 => todo!(),
+            ConfidentialityAlgorithm::Xrc4_40 => todo!(),
+        };
+
+        if trailer.iter().zip(1..).any(|(l, r)| *l != r) {
+            Err(CryptoUnwrapError::InvalidConfidentialityTrailer)
+        } else {
+            Ok(data)
+        }
+    }
+
+    pub fn read_payload(&mut self, data: &mut [u8]) -> Result<Message, ReadError> {
+        if data.len() < 10 {
+            return Err(ReadError::NotEnoughData);
         }
 
-        Ok(())
+        if data[0] != 0x06 {
+            return Err(ReadError::NotIpmiV2_0);
+        }
+
+        let encrypted = (data[1] & 0x80) == 0x80;
+        let authenticated = (data[1] & 0x40) == 0x40;
+        let ty = PayloadType::try_from(data[1] & 0x3F)
+            .map_err(|_| ReadError::InvalidPayloadType(data[1] & 0x3F))?;
+
+        if self.encrypted() != encrypted {
+            return Err(CryptoUnwrapError::MismatchingEncryptionState.into());
+        }
+
+        if self.authenticated() != authenticated {
+            return Err(CryptoUnwrapError::MismatchingAuthenticationState.into());
+        }
+
+        let session_id = u32::from_le_bytes(data[2..6].try_into().unwrap());
+        let session_sequence_number = u32::from_le_bytes(data[6..10].try_into().unwrap());
+
+        let data_with_header = self.validate_trailer(data)?;
+        let data = &mut data_with_header[10..];
+
+        if data.len() < 2 {
+            return Err(CryptoUnwrapError::NotEnoughData.into());
+        }
+
+        let data_len = u16::from_le_bytes(data[..2].try_into().unwrap());
+        let data = &mut data[2..];
+
+        if data_len as usize != data.len() {
+            return Err(CryptoUnwrapError::IncorrectPayloadLen.into());
+        }
+
+        let data = self.read_data_encrypted(data)?;
+
+        Ok(Message {
+            ty,
+            session_id,
+            session_sequence_number,
+            payload: data.to_vec(),
+        })
     }
 
     pub fn write_payload(
@@ -275,8 +293,7 @@ impl SubState {
         buffer.extend_from_slice(&message.session_id.to_le_bytes());
         buffer.extend_from_slice(&message.session_sequence_number.to_le_bytes());
 
-        self.write_payload_data(&message.payload, buffer)?;
-
+        self.write_data_encrypted(&message.payload, buffer)?;
         self.write_trailer(buffer)?;
 
         Ok(())
