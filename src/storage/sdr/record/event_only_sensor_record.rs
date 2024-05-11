@@ -3,6 +3,8 @@ use crate::storage::sdr::record::compact_sensor_record::{IdStringModifier, Recor
 use crate::storage::sdr::record::{Direction, EntityInstance, SensorId, SensorKey, TypeLengthRaw};
 use crate::storage::sdr::SensorType;
 
+use super::ParseError;
+
 #[derive(Debug, Clone)]
 
 pub struct EventOnlySensorRecord {
@@ -18,22 +20,22 @@ pub struct EventOnlySensorRecord {
 }
 
 impl EventOnlySensorRecord {
-    pub fn parse(record_data: &[u8]) -> Option<Self> {
+    pub fn parse(record_data: &[u8]) -> Result<Self, ParseError> {
         let key = SensorKey::parse(&record_data[..3])?;
 
         let entity_id = record_data[3];
-        let entity_instance = EntityInstance::try_from(record_data[4]).ok()?;
+        let entity_instance = EntityInstance::from(record_data[4]);
         let ty = record_data[5].into();
         let event_reading_type_code = record_data[6].into();
 
         let direction_sharing_1 = record_data[7];
         let direction_sharing_2 = record_data[8];
 
-        let direction = Direction::try_from((direction_sharing_1 & 0xC) >> 6).unwrap();
+        let direction = Direction::try_from((direction_sharing_1 & 0xC) >> 6)?;
         let id_string_instance_modifier = match (direction_sharing_1 & 0x30) >> 4 {
-            0b00 => Some(IdStringModifier::Numeric),
-            0b01 => Some(IdStringModifier::Alpha),
-            _ => None,
+            0b00 => Ok(IdStringModifier::Numeric),
+            0b01 => Ok(IdStringModifier::Alpha),
+            v => Err(ParseError::InvalidIdStringModifier(v)),
         }?;
 
         let share_count = direction_sharing_1 & 0xF;
@@ -52,9 +54,9 @@ impl EventOnlySensorRecord {
         let id_string_type_len = record_data[11];
         let id_string_bytes = &record_data[12..];
 
-        let id_string = TypeLengthRaw::new(id_string_type_len, id_string_bytes).into();
+        let id_string = TypeLengthRaw::new(id_string_type_len, id_string_bytes).try_into()?;
 
-        Some(EventOnlySensorRecord {
+        Ok(EventOnlySensorRecord {
             key,
             entity_id,
             entity_instance,

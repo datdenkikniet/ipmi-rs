@@ -78,9 +78,9 @@ pub struct SensorKey {
 }
 
 impl SensorKey {
-    pub fn parse(record_data: &[u8]) -> Option<Self> {
+    pub fn parse(record_data: &[u8]) -> Result<Self, ParseError> {
         if record_data.len() != 3 {
-            return None;
+            return Err(ParseError::NotEnoughData);
         }
 
         let owner_id = SensorOwner::from(record_data[0]);
@@ -93,9 +93,10 @@ impl SensorKey {
             LogicalUnit::try_from((owner_channel_fru_lun >> 2) & 0x3).unwrap();
         let owner_lun = LogicalUnit::try_from(owner_channel_fru_lun & 0x3).unwrap();
 
-        let sensor_number = SensorNumber(NonMaxU8::new(record_data[2])?);
+        let sensor_number =
+            SensorNumber(NonMaxU8::new(record_data[2]).ok_or(ParseError::InvalidSensorNumber)?);
 
-        Some(Self {
+        Ok(Self {
             owner_id,
             owner_channel,
             fru_inv_device_owner_lun,
@@ -612,17 +613,29 @@ pub enum Direction {
 }
 
 impl TryFrom<u8> for Direction {
-    type Error = ();
+    type Error = ParseError;
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         let dir = match value {
             0b00 => Self::UnspecifiedNotApplicable,
             0b01 => Self::Input,
             0b10 => Self::Output,
-            _ => return Err(()),
+            _ => return Err(ParseError::InvalidDirection),
         };
         Ok(dir)
     }
+}
+
+#[derive(Debug)]
+pub enum ParseError {
+    NotEnoughData,
+    IncorrectRecordLength,
+    InvalidSensorId,
+    SensorRecordCommon,
+    InvalidSensorKey,
+    InvalidIdStringModifier(u8),
+    InvalidSensorNumber,
+    InvalidDirection,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -634,8 +647,10 @@ impl<'a> TypeLengthRaw<'a> {
     }
 }
 
-impl<'a> From<TypeLengthRaw<'a>> for SensorId {
-    fn from(value: TypeLengthRaw<'a>) -> Self {
+impl<'a> TryFrom<TypeLengthRaw<'a>> for SensorId {
+    type Error = ParseError;
+
+    fn try_from(value: TypeLengthRaw<'a>) -> Result<Self, Self::Error> {
         let TypeLengthRaw(value, data) = value;
         let type_code = (value >> 6) & 0x3;
 
@@ -643,15 +658,19 @@ impl<'a> From<TypeLengthRaw<'a>> for SensorId {
 
         let data = &data[..(length as usize).min(data.len())];
 
-        let str = core::str::from_utf8(data).map(ToString::to_string);
+        let str = core::str::from_utf8(data)
+            .map_err(|_| ParseError::InvalidSensorId)
+            .map(str::to_string);
 
-        match type_code {
-            0b00 => SensorId::Unicode(str.unwrap()),
+        let id = match type_code {
+            0b00 => SensorId::Unicode(str?),
             0b01 => SensorId::BCDPlus(data.to_vec()),
             0b10 => SensorId::Ascii6BPacked(data.to_vec()),
             0b11 => SensorId::Ascii8BAndLatin1(str.unwrap()),
             _ => unreachable!(),
-        }
+        };
+
+        Ok(id)
     }
 }
 
@@ -744,9 +763,9 @@ impl Record {
         }
     }
 
-    pub fn parse(data: &[u8]) -> Option<Self> {
+    pub fn parse(data: &[u8]) -> Result<Self, ParseError> {
         if data.len() < 5 {
-            return None;
+            return Err(ParseError::NotEnoughData);
         }
 
         let record_id = RecordId::new_raw(u16::from_le_bytes([data[0], data[1]]));
@@ -757,11 +776,11 @@ impl Record {
 
         let record_data = &data[5..];
         if record_data.len() != record_length as usize {
-            return None;
+            return Err(ParseError::IncorrectRecordLength);
         }
 
         let contents = if record_type == 0x01 {
-            RecordContents::FullSensor(FullSensorRecord::parse(record_data).ok()?)
+            RecordContents::FullSensor(FullSensorRecord::parse(record_data)?)
         } else if record_type == 0x02 {
             RecordContents::CompactSensor(CompactSensorRecord::parse(record_data)?)
         } else if record_type == 0x03 {
@@ -777,7 +796,7 @@ impl Record {
             }
         };
 
-        Some(Self {
+        Ok(Self {
             header: RecordHeader {
                 id: record_id,
                 sdr_version_minor: sdr_version_min,
@@ -828,9 +847,9 @@ impl SensorRecordCommon {
     ///
     /// You _must_ remember to [`SensorRecordCommon::set_id`] once the ID of the
     /// record has been parsed.
-    pub(crate) fn parse_without_id(record_data: &[u8]) -> Option<(Self, &[u8])> {
+    pub(crate) fn parse_without_id(record_data: &[u8]) -> Result<(Self, &[u8]), ParseError> {
         if record_data.len() < 17 {
-            return None;
+            return Err(ParseError::NotEnoughData);
         }
 
         let sensor_key = SensorKey::parse(&record_data[..3])?;
@@ -868,7 +887,7 @@ impl SensorRecordCommon {
 
         let sensor_units = SensorUnits::from(sensor_units_1, base_unit, modifier_unit);
 
-        Some((
+        Ok((
             Self {
                 key: sensor_key,
                 entity_id,

@@ -1,6 +1,8 @@
 use crate::connection::LogicalUnit;
 use crate::storage::sdr::record::{SensorId, TypeLengthRaw};
 
+use super::ParseError;
+
 #[derive(Debug, Clone)]
 pub struct LogicalFruDevice {
     pub fru_device_id: u8,
@@ -38,9 +40,9 @@ pub struct FruDeviceLocator {
 }
 
 impl FruDeviceLocator {
-    pub fn parse(record_data: &[u8]) -> Option<Self> {
+    pub fn parse(record_data: &[u8]) -> Result<Self, ParseError> {
         if record_data.len() < 8 {
-            return None;
+            return Err(ParseError::NotEnoughData);
         }
 
         let device_access_address = record_data[0] >> 1;
@@ -55,7 +57,8 @@ impl FruDeviceLocator {
             })
         };
 
-        let lun = LogicalUnit::try_from((record_data[2] >> 3) & 0b11).ok()?;
+        // NOTE(unwrap): `LogicalUnit::try_from` always succeeds for data masked with 0b11.
+        let lun = LogicalUnit::try_from((record_data[2] >> 3) & 0b11).unwrap();
         let private_bus_id = record_data[2] & 0b111;
         let channel_number = record_data[3];
 
@@ -76,9 +79,9 @@ impl FruDeviceLocator {
         let id_string_type_len = record_data[10];
         let id_string_bytes = &record_data[11..];
 
-        let id_string = TypeLengthRaw::new(id_string_type_len, id_string_bytes).into();
+        let id_string = TypeLengthRaw::new(id_string_type_len, id_string_bytes).try_into()?;
 
-        Some(Self {
+        Ok(Self {
             record_key,
             device_type,
             device_type_modifier,

@@ -1,5 +1,7 @@
 use crate::storage::sdr::record::{SensorId, TypeLengthRaw};
 
+use super::ParseError;
+
 #[derive(Debug, Clone)]
 pub struct McRecordKey {
     pub i2c_address: u8,
@@ -43,7 +45,11 @@ pub struct McDeviceLocatorRecord {
 }
 
 impl McDeviceLocatorRecord {
-    pub fn parse(record_data: &[u8]) -> Option<Self> {
+    pub fn parse(record_data: &[u8]) -> Result<Self, ParseError> {
+        if record_data.len() < 11 {
+            return Err(ParseError::NotEnoughData);
+        }
+
         let i2c_address = record_data[0] >> 1;
         let channel = record_data[1] & 0b1111;
 
@@ -93,9 +99,9 @@ impl McDeviceLocatorRecord {
         let id_string_type_len = record_data[10];
         let id_string_bytes = &record_data[11..];
 
-        let id_string = TypeLengthRaw::new(id_string_type_len, id_string_bytes).into();
+        let id_string = TypeLengthRaw::new(id_string_type_len, id_string_bytes).try_into()?;
 
-        Some(McDeviceLocatorRecord {
+        Ok(McDeviceLocatorRecord {
             key,
             acpi_system_power_state_notification_required,
             acpi_device_power_state_notification_required,
