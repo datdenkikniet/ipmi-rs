@@ -1,270 +1,204 @@
-// LE = least significant byte first = IPMI
-// BE = most significant byte first = RMCP/ASF
+use crate::{connection::IpmiConnection, IpmiCommandError};
+use std::{net::ToSocketAddrs, time::Duration};
 
-use std::{
-    io::{Error, ErrorKind},
-    net::{ToSocketAddrs, UdpSocket},
-    num::NonZeroU32,
-    time::Duration,
+mod socket;
+
+mod v1_5;
+pub use v1_5::{
+    ActivationError as V1_5ActivationError, ReadError as V1_5ReadError,
+    WriteError as V1_5WriteError,
 };
 
-use crate::{
-    app::auth::{
-        self, ActivateSession, AuthError, GetChannelAuthenticationCapabilities,
-        GetSessionChallenge, PrivilegeLevel,
-    },
-    connection::{Channel, IpmiConnection, LogicalUnit, Response},
-    IpmiCommandError,
+mod v2_0;
+pub use v2_0::{
+    ActivationError as V2_0ActivationError, AuthenticationAlgorithm, ConfidentialityAlgorithm,
+    IntegrityAlgorithm, ReadError as V2_0ReadError, WriteError as V2_0WriteError, *,
 };
 
-mod wire;
+mod checksum;
 
-mod protocol;
-use protocol::*;
+mod header;
+pub(crate) use header::*;
 
-mod encapsulation;
+mod asf;
+pub(crate) use asf::*;
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Inactive;
+mod internal;
+use internal::{Active, RmcpWithState, Unbound};
 
-pub struct Active {
-    session_id: Option<NonZeroU32>,
-    auth_type: crate::app::auth::AuthType,
-    password: [u8; 16],
-    _supported_interactions: SupportedInteractions,
-    request_sequence: u32,
+#[derive(Debug)]
+pub enum RmcpIpmiReceiveError {
+    Io(std::io::Error),
+    RmcpHeader(RmcpHeaderError),
+    Session(UnwrapSessionError),
+    NotIpmi,
+    NotEnoughData,
+    EmptyMessage,
+    IpmbChecksumFailed,
 }
 
-pub struct Rmcp<T> {
-    inner: UdpSocket,
-    ipmb_sequence: u8,
-    responder_addr: u8,
-    requestor_addr: u8,
-    requestor_lun: LogicalUnit,
-    state: T,
+#[derive(Debug)]
+pub enum RmcpIpmiSendError {
+    V1_5(V1_5WriteError),
+    V2_0(V2_0WriteError),
 }
 
-impl<T> Rmcp<T> {
-    fn convert<O>(self, new_state: O) -> Rmcp<O> {
-        Rmcp {
-            inner: self.inner,
-            ipmb_sequence: self.ipmb_sequence,
-            responder_addr: self.responder_addr,
-            requestor_addr: self.requestor_addr,
-            requestor_lun: self.requestor_lun,
-            state: new_state,
-        }
+impl From<V1_5WriteError> for RmcpIpmiSendError {
+    fn from(value: V1_5WriteError) -> Self {
+        Self::V1_5(value)
     }
 }
 
-type CommandError<T> = IpmiCommandError<<Rmcp<Active> as IpmiConnection>::Error, T>;
+impl From<V2_0WriteError> for RmcpIpmiSendError {
+    fn from(value: V2_0WriteError) -> Self {
+        Self::V2_0(value)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum UnwrapSessionError {
+    V1_5(V1_5ReadError),
+    V2_0(V2_0ReadError),
+}
+
+impl From<V1_5ReadError> for UnwrapSessionError {
+    fn from(value: V1_5ReadError) -> Self {
+        Self::V1_5(value)
+    }
+}
+
+impl From<V2_0ReadError> for UnwrapSessionError {
+    fn from(value: V2_0ReadError) -> Self {
+        Self::V2_0(value)
+    }
+}
+
+#[derive(Debug)]
+pub enum RmcpIpmiError {
+    NotActive,
+    Receive(RmcpIpmiReceiveError),
+    Send(RmcpIpmiSendError),
+}
+
+impl From<RmcpIpmiReceiveError> for RmcpIpmiError {
+    fn from(value: RmcpIpmiReceiveError) -> Self {
+        Self::Receive(value)
+    }
+}
+
+impl From<RmcpIpmiSendError> for RmcpIpmiError {
+    fn from(value: RmcpIpmiSendError) -> Self {
+        Self::Send(value)
+    }
+}
+
+type CommandError<T> = IpmiCommandError<RmcpIpmiError, T>;
 
 #[derive(Debug)]
 pub enum ActivationError {
-    Io(Error),
-    UsernameTooLong,
-    PasswordTooLong,
-    NoSupportedAuthenticationType,
+    BindSocket(std::io::Error),
+    PingSend(std::io::Error),
+    PongReceive(std::io::Error),
+    PongRead,
+    /// The contacted host does not support IPMI over RMCP.
+    IpmiNotSupported,
+    NoSupportedIpmiLANVersions,
     GetChannelAuthenticationCapabilities(CommandError<()>),
-    GetSessionChallenge(CommandError<AuthError>),
-    ActivateSession(CommandError<AuthError>),
+    V1_5(V1_5ActivationError),
+    V2_0(V2_0ActivationError),
+    RmcpError(RmcpHeaderError),
 }
 
-impl From<std::io::Error> for ActivationError {
-    fn from(value: std::io::Error) -> Self {
-        Self::Io(value)
+impl From<V1_5ActivationError> for ActivationError {
+    fn from(value: V1_5ActivationError) -> Self {
+        Self::V1_5(value)
     }
 }
 
-impl Rmcp<Inactive> {
-    pub fn new<R: ToSocketAddrs + core::fmt::Debug>(
-        remote: R,
-        timeout: Duration,
-    ) -> std::io::Result<Self> {
-        let addrs: Vec<_> = remote.to_socket_addrs()?.collect();
+impl From<V2_0ActivationError> for ActivationError {
+    fn from(value: V2_0ActivationError) -> Self {
+        Self::V2_0(value)
+    }
+}
 
-        if addrs.len() != 1 {
-            return Err(Error::new(
-                ErrorKind::InvalidInput,
-                "You must provide exactly 1 remote address.",
-            ));
-        }
+#[derive(Debug)]
+pub struct Rmcp {
+    unbound_state: RmcpWithState<Unbound>,
+    active_state: Option<RmcpWithState<Active>>,
+}
 
-        log::debug!("Binding socket...");
-        let socket = UdpSocket::bind("[::]:0")?;
-        socket.set_read_timeout(Some(timeout))?;
-
-        log::debug!("Opening connection");
-        socket.connect(addrs[0])?;
+impl Rmcp {
+    pub fn new<R>(remote: R, timeout: Duration) -> Result<Self, std::io::Error>
+    where
+        R: ToSocketAddrs + std::fmt::Debug,
+    {
+        let unbound_state = RmcpWithState::new(remote, timeout)?;
 
         Ok(Self {
-            inner: socket,
-            responder_addr: 0x20,
-            requestor_addr: 0x81,
-            requestor_lun: LogicalUnit::Zero,
-            ipmb_sequence: 0,
-            state: Inactive,
+            unbound_state,
+            active_state: None,
         })
     }
 
+    pub fn inactive_clone(&self) -> Self {
+        Self {
+            unbound_state: self.unbound_state.clone(),
+            active_state: None,
+        }
+    }
+
+    pub fn is_active(&self) -> bool {
+        self.active_state.is_some()
+    }
+
+    /// Activate this RMCP connection with the provided username and password.
+    ///
+    /// If `rmcp_plus` is `true`, upgrade the connection to an RMCP+ connection
+    /// if the remote host supports it.
     pub fn activate(
-        self,
+        &mut self,
+        rmcp_plus: bool,
         username: Option<&str>,
-        password: &[u8],
-    ) -> Result<Rmcp<Active>, ActivationError> {
-        let challenge_command = match GetSessionChallenge::new(auth::AuthType::None, username) {
-            Some(v) => v,
-            None => return Err(ActivationError::UsernameTooLong),
-        };
-
-        if password.len() > 16 {
-            return Err(ActivationError::PasswordTooLong);
+        password: Option<&[u8]>,
+    ) -> Result<(), ActivationError> {
+        if self.active_state.take().is_some() {
+            // TODO: shut down currently active state.
+            log::info!("De-activating RMCP connection for re-activation");
         }
 
-        let ping = RmcpMessage::new(
-            0xFF,
-            RmcpClass::Asf(ASFMessage {
-                message_tag: 0x00,
-                message_type: ASFMessageType::Ping,
-            }),
-        );
+        let inactive = self
+            .unbound_state
+            .bind()
+            .map_err(ActivationError::BindSocket)?;
 
-        log::debug!("Starting RMCP activation sequence");
-        self.inner.send(&ping.to_bytes())?;
-
-        let mut buf = [0u8; 1024];
-        let received = self.inner.recv(&mut buf)?;
-
-        let pong = RmcpMessage::from_bytes(&buf[..received]);
-
-        let (supported_entities, supported_interactions) = if let Some(RmcpMessage {
-            class_and_contents:
-                RmcpClass::Asf(ASFMessage {
-                    message_type:
-                        ASFMessageType::Pong {
-                            supported_entities,
-                            supported_interactions,
-                            ..
-                        },
-                    ..
-                }),
-            ..
-        }) = pong
-        {
-            (supported_entities, supported_interactions)
-        } else {
-            return Err(Error::new(ErrorKind::Other, "Invalid response from remote").into());
-        };
-
-        if !supported_entities.ipmi {
-            return Err(Error::new(
-                ErrorKind::Unsupported,
-                "Remote does not support IPMI entity.",
-            )
-            .into());
-        }
-
-        let privilege_level = PrivilegeLevel::Administrator;
-
-        let mut password_padded = [0u8; 16];
-        password_padded[..password.len()].copy_from_slice(password);
-
-        let activated = self.convert(Active {
-            auth_type: auth::AuthType::None,
-            password: password_padded,
-            _supported_interactions: supported_interactions,
-            session_id: None,
-            request_sequence: 0,
-        });
-
-        let mut ipmi = crate::Ipmi::new(activated);
-
-        log::debug!("Obtaining channel authentication capabilitiles");
-
-        let authentication_caps = match ipmi.send_recv(GetChannelAuthenticationCapabilities::new(
-            Channel::Current,
-            privilege_level,
-        )) {
-            Ok(v) => v,
-            Err(e) => return Err(ActivationError::GetChannelAuthenticationCapabilities(e)),
-        };
-
-        log::trace!("Authentication capabilities: {:?}", authentication_caps);
-
-        log::debug!("Requesting challenge");
-
-        let challenge = match ipmi.send_recv(challenge_command) {
-            Ok(v) => v,
-            Err(e) => return Err(ActivationError::GetSessionChallenge(e)),
-        };
-
-        let activation_auth_type = authentication_caps
-            .best_auth()
-            .ok_or(ActivationError::NoSupportedAuthenticationType)?;
-
-        let activate_session: ActivateSession = ActivateSession {
-            auth_type: activation_auth_type,
-            maxiumum_privilege_level: privilege_level,
-            challenge_string: challenge.challenge_string,
-            initial_sequence_number: 0xDEAD_BEEF,
-        };
-
-        ipmi.inner_mut().state.session_id = Some(challenge.temporary_session_id);
-        ipmi.inner_mut().state.auth_type = activation_auth_type;
-
-        log::debug!("Activating session");
-
-        let activation_info = match ipmi.send_recv(activate_session.clone()) {
-            Ok(v) => v,
-            Err(e) => return Err(ActivationError::ActivateSession(e)),
-        };
-
-        log::debug!("Succesfully started a session ({:?})", activation_info);
-
-        let mut me = ipmi.release();
-
-        me.state.request_sequence = activation_info.initial_sequence_number;
-        me.state.session_id = Some(activation_info.session_id);
-
-        // TODO: assert the correct thing here
-        assert_eq!(activate_session.auth_type, activation_auth_type);
-
-        Ok(me)
+        let activated = inactive.activate(rmcp_plus, username, password)?;
+        self.active_state = Some(activated);
+        Ok(())
     }
 }
 
-impl IpmiConnection for Rmcp<Active> {
-    type SendError = Error;
+impl IpmiConnection for Rmcp {
+    type SendError = RmcpIpmiError;
 
-    type RecvError = Error;
+    type RecvError = RmcpIpmiError;
 
-    type Error = Error;
+    type Error = RmcpIpmiError;
 
     fn send(&mut self, request: &mut crate::connection::Request) -> Result<(), Self::SendError> {
-        wire::send(
-            &mut self.inner,
-            self.state.auth_type,
-            self.requestor_addr,
-            self.responder_addr,
-            &mut self.ipmb_sequence,
-            self.requestor_lun,
-            &mut self.state.request_sequence,
-            self.state.session_id,
-            &self.state.password,
-            request,
-        )
-        .map(|_| ())
+        let active = self.active_state.as_mut().ok_or(RmcpIpmiError::NotActive)?;
+        active.send(request)
     }
 
-    fn recv(&mut self) -> Result<Response, Self::RecvError> {
-        wire::recv(&mut self.inner)
+    fn recv(&mut self) -> Result<crate::connection::Response, Self::RecvError> {
+        let active = self.active_state.as_mut().ok_or(RmcpIpmiError::NotActive)?;
+        active.recv().map_err(RmcpIpmiError::Receive)
     }
 
     fn send_recv(
         &mut self,
         request: &mut crate::connection::Request,
-    ) -> Result<Response, Self::Error> {
-        self.send(request)?;
-        self.recv()
+    ) -> Result<crate::connection::Response, Self::Error> {
+        let active = self.active_state.as_mut().ok_or(RmcpIpmiError::NotActive)?;
+        active.send_recv(request)
     }
 }

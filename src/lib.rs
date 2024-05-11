@@ -2,6 +2,9 @@ pub mod app;
 
 pub mod connection;
 
+mod error;
+pub use error::IpmiError;
+
 pub mod storage;
 pub use storage::sdr::record::SensorRecord;
 
@@ -38,31 +41,6 @@ where
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
-pub enum IpmiError<CON, P> {
-    NetFnIsResponse(NetFn),
-    UnexpectedResponse {
-        netfn_sent: NetFn,
-        netfn_recvd: NetFn,
-        cmd_sent: u8,
-        cmd_recvd: u8,
-    },
-    ParsingFailed {
-        error: P,
-        netfn: NetFn,
-        cmd: u8,
-        completion_code: u8,
-        data: Vec<u8>,
-    },
-    Connection(CON),
-}
-
-impl<CON, P> From<CON> for IpmiError<CON, P> {
-    fn from(value: CON) -> Self {
-        Self::Connection(value)
-    }
-}
-
 pub type IpmiCommandError<T, E> = IpmiError<T, ParseResponseError<E>>;
 
 impl<CON> Ipmi<CON>
@@ -95,6 +73,7 @@ where
             Some((a, c)) => RequestTargetAddress::BmcOrIpmb(a, c, LogicalUnit::Zero),
             None => RequestTargetAddress::Bmc(LogicalUnit::Zero),
         };
+
         let message = request.into();
         let (message_netfn, message_cmd) = (message.netfn(), message.cmd());
         let mut request = Request::new(message, target_address);

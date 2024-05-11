@@ -5,23 +5,26 @@ use std::{io::ErrorKind, time::Duration};
 use clap::{Args, Parser};
 use ipmi_rs::{
     connection::{
-        rmcp::{Active, Rmcp},
+        rmcp::{
+            Rmcp, RmcpIpmiError, RmcpIpmiReceiveError, RmcpIpmiSendError, V1_5WriteError,
+            V2_0WriteError,
+        },
         File, IpmiCommand,
     },
     storage::sdr,
-    Ipmi, IpmiCommandError, SdrIter,
+    Ipmi, IpmiCommandError, IpmiError, SdrIter,
 };
 
 #[allow(unused)]
 fn main() {}
 
 pub enum IpmiConnectionEnum {
-    Rmcp(Ipmi<Rmcp<Active>>),
+    Rmcp(Ipmi<Rmcp>),
     File(Ipmi<File>),
 }
 
 enum SdrIterInner<'a> {
-    Rmcp(SdrIter<'a, Rmcp<Active>>),
+    Rmcp(SdrIter<'a, Rmcp>),
     File(SdrIter<'a, File>),
 }
 
@@ -45,7 +48,24 @@ impl IpmiConnectionEnum {
         CMD: IpmiCommand,
     {
         match self {
-            IpmiConnectionEnum::Rmcp(rmcp) => rmcp.send_recv(request),
+            IpmiConnectionEnum::Rmcp(rmcp) => match rmcp.send_recv(request) {
+                Ok(v) => Ok(v),
+                Err(e) => {
+                    let mapped = e.map(|e| match e {
+                        RmcpIpmiError::Receive(RmcpIpmiReceiveError::Io(io))
+                        | RmcpIpmiError::Send(RmcpIpmiSendError::V1_5(V1_5WriteError::Io(io)))
+                        | RmcpIpmiError::Send(RmcpIpmiSendError::V2_0(V2_0WriteError::Io(io))) => {
+                            io
+                        }
+                        e => {
+                            log::error!("RMCP command failed: {e:?}");
+                            std::io::Error::new(ErrorKind::Other, format!("{e:?}"))
+                        }
+                    });
+
+                    Err(mapped)
+                }
+            },
             IpmiConnectionEnum::File(file) => file.send_recv(request),
         }
     }
@@ -111,12 +131,11 @@ impl CommonOpts {
 
             log::debug!("Opening connection to {address}");
 
-            let rmcp = Rmcp::new(address, timeout)?;
-            let activated = rmcp
-                .activate(Some(username), password.as_bytes())
+            let mut rmcp = Rmcp::new(address, timeout)?;
+            rmcp.activate(true, Some(username), Some(password.as_bytes()))
                 .map_err(|e| error(format!("RMCP activation error: {:?}", e)))?;
 
-            let ipmi = Ipmi::new(activated);
+            let ipmi = Ipmi::new(rmcp);
             Ok(IpmiConnectionEnum::Rmcp(ipmi))
         } else {
             Err(error(format!(
