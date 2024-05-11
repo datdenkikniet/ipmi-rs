@@ -21,8 +21,8 @@ impl RawSensorReading {
 
         let reading_or_state_unavailable = (data[1] & 0x20) == 0x20;
 
-        let offset_data_1 = data.get(2).map(Clone::clone);
-        let offset_data_2 = data.get(3).map(Clone::clone);
+        let offset_data_1 = data.get(2).copied();
+        let offset_data_2 = data.get(3).copied();
 
         Some(Self {
             reading,
