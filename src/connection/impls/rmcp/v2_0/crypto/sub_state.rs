@@ -55,15 +55,6 @@ impl SubState {
         let ty = PayloadType::try_from(data[1] & 0x3F)
             .map_err(|_| ReadError::InvalidPayloadType(data[1] & 0x3F))?;
 
-        let session_id = u32::from_le_bytes(data[2..6].try_into().unwrap());
-        let session_sequence_number = u32::from_le_bytes(data[6..10].try_into().unwrap());
-
-        let data = &mut data[10..];
-
-        if data.len() < 2 {
-            return Err(CryptoUnwrapError::NotEnoughData.into());
-        }
-
         if self.encrypted() != encrypted {
             return Err(CryptoUnwrapError::MismatchingEncryptionState.into());
         }
@@ -72,21 +63,45 @@ impl SubState {
             return Err(CryptoUnwrapError::MismatchingAuthenticationState.into());
         }
 
-        let data_len = u16::from_le_bytes(data[..2].try_into().unwrap());
-        let data = &mut data[2..];
+        let session_id = u32::from_le_bytes(data[2..6].try_into().unwrap());
+        let session_sequence_number = u32::from_le_bytes(data[6..10].try_into().unwrap());
 
         let data = match self.integrity_algorithm {
             IntegrityAlgorithm::None => data,
             IntegrityAlgorithm::HmacSha1_96 => {
+                let (data, checksum_data) = data.split_at_mut(data.len() - 12);
+
+                let checksum = RunningHmac::new(&self.keys.k1).feed(data).finalize();
+
+                if &checksum[..12] != checksum_data {
+                    return Err(CryptoUnwrapError::AuthCodeMismatch.into());
+                }
+
                 let data_len = data.len();
-                // TODO: validate
-                let pad_len = data[data_len - 12 - 2];
-                &mut data[..data_len - 12 - 2 - pad_len as usize]
+                let pad_len = data[data_len - 2] as usize;
+                let next_header = data[data_len - 1];
+
+                if next_header != 0x07 {
+                    return Err(CryptoUnwrapError::UnknownNextHeader(next_header).into());
+                }
+
+                // strip 2 bytes (pad_len and next_header) and the length
+                // of the pad.
+                &mut data[..data_len - 2 - pad_len]
             }
             IntegrityAlgorithm::HmacMd5_128 => todo!(),
             IntegrityAlgorithm::Md5_128 => todo!(),
             IntegrityAlgorithm::HmacSha256_128 => todo!(),
         };
+
+        let data = &mut data[10..];
+
+        if data.len() < 2 {
+            return Err(CryptoUnwrapError::NotEnoughData.into());
+        }
+
+        let data_len = u16::from_le_bytes(data[..2].try_into().unwrap());
+        let data = &mut data[2..];
 
         if data_len as usize != data.len() {
             return Err(CryptoUnwrapError::IncorrectPayloadLen.into());
@@ -120,7 +135,7 @@ impl SubState {
                     || trailer.len() != trailer_len_desc
                     || trailer_len != trailer_len_desc
                 {
-                    return Err(CryptoUnwrapError::IncorrectTrailerLen.into());
+                    return Err(CryptoUnwrapError::IncorrectConfidentialityTrailerLen.into());
                 }
 
                 (data, trailer)
@@ -130,7 +145,7 @@ impl SubState {
         };
 
         if trailer.iter().zip(1..).any(|(l, r)| *l != r) {
-            return Err(CryptoUnwrapError::InvalidTrailer.into());
+            return Err(CryptoUnwrapError::InvalidConfidentialityTrailer.into());
         }
 
         Ok(Message {
@@ -141,6 +156,8 @@ impl SubState {
         })
     }
 
+    /// Write payload data `data` to `buffer`, potentially encrypting and adding
+    /// headers or trailers as necessary.
     fn write_payload_data(&mut self, data: &[u8], buffer: &mut Vec<u8>) -> Result<(), WriteError> {
         let data_len = data.len();
 
