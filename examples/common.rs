@@ -132,7 +132,7 @@ impl CommonOpts {
             log::debug!("Opening connection to {address}");
 
             let mut rmcp = Rmcp::new(address, timeout)?;
-            rmcp.activate(Some(username), Some(password.as_bytes()))
+            rmcp.activate(true, Some(username), Some(password.as_bytes()))
                 .map_err(|e| error(format!("RMCP activation error: {:?}", e)))?;
 
             let ipmi = Ipmi::new(rmcp);

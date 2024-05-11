@@ -151,8 +151,13 @@ impl Rmcp {
         self.active_state.is_some()
     }
 
+    /// Activate this RMCP connection with the provided username and password.
+    ///
+    /// If `rmcp_plus` is `true`, upgrade the connection to an RMCP+ connection
+    /// if the remote host supports it.
     pub fn activate(
         &mut self,
+        rmcp_plus: bool,
         username: Option<&str>,
         password: Option<&[u8]>,
     ) -> Result<(), ActivationError> {
@@ -166,7 +171,7 @@ impl Rmcp {
             .bind()
             .map_err(ActivationError::BindSocket)?;
 
-        let activated = inactive.activate(username, password)?;
+        let activated = inactive.activate(rmcp_plus, username, password)?;
         self.active_state = Some(activated);
         Ok(())
     }

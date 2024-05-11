@@ -101,6 +101,7 @@ impl RmcpWithState<Unbound> {
 impl RmcpWithState<Inactive> {
     pub fn activate(
         self,
+        rmcp_plus: bool,
         username: Option<&str>,
         password: Option<&[u8]>,
     ) -> Result<RmcpWithState<Active>, ActivationError> {
@@ -177,7 +178,7 @@ impl RmcpWithState<Inactive> {
 
         log::debug!("Authentication capabilities: {:?}", authentication_caps);
 
-        if authentication_caps.ipmi2_connections_supported {
+        if authentication_caps.ipmi2_connections_supported && rmcp_plus {
             let username = super::v2_0::Username::new(username.unwrap_or(""))
                 .unwrap_or(super::v2_0::Username::new_empty());
 
