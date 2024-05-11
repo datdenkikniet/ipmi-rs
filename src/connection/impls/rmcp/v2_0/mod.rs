@@ -225,16 +225,20 @@ impl State {
         Ok(())
     }
 
-    // TODO: validate RAKP message 4
-    // TODO: assert that rng is always CryptoRng
     pub fn activate(
         state: v1_5::State,
         privilege_level: Option<PrivilegeLevel>,
         username: &Username,
         password: &[u8],
     ) -> Result<Self, ActivationError> {
-        use rand::Rng;
+        use rand::{CryptoRng, Rng};
+
         let mut rng = rand::thread_rng();
+
+        // For good measure, add a compile time assert that
+        // makes sure thread_rng is a crypto rng.
+        fn assert_crypto_rng<T: CryptoRng>(_: &T) {}
+        assert_crypto_rng(&rng);
 
         fn send(
             socket: &mut RmcpIpmiSocket,
