@@ -739,6 +739,14 @@ impl Record {
         }
     }
 
+    pub fn event_only(&self) -> Option<&EventOnlySensorRecord> {
+        if let RecordContents::EventOnlySensor(event) = &self.contents {
+            Some(event)
+        } else {
+            None
+        }
+    }
+
     pub fn parse(data: &[u8]) -> Result<Self, ParseError> {
         if data.len() < 5 {
             return Err(ParseError::NotEnoughData);
@@ -888,6 +896,7 @@ impl Loggable for Record {
     fn as_log(&self) -> Vec<crate::fmt::LogItem> {
         let full = self.full_sensor();
         let compact = self.compact_sensor();
+        let event_only = self.event_only();
 
         let mut log = Vec::new();
 
@@ -895,6 +904,8 @@ impl Loggable for Record {
             log.push((0, "SDR Record (Full)").into());
         } else if compact.is_some() {
             log.push((0, "SDR Record (Compact)").into());
+        } else if event_only.is_some() {
+            log.push((0, "SDR Record (Event-only)").into())
         } else {
             log.push((0, "Cannot log unknown sensor type").into());
             return log;
@@ -934,6 +945,9 @@ impl Loggable for Record {
         } else if let Some(compact) = compact {
             compact.key_data().log_into(1, &mut log);
             log.push((1, "Sensor ID", compact.id_string()).into());
+        } else if let Some(event_only) = event_only {
+            event_only.key_data().log_into(1, &mut log);
+            log.push((1, "Sensor ID", event_only.id_string()).into());
         }
 
         log
