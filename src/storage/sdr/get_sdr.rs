@@ -56,7 +56,7 @@ impl From<GetDeviceSdr> for Message {
 impl IpmiCommand for GetDeviceSdr {
     type Output = RecordInfo;
 
-    type Error = RecordParseError;
+    type Error = (RecordParseError, RecordId);
 
     fn parse_response(
         completion_code: crate::connection::CompletionCode,
@@ -68,7 +68,9 @@ impl IpmiCommand for GetDeviceSdr {
             return Err(ParseResponseError::NotEnoughData);
         }
 
-        let res = RecordInfo::parse(data)?;
+        let next_id = RecordId::new_raw(u16::from_le_bytes([data[0], data[1]]));
+
+        let res = RecordInfo::parse(data).map_err(|e| (e, next_id))?;
 
         Ok(res)
     }
