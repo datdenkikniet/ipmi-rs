@@ -1,6 +1,6 @@
 use crate::storage::sdr::record::{SensorId, TypeLengthRaw};
 
-use super::ParseError;
+use super::{IdentifiableSensor, ParseError};
 
 #[derive(Debug, Clone)]
 pub struct McRecordKey {
@@ -42,6 +42,16 @@ pub struct McDeviceLocatorRecord {
     pub entity_instance: u8,
     pub oem_reserved: u8,
     pub id_string: SensorId,
+}
+
+impl IdentifiableSensor for McDeviceLocatorRecord {
+    fn id_string(&self) -> &SensorId {
+        &self.id_string
+    }
+
+    fn entity_id(&self) -> u8 {
+        self.entity_id
+    }
 }
 
 impl McDeviceLocatorRecord {

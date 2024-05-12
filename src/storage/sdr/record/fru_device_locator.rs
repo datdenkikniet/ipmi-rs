@@ -1,7 +1,7 @@
 use crate::connection::LogicalUnit;
 use crate::storage::sdr::record::{SensorId, TypeLengthRaw};
 
-use super::ParseError;
+use super::{IdentifiableSensor, ParseError};
 
 #[derive(Debug, Clone)]
 pub struct LogicalFruDevice {
@@ -37,6 +37,17 @@ pub struct FruDeviceLocator {
     pub fru_entity_instance: u8,
     pub oem_reserved: u8,
     pub id_string: SensorId,
+}
+
+impl IdentifiableSensor for FruDeviceLocator {
+    fn id_string(&self) -> &SensorId {
+        &self.id_string
+    }
+
+    fn entity_id(&self) -> u8 {
+        // Is this correct?
+        self.fru_entity_id
+    }
 }
 
 impl FruDeviceLocator {

@@ -3,7 +3,7 @@ use crate::storage::sdr::record::compact_sensor_record::{IdStringModifier, Recor
 use crate::storage::sdr::record::{Direction, EntityInstance, SensorId, SensorKey, TypeLengthRaw};
 use crate::storage::sdr::SensorType;
 
-use super::ParseError;
+use super::{DirectionalSensor, IdentifiableSensor, InstancedSensor, ParseError};
 
 #[derive(Debug, Clone)]
 
@@ -11,12 +11,47 @@ pub struct EventOnlySensorRecord {
     pub key: SensorKey,
     pub entity_id: u8,
     pub entity_instance: EntityInstance,
+    pub id_string: SensorId,
     pub ty: SensorType,
     pub event_reading_type_code: EventReadingTypeCodes,
     pub direction: Direction,
+
     pub record_sharing: RecordSharing,
     pub oem_reserved: u8,
-    pub id_string: SensorId,
+}
+
+impl IdentifiableSensor for EventOnlySensorRecord {
+    fn id_string(&self) -> &SensorId {
+        &self.id_string
+    }
+
+    fn entity_id(&self) -> u8 {
+        self.entity_id
+    }
+}
+
+impl InstancedSensor for EventOnlySensorRecord {
+    fn key_data(&self) -> &SensorKey {
+        &self.key
+    }
+
+    fn entity_instance(&self) -> &EntityInstance {
+        &self.entity_instance
+    }
+
+    fn ty(&self) -> &SensorType {
+        &self.ty
+    }
+
+    fn event_reading_type_codes(&self) -> &EventReadingTypeCodes {
+        &self.event_reading_type_code
+    }
+}
+
+impl DirectionalSensor for EventOnlySensorRecord {
+    fn direction(&self) -> &Direction {
+        &self.direction
+    }
 }
 
 impl EventOnlySensorRecord {

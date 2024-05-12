@@ -24,13 +24,15 @@ pub struct CompactSensorRecord {
     pub oem_data: u8,
 }
 
-impl SensorRecord for CompactSensorRecord {
+impl WithSensorRecordCommon for CompactSensorRecord {
     fn common(&self) -> &SensorRecordCommon {
         &self.common
     }
+}
 
-    fn direction(&self) -> Direction {
-        self.direction
+impl DirectionalSensor for CompactSensorRecord {
+    fn direction(&self) -> &Direction {
+        &self.direction
     }
 }
 

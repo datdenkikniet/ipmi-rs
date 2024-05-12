@@ -32,13 +32,15 @@ pub struct FullSensorRecord {
     pub oem_data: u8,
 }
 
-impl SensorRecord for FullSensorRecord {
+impl WithSensorRecordCommon for FullSensorRecord {
     fn common(&self) -> &SensorRecordCommon {
         &self.common
     }
+}
 
-    fn direction(&self) -> Direction {
-        self.direction
+impl DirectionalSensor for FullSensorRecord {
+    fn direction(&self) -> &Direction {
+        &self.direction
     }
 }
 

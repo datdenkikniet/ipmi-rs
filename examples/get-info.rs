@@ -5,12 +5,14 @@ use indicatif::{ProgressBar, ProgressStyle};
 use ipmi_rs::{
     app::GetDeviceId,
     sensor_event::{GetSensorReading, ThresholdReading},
-    storage::sdr::{
-        record::RecordContents, GetDeviceSdrInfo, GetSdrAllocInfo, GetSdrRepositoryInfo, SdrCount,
-        SdrOperation,
+    storage::{
+        sdr::{
+            record::{IdentifiableSensor, InstancedSensor, RecordContents},
+            GetDeviceSdrInfo, GetSdrAllocInfo, GetSdrRepositoryInfo, SdrCount, SdrOperation,
+        },
+        sel::{GetSelAllocInfo, GetSelEntry, GetSelInfo, RecordId as SelRecordId, SelCommand},
     },
-    storage::sel::{GetSelAllocInfo, GetSelEntry, GetSelInfo, RecordId as SelRecordId, SelCommand},
-    LogOutput, SensorRecord,
+    LogOutput,
 };
 
 fn main() -> std::io::Result<()> {
@@ -86,36 +88,45 @@ fn main() -> std::io::Result<()> {
     progress_bar.finish();
 
     for sensor in &sensors {
-        if let RecordContents::FullSensor(full) = &sensor.contents {
-            let value = ipmi
-                .send_recv(GetSensorReading::for_sensor_key(full.key_data()))
-                .unwrap();
+        match &sensor.contents {
+            RecordContents::FullSensor(full) => {
+                log_id("Full Sensor Record", full);
+                let value = ipmi
+                    .send_recv(GetSensorReading::for_sensor_key(full.key_data()))
+                    .unwrap();
 
-            let reading: ThresholdReading = (&value).into();
+                let reading: ThresholdReading = (&value).into();
 
-            if let Some(reading) = reading.reading {
-                if let Some(display) = full.display_reading(reading) {
-                    log::info!("{}: {}", full.id_string(), display);
-                    ipmi_rs::Logger::log(debug_log_output, sensor);
+                if let Some(reading) = reading.reading {
+                    if let Some(display) = full.display_reading(reading) {
+                        log::info!("  {}: {}", full.id_string(), display);
+                        ipmi_rs::Logger::log(debug_log_output, sensor);
+                    }
+                } else {
+                    log::warn!("  No reading for {}", full.id_string());
                 }
-            } else {
-                log::warn!("No reading for {}", full.id_string());
             }
-        } else if let RecordContents::CompactSensor(compact) = &sensor.contents {
-            log::info!("Compact sensor {}", compact.id_string());
-            log::info!("  Sensor type: {:?}", compact.common().ty);
-        } else if let RecordContents::EventOnlySensor(event) = &sensor.contents {
-            log::info!("Event-only sensor {}", event.id_string);
-            log::info!("  Sensor type: {:?}", event.ty);
-        } else if let RecordContents::FruDeviceLocator(fru_device_locator) = &sensor.contents {
-            log::info!("FRU Device Locator {}", fru_device_locator.id_string());
-            log::info!("  Device type: {}", fru_device_locator.device_type);
-        } else if let RecordContents::McDeviceLocator(mc_device_locator) = &sensor.contents {
-            log::info!("MC Device Locator {}", mc_device_locator.id_string());
-        } else if let RecordContents::Unknown { ty, .. } = &sensor.contents {
-            log::info!("Unknown record type. Type: 0x{ty:02X}");
+            RecordContents::CompactSensor(compact) => log_sensor("Compact Sensor", compact),
+            RecordContents::EventOnlySensor(event) => log_sensor("Event-only Sensor", event),
+            RecordContents::FruDeviceLocator(fru) => {
+                log_id("FRU Device Locator", fru);
+                log::info!("  Device type: {}", fru.device_type);
+            }
+            RecordContents::McDeviceLocator(mc) => log_id("MC Device Locator", mc),
+            RecordContents::Unknown { ty, .. } => {
+                log::info!("Unknown record type. Type: 0x{ty:02X}");
+            }
         }
     }
 
     Ok(())
+}
+
+fn log_id<T: IdentifiableSensor>(ty: &str, sensor: &T) {
+    log::info!("{ty} {}", sensor.id_string());
+}
+
+fn log_sensor<T: InstancedSensor>(ty: &str, sensor: &T) {
+    log_id(ty, sensor);
+    log::info!("  Sensor type: {:?}", sensor.ty());
 }

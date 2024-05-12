@@ -6,7 +6,7 @@ mod error;
 pub use error::IpmiError;
 
 pub mod storage;
-pub use storage::sdr::record::SensorRecord;
+pub use storage::sdr::record::WithSensorRecordCommon;
 
 pub mod sensor_event;
 

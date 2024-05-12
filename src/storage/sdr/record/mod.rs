@@ -6,6 +6,9 @@ mod event_only_sensor_record;
 mod fru_device_locator;
 mod mc_device_locator;
 
+pub mod traits;
+pub use traits::*;
+
 pub use compact_sensor_record::CompactSensorRecord;
 
 use nonmax::NonMaxU8;
@@ -19,32 +22,6 @@ use crate::{
 };
 
 use super::{event_reading_type_code::EventReadingTypeCodes, RecordId, SensorType, Unit};
-
-pub trait SensorRecord {
-    fn common(&self) -> &SensorRecordCommon;
-
-    fn capabilities(&self) -> &SensorCapabilities {
-        &self.common().capabilities
-    }
-
-    fn id_string(&self) -> &SensorId {
-        &self.common().sensor_id
-    }
-
-    fn direction(&self) -> Direction;
-
-    fn sensor_number(&self) -> SensorNumber {
-        self.common().key.sensor_number
-    }
-
-    fn entity_id(&self) -> u8 {
-        self.common().entity_id
-    }
-
-    fn key_data(&self) -> &SensorKey {
-        &self.common().key
-    }
-}
 
 #[derive(Debug)]
 pub struct Value {
