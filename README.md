@@ -26,13 +26,13 @@ This example will, using the `/dev/ipmi0` file:
 - [ ] FRU information lookup
 - [x] `ioctl`-based IPMI device file interface support
     - Supports bridging IPMI requests to other IPMBs.
-- [ ] RMCP
+- [x] RMCP
     Supported auth types:
     - [x] Unauthenticated
-    - [ ] MD5
-    - [ ] MD2
+    - [x] MD5
+    - [x] MD2
     - [ ] Key
-- [ ] RMCP+
+- [x] RMCP+
 
 ## License
 

@@ -4,7 +4,7 @@ use nonmax::NonMaxU8;
 
 use crate::connection::{IpmiCommand, Message, NetFn, ParseResponseError};
 
-use super::{record::Record, RecordId};
+use super::{Record, RecordId, RecordParseError};
 
 /// Get a device SDR.
 ///
@@ -56,7 +56,7 @@ impl From<GetDeviceSdr> for Message {
 impl IpmiCommand for GetDeviceSdr {
     type Output = RecordInfo;
 
-    type Error = ();
+    type Error = (RecordParseError, RecordId);
 
     fn parse_response(
         completion_code: crate::connection::CompletionCode,
@@ -64,7 +64,15 @@ impl IpmiCommand for GetDeviceSdr {
     ) -> Result<Self::Output, ParseResponseError<Self::Error>> {
         Self::check_cc_success(completion_code)?;
 
-        RecordInfo::parse(data).ok_or(ParseResponseError::NotEnoughData)
+        if data.len() < 9 {
+            return Err(ParseResponseError::NotEnoughData);
+        }
+
+        let next_id = RecordId::new_raw(u16::from_le_bytes([data[0], data[1]]));
+
+        let res = RecordInfo::parse(data).map_err(|e| (e, next_id))?;
+
+        Ok(res)
     }
 }
 
@@ -75,14 +83,9 @@ pub struct RecordInfo {
 }
 
 impl RecordInfo {
-    pub fn parse(data: &[u8]) -> Option<Self> {
-        if data.len() < 9 {
-            return None;
-        }
-
+    pub fn parse(data: &[u8]) -> Result<Self, RecordParseError> {
         let next_entry = RecordId::new_raw(u16::from_le_bytes([data[0], data[1]]));
         let data = &data[2..];
-
         Record::parse(data).map(|record| Self { next_entry, record })
     }
 }

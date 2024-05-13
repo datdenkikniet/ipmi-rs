@@ -6,7 +6,7 @@ mod error;
 pub use error::IpmiError;
 
 pub mod storage;
-pub use storage::sdr::record::SensorRecord;
+pub use storage::sdr::record::WithSensorRecordCommon;
 
 pub mod sensor_event;
 
@@ -113,21 +113,49 @@ where
     type Item = SdrRecord;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let next_id = self.next_id?;
+        let current_id = self.next_id?;
         let next_record = self
             .ipmi
-            .send_recv(sdr::GetDeviceSdr::new(None, next_id))
-            .map_err(|e| {
-                log::error!("Error occured while iterating SDR records: {e:?}");
-            })
-            .ok()?;
+            .send_recv(sdr::GetDeviceSdr::new(None, current_id));
 
-        if !next_record.next_entry.is_last() {
-            self.next_id = Some(next_record.next_entry);
-        } else {
+        let (value, next_record_id) = match next_record {
+            Ok(record) => {
+                let next_record_id = record.next_entry;
+
+                (Some(record.record), next_record_id)
+            }
+            Err(IpmiError::ParsingFailed {
+                error: ParseResponseError::Parse((e, next_id)),
+                ..
+            }) => {
+                log::warn!(
+                    "Recoverable error while parsing SDR record 0x{:04X}: {e:?}",
+                    current_id.value()
+                );
+                (None, next_id)
+            }
+            Err(e) => {
+                log::error!(
+                    "Unrecoverable error while parsing SDR record 0x{:04X}: {e:?}",
+                    current_id.value()
+                );
+                self.next_id.take();
+                return None;
+            }
+        };
+
+        if current_id.is_last() {
             self.next_id.take();
+        } else {
+            if next_record_id == current_id {
+                log::error!("Got duplicate SDR record IDs! Stopping iteration.");
+                self.next_id.take();
+                return None;
+            } else {
+                self.next_id = Some(next_record_id);
+            }
         }
 
-        Some(next_record.record)
+        value
     }
 }

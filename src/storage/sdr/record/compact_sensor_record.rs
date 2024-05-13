@@ -24,20 +24,22 @@ pub struct CompactSensorRecord {
     pub oem_data: u8,
 }
 
-impl SensorRecord for CompactSensorRecord {
+impl WithSensorRecordCommon for CompactSensorRecord {
     fn common(&self) -> &SensorRecordCommon {
         &self.common
     }
+}
 
-    fn direction(&self) -> Direction {
-        self.direction
+impl DirectionalSensor for CompactSensorRecord {
+    fn direction(&self) -> &Direction {
+        &self.direction
     }
 }
 
 impl CompactSensorRecord {
-    pub fn parse(record_data: &[u8]) -> Option<Self> {
+    pub fn parse(record_data: &[u8]) -> Result<Self, ParseError> {
         if record_data.len() < 26 {
-            return None;
+            return Err(ParseError::NotEnoughData);
         }
 
         let (mut common, record_data) = SensorRecordCommon::parse_without_id(record_data)?;
@@ -45,7 +47,7 @@ impl CompactSensorRecord {
         let direction_sharing_1 = record_data[0];
         let direction_sharing_2 = record_data[1];
 
-        let direction = Direction::try_from((direction_sharing_1 & 0xC) >> 6).unwrap();
+        let direction = Direction::try_from((direction_sharing_1 & 0xC) >> 6)?;
         let id_string_instance_modifier = match (direction_sharing_1 & 0x30) >> 4 {
             0b00 => IdStringModifier::Numeric,
             0b01 => IdStringModifier::Alpha,
@@ -72,11 +74,11 @@ impl CompactSensorRecord {
 
         let id_string_type_len = record_data[8];
         let id_string_bytes = &record_data[9..];
-        let id_string = TypeLengthRaw::new(id_string_type_len, id_string_bytes).into();
+        let id_string = TypeLengthRaw::new(id_string_type_len, id_string_bytes).try_into()?;
 
         common.set_id(id_string);
 
-        Some(Self {
+        Ok(Self {
             common,
             direction,
             record_sharing,

@@ -1,8 +1,10 @@
 use clap::Parser;
 use ipmi_rs::{
     sensor_event::{GetSensorReading, ThresholdReading},
-    storage::sdr::{record::RecordContents, Record, SensorType},
-    SensorRecord,
+    storage::sdr::{
+        record::{IdentifiableSensor, InstancedSensor, RecordContents},
+        Record, SensorType,
+    },
 };
 use log::Level;
 

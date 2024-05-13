@@ -32,29 +32,22 @@ pub struct FullSensorRecord {
     pub oem_data: u8,
 }
 
-#[derive(Debug, Clone, Copy)]
-pub enum ParseFullSensorRecordError {
-    NotEnoughData,
-    CouldNotParseCommon,
-    NotEnoughDataAfterCommon,
-}
-
-impl SensorRecord for FullSensorRecord {
+impl WithSensorRecordCommon for FullSensorRecord {
     fn common(&self) -> &SensorRecordCommon {
         &self.common
     }
+}
 
-    fn direction(&self) -> Direction {
-        self.direction
+impl DirectionalSensor for FullSensorRecord {
+    fn direction(&self) -> &Direction {
+        &self.direction
     }
 }
 
 impl FullSensorRecord {
-    pub fn parse(record_data: &[u8]) -> Result<Self, ParseFullSensorRecordError> {
-        use ParseFullSensorRecordError::*;
-
+    pub fn parse(record_data: &[u8]) -> Result<Self, ParseError> {
         if record_data.len() < 15 {
-            return Err(NotEnoughData);
+            return Err(ParseError::NotEnoughData);
         }
 
         let sensor_units_1 = record_data[15];
@@ -67,11 +60,10 @@ impl FullSensorRecord {
             _ => unreachable!(),
         };
 
-        let (mut common, record_data) =
-            SensorRecordCommon::parse_without_id(record_data).ok_or(CouldNotParseCommon)?;
+        let (mut common, record_data) = SensorRecordCommon::parse_without_id(record_data)?;
 
         if record_data.len() < 24 {
-            return Err(NotEnoughDataAfterCommon);
+            return Err(ParseError::NotEnoughData);
         }
 
         let linearization = record_data[0];
@@ -108,8 +100,7 @@ impl FullSensorRecord {
 
         let accuracy_exponent = (accuracy_msb_accuracy_exp_sensor_dir >> 2) & 0x3;
 
-        let direction = Direction::try_from(accuracy_msb_accuracy_exp_sensor_dir & 0b11)
-            .unwrap_or(Direction::UnspecifiedNotApplicable);
+        let direction = Direction::try_from(accuracy_msb_accuracy_exp_sensor_dir & 0b11)?;
 
         let r_exp_b_exp = record_data[6];
 
@@ -169,7 +160,7 @@ impl FullSensorRecord {
         let id_string_type_len = record_data[24];
         let id_string_bytes = &record_data[25..];
 
-        let id_string = TypeLengthRaw::new(id_string_type_len, id_string_bytes).into();
+        let id_string = TypeLengthRaw::new(id_string_type_len, id_string_bytes).try_into()?;
 
         common.set_id(id_string);
 
