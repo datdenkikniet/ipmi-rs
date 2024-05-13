@@ -68,8 +68,7 @@ impl FruDeviceLocator {
             })
         };
 
-        // NOTE(unwrap): `LogicalUnit::try_from` always succeeds for data masked with 0b11.
-        let lun = LogicalUnit::try_from((record_data[2] >> 3) & 0b11).unwrap();
+        let lun = LogicalUnit::from_low_bits(record_data[2] >> 3);
         let private_bus_id = record_data[2] & 0b111;
         let channel_number = record_data[3];
 

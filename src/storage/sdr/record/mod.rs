@@ -66,9 +66,8 @@ impl SensorKey {
         // NOTE(unwrap): value is guaranteed to be in the correct range due to mask + shift.
         let owner_channel = Channel::new((owner_channel_fru_lun & 0xF0) >> 4).unwrap();
 
-        let fru_inv_device_owner_lun =
-            LogicalUnit::try_from((owner_channel_fru_lun >> 2) & 0x3).unwrap();
-        let owner_lun = LogicalUnit::try_from(owner_channel_fru_lun & 0x3).unwrap();
+        let fru_inv_device_owner_lun = LogicalUnit::from_low_bits(owner_channel_fru_lun >> 2);
+        let owner_lun = LogicalUnit::from_low_bits(owner_channel_fru_lun & 0b11);
 
         let sensor_number =
             SensorNumber(NonMaxU8::new(record_data[2]).ok_or(ParseError::InvalidSensorNumber)?);

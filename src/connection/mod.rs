@@ -101,18 +101,31 @@ pub enum LogicalUnit {
     Three,
 }
 
+impl LogicalUnit {
+    /// Construct a `LogicalUnit` from the two lowest bits of `value`,
+    /// ignoring all other bits.
+    pub fn from_low_bits(value: u8) -> Self {
+        let value = value & 0b11;
+
+        match value {
+            0b00 => Self::Zero,
+            0b01 => Self::One,
+            0b10 => Self::Two,
+            0b11 => Self::Three,
+            _ => unreachable!("Value bitmasked with 0b11 has value greater than 3"),
+        }
+    }
+}
+
 impl TryFrom<u8> for LogicalUnit {
     type Error = ();
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
-        let val = match value {
-            0 => Self::Zero,
-            1 => Self::One,
-            2 => Self::Two,
-            3 => Self::Three,
-            _ => return Err(()),
-        };
-        Ok(val)
+        if value <= 0b11 {
+            Ok(Self::from_low_bits(value))
+        } else {
+            Err(())
+        }
     }
 }
 

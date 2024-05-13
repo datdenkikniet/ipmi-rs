@@ -93,7 +93,7 @@ impl From<(u8, u8)> for EventGenerator {
                 channel_number,
             }
         } else {
-            let lun = (value.1 & 0x3).try_into().unwrap();
+            let lun = LogicalUnit::from_low_bits(value.1);
 
             Self::RqSAAndLun {
                 i2c_addr: i2c_or_sid,
