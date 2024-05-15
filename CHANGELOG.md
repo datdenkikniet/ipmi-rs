@@ -10,6 +10,7 @@
 * Rudimentary RMCP+ support. ([#13])
 * Add more SDR record types. ([#10], [#18])
 * Breaking change: improve error reporting in SDR records. ([#10], [#18])
+* Fix SDR iteration. ([#19])
 
 [#6]: https://github.com/datdenkikniet/ipmi-rs/pull/6
 [#7]: https://github.com/datdenkikniet/ipmi-rs/pull/7
@@ -19,6 +20,7 @@
 [#13]: https://github.com/datdenkikniet/ipmi-rs/pull/13
 [#14]: https://github.com/datdenkikniet/ipmi-rs/pull/14
 [#18]: https://github.com/datdenkikniet/ipmi-rs/pull/18
+[#19]: https://github.com/datdenkikniet/ipmi-rs/pull/19
 
 # [0.2.1](https://github.com/datdenkikniet/ipmi-rs/tree/v0.2.1)
 
