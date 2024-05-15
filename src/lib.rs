@@ -114,6 +114,12 @@ where
 
     fn next(&mut self) -> Option<Self::Item> {
         let current_id = self.next_id?;
+
+        if current_id.is_last() {
+            self.next_id.take();
+            return None;
+        }
+
         let next_record = self
             .ipmi
             .send_recv(sdr::GetDeviceSdr::new(None, current_id));
@@ -125,14 +131,14 @@ where
                 (Some(record.record), next_record_id)
             }
             Err(IpmiError::ParsingFailed {
-                error: ParseResponseError::Parse((e, next_id)),
+                error: ParseResponseError::Parse((e, next_record_id)),
                 ..
             }) => {
                 log::warn!(
                     "Recoverable error while parsing SDR record 0x{:04X}: {e:?}",
                     current_id.value()
                 );
-                (None, next_id)
+                (None, next_record_id)
             }
             Err(e) => {
                 log::error!(
@@ -144,16 +150,12 @@ where
             }
         };
 
-        if current_id.is_last() {
+        if next_record_id == current_id {
+            log::error!("Got duplicate SDR record IDs! Stopping iteration.");
             self.next_id.take();
+            return None;
         } else {
-            if next_record_id == current_id {
-                log::error!("Got duplicate SDR record IDs! Stopping iteration.");
-                self.next_id.take();
-                return None;
-            } else {
-                self.next_id = Some(next_record_id);
-            }
+            self.next_id = Some(next_record_id);
         }
 
         value

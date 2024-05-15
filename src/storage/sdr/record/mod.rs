@@ -712,38 +712,19 @@ pub enum RecordContents {
 
 impl Record {
     pub fn common_data(&self) -> Option<&SensorRecordCommon> {
-        match &self.contents {
-            RecordContents::FullSensor(s) => Some(s.common()),
-            RecordContents::CompactSensor(s) => Some(s.common()),
-            RecordContents::EventOnlySensor(_) => None,
-            RecordContents::FruDeviceLocator(_) => None,
-            RecordContents::McDeviceLocator(_) => None,
-            RecordContents::Unknown { .. } => None,
-        }
+        self.contents.common_data()
     }
 
     pub fn full_sensor(&self) -> Option<&FullSensorRecord> {
-        if let RecordContents::FullSensor(full_sensor) = &self.contents {
-            Some(full_sensor)
-        } else {
-            None
-        }
+        self.contents.full_sensor()
     }
 
     pub fn compact_sensor(&self) -> Option<&CompactSensorRecord> {
-        if let RecordContents::CompactSensor(compact_sensor) = &self.contents {
-            Some(compact_sensor)
-        } else {
-            None
-        }
+        self.contents.compact_sensor()
     }
 
     pub fn event_only(&self) -> Option<&EventOnlySensorRecord> {
-        if let RecordContents::EventOnlySensor(event) = &self.contents {
-            Some(event)
-        } else {
-            None
-        }
+        self.contents.event_only()
     }
 
     pub fn parse(data: &[u8]) -> Result<Self, ParseError> {
@@ -790,7 +771,52 @@ impl Record {
     }
 
     pub fn id(&self) -> Option<&SensorId> {
-        match &self.contents {
+        self.contents.id()
+    }
+
+    pub fn sensor_number(&self) -> Option<SensorNumber> {
+        self.contents.sensor_number()
+    }
+}
+
+impl RecordContents {
+    pub fn common_data(&self) -> Option<&SensorRecordCommon> {
+        match self {
+            RecordContents::FullSensor(s) => Some(s.common()),
+            RecordContents::CompactSensor(s) => Some(s.common()),
+            RecordContents::EventOnlySensor(_) => None,
+            RecordContents::FruDeviceLocator(_) => None,
+            RecordContents::McDeviceLocator(_) => None,
+            RecordContents::Unknown { .. } => None,
+        }
+    }
+
+    pub fn full_sensor(&self) -> Option<&FullSensorRecord> {
+        if let RecordContents::FullSensor(full_sensor) = self {
+            Some(full_sensor)
+        } else {
+            None
+        }
+    }
+
+    pub fn compact_sensor(&self) -> Option<&CompactSensorRecord> {
+        if let RecordContents::CompactSensor(compact_sensor) = self {
+            Some(compact_sensor)
+        } else {
+            None
+        }
+    }
+
+    pub fn event_only(&self) -> Option<&EventOnlySensorRecord> {
+        if let RecordContents::EventOnlySensor(event) = self {
+            Some(event)
+        } else {
+            None
+        }
+    }
+
+    pub fn id(&self) -> Option<&SensorId> {
+        match self {
             RecordContents::FullSensor(full) => Some(full.id_string()),
             RecordContents::CompactSensor(compact) => Some(compact.id_string()),
             RecordContents::EventOnlySensor(event) => Some(&event.id_string),
@@ -801,7 +827,7 @@ impl Record {
     }
 
     pub fn sensor_number(&self) -> Option<SensorNumber> {
-        match &self.contents {
+        match self {
             RecordContents::FullSensor(full) => Some(full.sensor_number()),
             RecordContents::CompactSensor(compact) => Some(compact.sensor_number()),
             RecordContents::EventOnlySensor(event) => Some(event.key.sensor_number),
