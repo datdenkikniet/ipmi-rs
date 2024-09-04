@@ -33,6 +33,23 @@ This example will, using the `/dev/ipmi0` file:
     - [x] MD2
     - [ ] Key
 - [x] RMCP+
+    - The security aspects of the RMCP+ implementation itself is not specifically security-vetted. It _should_ be secure, but you must not rely on it.
+    -  Authentication algorithms:
+        -  [ ] RAKP-None
+        -  [x] RAKP-HMAC-SHA1
+        -  [ ] RAKP-HMAC-MD5
+        -  [ ] RAKP-HMAC-SHA256
+    - Confidentiality algorithms:
+        - [x] None
+        - [x] AES-CBC-128
+        - [ ] xRC4-128
+        - [ ] xRC4-40
+    - Integrity algorithms:
+        - [x] None
+        - [x] HMAC-SHA1-96
+        - [ ] HMAC-MD5-128
+        - [ ] MD5-128
+        - [ ] HMAC-SHA256-128
 
 ## License
 

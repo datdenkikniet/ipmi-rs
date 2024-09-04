@@ -13,7 +13,6 @@ pub enum ParseError {
 #[derive(Debug, Clone)]
 pub struct RakpMessage4<'a> {
     pub message_tag: u8,
-    pub status_code: u8,
     pub managed_system_session_id: NonZeroU32,
     pub integrity_check_value: &'a [u8],
 }
@@ -48,7 +47,6 @@ impl<'a> RakpMessage4<'a> {
 
         Ok(Self {
             message_tag,
-            status_code,
             managed_system_session_id,
             integrity_check_value,
         })
