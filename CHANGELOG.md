@@ -1,4 +1,7 @@
 # Unreleased
+
+# [0.3.0](https://github.com/datdenkikniet/ipmi-rs/tree/v0.3.0)
+
 * Support for sending bridged IPMB messages for sensors that are not available on the system
   interface for File-based connections. `GetSensorReading::new()` and `GetSensorReading::for_sensor()`
   have been replaced with`GetSensorReading::for_sensor_key()` which now takes a `&Sensorkey`. ([#6])
