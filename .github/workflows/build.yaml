@@ -15,7 +15,7 @@ jobs:
 
       - name: Run `cargo fmt --check`
         run: cargo fmt --check
-  
+
   check:
     runs-on: ubuntu-latest
     name: Check that the project builds with feature combinations
@@ -30,6 +30,6 @@ jobs:
       - uses: actions/checkout@v4
 
       - uses: dtolnay/rust-toolchain@stable
-      
+
       - name: Run `cargo check --no-default-features --features "${{ matrix.features }}"`
-        run: cargo check --no-default-features --features "${{ matrix.features }}"
+        run: cargo check --no-default-features --features "${{ matrix.features }}" --locked
