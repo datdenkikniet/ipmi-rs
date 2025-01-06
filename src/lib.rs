@@ -115,7 +115,6 @@ where
     fn next(&mut self) -> Option<Self::Item> {
         while let Some(current_id) = self.next_id.take() {
             if current_id.is_last() {
-                self.next_id.take();
                 return None;
             }
 
@@ -129,7 +128,6 @@ where
 
                     if next_record_id == current_id {
                         log::error!("Got duplicate SDR record IDs! Stopping iteration.");
-                        self.next_id.take();
                         return None;
                     }
 
@@ -152,7 +150,6 @@ where
                         "Unrecoverable error while parsing SDR record 0x{:04X}: {e:?}",
                         current_id.value()
                     );
-                    self.next_id.take();
                     return None;
                 }
             }
