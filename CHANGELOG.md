@@ -1,5 +1,7 @@
 # Unreleased
 
+# [0.3.1](https://github.com/datdenkikniet/ipmi-rs/tree/v0.3.1)
+
 * Fix: Continue iteration after recoverable errors in SdrIter. ([#23])
 
 [#23]: https://github.com/datdenkikniet/ipmi-rs/pull/23
