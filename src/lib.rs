@@ -113,51 +113,50 @@ where
     type Item = SdrRecord;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let current_id = self.next_id?;
-
-        if current_id.is_last() {
-            self.next_id.take();
-            return None;
-        }
-
-        let next_record = self
-            .ipmi
-            .send_recv(sdr::GetDeviceSdr::new(None, current_id));
-
-        let (value, next_record_id) = match next_record {
-            Ok(record) => {
-                let next_record_id = record.next_entry;
-
-                (Some(record.record), next_record_id)
-            }
-            Err(IpmiError::ParsingFailed {
-                error: ParseResponseError::Parse((e, next_record_id)),
-                ..
-            }) => {
-                log::warn!(
-                    "Recoverable error while parsing SDR record 0x{:04X}: {e:?}",
-                    current_id.value()
-                );
-                (None, next_record_id)
-            }
-            Err(e) => {
-                log::error!(
-                    "Unrecoverable error while parsing SDR record 0x{:04X}: {e:?}",
-                    current_id.value()
-                );
+        while let Some(current_id) = self.next_id.take() {
+            if current_id.is_last() {
                 self.next_id.take();
                 return None;
             }
-        };
 
-        if next_record_id == current_id {
-            log::error!("Got duplicate SDR record IDs! Stopping iteration.");
-            self.next_id.take();
-            return None;
-        } else {
-            self.next_id = Some(next_record_id);
+            let next_record = self
+                .ipmi
+                .send_recv(sdr::GetDeviceSdr::new(None, current_id));
+
+            match next_record {
+                Ok(record) => {
+                    let next_record_id = record.next_entry;
+
+                    if next_record_id == current_id {
+                        log::error!("Got duplicate SDR record IDs! Stopping iteration.");
+                        self.next_id.take();
+                        return None;
+                    }
+
+                    self.next_id = Some(next_record_id);
+                    return Some(record.record);
+                }
+                Err(IpmiError::ParsingFailed {
+                    error: ParseResponseError::Parse((e, next_record_id)),
+                    ..
+                }) => {
+                    log::warn!(
+                        "Recoverable error while parsing SDR record 0x{:04X}: {e:?}. Skipping to next.",
+                        current_id.value()
+                    );
+                    self.next_id = Some(next_record_id);
+                    continue; // skip the current one
+                }
+                Err(e) => {
+                    log::error!(
+                        "Unrecoverable error while parsing SDR record 0x{:04X}: {e:?}",
+                        current_id.value()
+                    );
+                    self.next_id.take();
+                    return None;
+                }
+            }
         }
-
-        value
+        None
     }
 }

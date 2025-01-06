@@ -1,5 +1,9 @@
 # Unreleased
 
+* Fix: Continue iteration after recoverable errors in SdrIter. ([#23])
+
+[#23]: https://github.com/datdenkikniet/ipmi-rs/pull/23
+
 # [0.3.0](https://github.com/datdenkikniet/ipmi-rs/tree/v0.3.0)
 
 * Support for sending bridged IPMB messages for sensors that are not available on the system
