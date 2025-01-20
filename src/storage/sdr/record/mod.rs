@@ -63,8 +63,9 @@ impl SensorKey {
         let owner_id = SensorOwner::from(record_data[0]);
         let owner_channel_fru_lun = record_data[1];
 
-        // NOTE(unwrap): value is guaranteed to be in the correct range due to mask + shift.
-        let owner_channel = Channel::new((owner_channel_fru_lun & 0xF0) >> 4).unwrap();
+        let owner_channel_value = (owner_channel_fru_lun & 0xF0) >> 4;
+        let owner_channel =
+            Channel::new(owner_channel_value).ok_or(ParseError::InvalidOwnerChannel)?;
 
         let fru_inv_device_owner_lun = LogicalUnit::from_low_bits(owner_channel_fru_lun >> 2);
         let owner_lun = LogicalUnit::from_low_bits(owner_channel_fru_lun & 0b11);
@@ -610,6 +611,7 @@ pub enum ParseError {
     InvalidIdStringModifier(u8),
     InvalidSensorNumber,
     InvalidSensorDirection,
+    InvalidOwnerChannel,
 }
 
 #[derive(Debug, Clone, PartialEq)]
