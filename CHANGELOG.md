@@ -1,5 +1,9 @@
 # Unreleased
 
+* Handle invalid `OwnerKey` while parsing `SensorKey`. ([#25])
+
+[#25]: https://github.com/datdenkikniet/ipmi-rs/pull/25
+
 # [0.3.1](https://github.com/datdenkikniet/ipmi-rs/tree/v0.3.1)
 
 * Fix: Continue iteration after recoverable errors in SdrIter. ([#23])
