@@ -1,5 +1,7 @@
 # Unreleased
 
+# [0.4.0](https://github.com/datdenkikniet/ipmi-rs/tree/v0.4.0)
+
 * Handle invalid `OwnerKey` while parsing `SensorKey`. ([#25])
 
 [#25]: https://github.com/datdenkikniet/ipmi-rs/pull/25
