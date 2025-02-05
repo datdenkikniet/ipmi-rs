@@ -4,19 +4,31 @@ use crate::connection::{IpmiCommand, Message, NetFn};
 
 use super::{AuthError, AuthType};
 
+/// A session challenge used to establish an authenticated session.
 #[derive(Debug, Clone, Copy)]
 pub struct SessionChallenge {
+    /// The temporary ID of the session.
     pub temporary_session_id: NonZeroU32,
+    /// The data for the challenge.
     pub challenge_string: [u8; 16],
 }
 
+/// The Get Session Challenge command.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct GetSessionChallenge {
+    /// The auth type for which to request a session challenge.
     auth_type: AuthType,
+    /// The username for which to request a session challenge.
     username: [u8; 16],
 }
 
 impl GetSessionChallenge {
+    /// Create a new [`GetSessionChallenge`] command.
+    ///
+    /// * `auth_type`: the auth type to requests a session challenge for.
+    /// * `username`: an optional username to request a session challenge for.
+    ///
+    /// Will return `None` if `username` is longer than 16 bytes.
     pub fn new(auth_type: AuthType, username: Option<&str>) -> Option<Self> {
         let bytes = username.map(|u| u.as_bytes()).unwrap_or(&[]);
         if bytes.len() > 16 {
@@ -32,10 +44,14 @@ impl GetSessionChallenge {
         })
     }
 
+    /// The auth type to request a challenge for.
     pub fn auth_type(&self) -> AuthType {
         self.auth_type
     }
 
+    /// The username to request a session challenge for.
+    ///
+    // TODO: return `Option<&str>`?
     pub fn username(&self) -> &str {
         let end = self.username.iter().take_while(|v| **v != 0).count();
         unsafe { core::str::from_utf8_unchecked(&self.username[..end]) }

@@ -3,6 +3,7 @@ use crate::connection::{
     Channel, IpmiCommand, Message, NetFn,
 };
 
+/// The Get Channel Cipher Suites command.
 #[derive(Debug, Clone)]
 pub struct GetChannelCipherSuites {
     channel: Channel,
@@ -35,12 +36,15 @@ impl GetChannelCipherSuites {
     }
 }
 
+/// Data describing the supported cipher suites for a channel.
+#[derive(Debug, Clone)]
 pub struct ChannelCipherSuites {
     data_length: usize,
     record_data: [u8; 16],
 }
 
 impl ChannelCipherSuites {
+    /// Parse the data returned from a Get Channel Cipher Suites command.
     pub fn parse_full_data(data: &[u8]) -> impl Iterator<Item = CipherSuite> + '_ {
         struct Iter<'a> {
             inner: core::slice::Iter<'a, u8>,

@@ -48,7 +48,7 @@ pub enum WriteError {
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ReadError {
-    /// There is not enough data in the packet to form a valid [`EncapsulatedMessage`].
+    /// There is not enough data in the packet to form a valid [`Message`].
     NotEnoughData,
     /// The auth type provided is not supported.
     UnsupportedAuthType(u8),

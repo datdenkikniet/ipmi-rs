@@ -1,3 +1,5 @@
+//! IPMI authentication commands.
+
 mod get_channel_authentication_capabilities;
 use core::cmp::Ordering;
 
@@ -14,6 +16,7 @@ pub use activate_session::{ActivateSession, BeginSessionInfo};
 mod get_channel_cipher_suites;
 pub use get_channel_cipher_suites::{ChannelCipherSuites, CipherSuite, GetChannelCipherSuites};
 
+/// Errors that can occur during authentication.
 #[derive(Debug, Clone)]
 pub enum AuthError {
     /// One of the exchanged authentication responses did not
@@ -28,6 +31,8 @@ pub enum AuthError {
     InvalidPrivilegeLevel(u8),
 }
 
+/// The authentication type that is used.
+#[allow(missing_docs)]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum AuthType {
     None,
@@ -37,6 +42,8 @@ pub enum AuthType {
 }
 
 impl AuthType {
+    /// Compare the strength of an authentication type. [`Ordering::Greater`] means
+    /// that `self` is stronger than `other`.
     pub fn compare_strength(&self, other: &Self) -> Ordering {
         if self == other {
             Ordering::Equal
@@ -57,7 +64,7 @@ impl AuthType {
 }
 
 #[test]
-pub fn strength_ordering_individual() {
+fn strength_ordering_individual() {
     let gt_pairs = [
         (AuthType::Key, AuthType::None),
         (AuthType::MD2, AuthType::None),
@@ -74,7 +81,7 @@ pub fn strength_ordering_individual() {
 }
 
 #[test]
-pub fn strength_ordering() {
+fn strength_ordering() {
     let types = [AuthType::None, AuthType::MD2, AuthType::MD5, AuthType::Key];
 
     let max = types.into_iter().max_by(AuthType::compare_strength);
@@ -111,6 +118,8 @@ impl From<AuthType> for u8 {
     }
 }
 
+/// The privilege level of a session.
+#[allow(missing_docs)]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum PrivilegeLevel {
     Callback,
