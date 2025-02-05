@@ -3,6 +3,7 @@ use crate::{
     log_vec, Loggable,
 };
 
+/// The Get Device ID command.
 pub struct GetDeviceId;
 
 impl From<GetDeviceId> for Message {
@@ -21,30 +22,53 @@ impl IpmiCommand for GetDeviceId {
     }
 }
 
+/// All of the fields that are returned when retrieving a
+/// device's ID.
 #[derive(Clone, Debug, PartialEq)]
 pub struct DeviceId {
+    /// The raw ID of the device.
     pub device_id: u8,
+    /// The revision of the device.
     pub device_revision: u8,
+    /// `true` if the device provides device SDRs.
     pub provides_device_sdrs: bool,
+    /// `true` if the device is availalbe, `false` if the device
+    /// is in device firmware, SDR repository update, or self-initialization state.
     pub device_available: bool,
+    /// The major version of the firmware revision of the device.
     pub major_fw_revision: u8,
+    /// The minor version of the firmware of the device.
     pub minor_fw_revision: u8,
+    /// The major version of the IPMI version supported by the device.
     pub major_version: u8,
+    /// The minor version of the IPMI version supported by the device.
     pub minor_version: u8,
+    /// `true` if the device is a chassis device per the ICBM specification.
     pub chassis_support: bool,
+    /// `true` if the device will response to bridge NetFN commands.
     pub bridge_support: bool,
+    /// Whether the device will generate event messages onto the IPMB.
     pub ipmb_event_generator_support: bool,
+    /// Whether the device will generate event messages onto the IPMB.
     pub ipmb_event_receiver_support: bool,
+    /// Whether if the device supports FRU inventory.
     pub fru_inventory_support: bool,
+    /// Whether the device supports the SEL.
     pub sel_device_support: bool,
+    /// Whether the device is an SDR repository device.
     pub sdr_repository_support: bool,
+    /// Whether the device is a sensor device.
     pub sensor_device_support: bool,
+    /// The ID of the manufacturer.
     pub manufacturer_id: u32,
+    /// The ID of the product.
     pub product_id: u16,
+    /// Optional auxiliary firmware revision information.
     pub aux_revision: Option<[u8; 4]>,
 }
 
 impl DeviceId {
+    /// Parse a `DeviceID` from IPMI response data.
     pub fn from_data(data: &[u8]) -> Option<Self> {
         if data.len() < 11 {
             return None;

@@ -12,6 +12,7 @@ impl Request {
     /// Create a new IPMI request message.
     ///
     /// The netfn for `request` should be of the `request` variant, see [`Message::new_request`].
+    // TODO: don't accept `Message` directly (could be malformed?)
     pub const fn new(request: Message, target: RequestTargetAddress) -> Self {
         Self {
             target,
