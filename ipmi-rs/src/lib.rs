@@ -1,31 +1,18 @@
-//! IPMI-rs: a pure-rust IPMI library.
-//!
-//! This library provides command serialization and deserialization (in the [`app`], [`storage`] and [`sensor_event`] modules),
-//! and different ways of connecting to an IPMI device (in the [`connection`] module).
+pub use ipmi_rs_core::*;
+pub use ipmi_rs_log::*;
 
-pub mod app;
+#[cfg(feature = "unix-file")]
+mod file;
 
-pub mod connection;
+#[cfg(feature = "unix-file")]
+pub use file::File;
 
-mod error;
-pub use error::IpmiError;
+pub mod rmcp;
 
-pub mod storage;
-pub use storage::sdr::record::WithSensorRecordCommon;
-
-pub mod sensor_event;
-
-#[macro_use]
-mod fmt;
-#[cfg(test)]
-mod tests;
-
-pub use fmt::{LogOutput, Loggable, Logger};
-
-use connection::{
-    CompletionErrorCode, IpmiCommand, LogicalUnit, NetFn, Request, RequestTargetAddress,
+use ipmi_rs_core::{
+    connection::{CompletionErrorCode, IpmiCommand, LogicalUnit, Request, RequestTargetAddress},
+    storage::sdr::{self, Record as SdrRecord},
 };
-use storage::sdr::{self, record::Record as SdrRecord};
 
 pub struct Ipmi<CON> {
     inner: CON,

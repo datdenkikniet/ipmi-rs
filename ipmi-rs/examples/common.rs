@@ -4,15 +4,13 @@ use std::{io::ErrorKind, time::Duration};
 
 use clap::{Args, Parser};
 use ipmi_rs::{
-    connection::{
-        rmcp::{
-            Rmcp, RmcpIpmiError, RmcpIpmiReceiveError, RmcpIpmiSendError, V1_5WriteError,
-            V2_0WriteError,
-        },
-        File, IpmiCommand,
+    connection::IpmiCommand,
+    rmcp::{
+        Rmcp, RmcpIpmiError, RmcpIpmiReceiveError, RmcpIpmiSendError, V1_5WriteError,
+        V2_0WriteError,
     },
     storage::sdr,
-    Ipmi, IpmiError, SdrIter,
+    File, Ipmi, IpmiError, SdrIter,
 };
 
 #[allow(unused)]

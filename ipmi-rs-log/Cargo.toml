@@ -1,0 +1,12 @@
+[package]
+name = "ipmi-rs-log"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+log = "0.4.25"
+parking_lot = { version = "0.12", optional = true }
+ipmi-rs-core = { path = "../ipmi-rs-core" }
+
+[features]
+log-to-file = [ "parking_lot" ]
