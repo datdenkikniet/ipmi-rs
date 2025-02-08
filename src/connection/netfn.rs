@@ -1,8 +1,10 @@
 macro_rules! netfn {
     ($($name:ident => [$req:literal | $resp:literal]),*) => {
         #[derive(Debug, Clone, Copy, PartialEq)]
+        #[allow(missing_docs)]
         pub enum NetFn {
             $($name,)*
+            /// A reserved netfn.
             Reserved(u8),
         }
 
@@ -16,14 +18,18 @@ macro_rules! netfn {
         }
 
         impl NetFn {
+            // TODO: give these two fns their own impl block.
+            /// Check whether `v` is a response value.
             pub fn is_response_value(v: u8) -> bool {
                 v % 2 == 0
             }
 
+            /// Check whether `v` is a request value.
             pub fn is_request_value(v: u8) -> bool {
                 !Self::is_response_value(v)
             }
 
+            /// Get the raw data for the request value of this netfn.
             pub fn request_value(&self) -> u8 {
                 match self {
                     $(Self::$name => $req,)*
@@ -37,6 +43,7 @@ macro_rules! netfn {
                 }
             }
 
+            /// Get the raw data for the response value of this netfn.
             pub fn response_value(&self) -> u8 {
                 match self {
                     $(Self::$name => $resp,)*
