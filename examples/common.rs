@@ -12,7 +12,7 @@ use ipmi_rs::{
         File, IpmiCommand,
     },
     storage::sdr,
-    Ipmi, IpmiCommandError, IpmiError, SdrIter,
+    Ipmi, IpmiError, SdrIter,
 };
 
 #[allow(unused)]
@@ -43,7 +43,7 @@ impl IpmiConnectionEnum {
     pub fn send_recv<CMD>(
         &mut self,
         request: CMD,
-    ) -> Result<CMD::Output, IpmiCommandError<std::io::Error, CMD::Error>>
+    ) -> Result<CMD::Output, IpmiError<std::io::Error, CMD::Error>>
     where
         CMD: IpmiCommand,
     {
