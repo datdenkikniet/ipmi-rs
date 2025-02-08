@@ -9,6 +9,12 @@ pub enum IpmiError<CON, P> {
         cmd_sent: u8,
         cmd_recvd: u8,
     },
+    Failed {
+        netfn: NetFn,
+        cmd: u8,
+        completion_code: u8,
+        data: Vec<u8>,
+    },
     ParsingFailed {
         error: P,
         netfn: NetFn,
@@ -51,6 +57,17 @@ impl<CON, P> IpmiError<CON, P> {
                 data,
             } => IpmiError::ParsingFailed {
                 error,
+                netfn,
+                cmd,
+                completion_code,
+                data,
+            },
+            IpmiError::Failed {
+                netfn,
+                cmd,
+                completion_code,
+                data,
+            } => IpmiError::Failed {
                 netfn,
                 cmd,
                 completion_code,

@@ -16,6 +16,9 @@ pub use get_channel_cipher_suites::{ChannelCipherSuites, CipherSuite, GetChannel
 
 #[derive(Debug, Clone)]
 pub enum AuthError {
+    /// One of the exchanged authentication responses did not
+    /// contain enough data to parse the expected message.
+    NotEnoughData,
     /// A non-zero session ID was received at a stage where
     /// non-zero session numbers are not allowed.
     InvalidZeroSession,

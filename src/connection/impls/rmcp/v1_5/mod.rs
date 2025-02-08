@@ -5,7 +5,7 @@ use crate::{
         ActivateSession, AuthError, AuthType, ChannelAuthenticationCapabilities,
         GetSessionChallenge, PrivilegeLevel,
     },
-    connection::{IpmiConnection, ParseResponseError, Request, Response},
+    connection::{IpmiConnection, Request, Response},
     Ipmi, IpmiError,
 };
 
@@ -28,9 +28,9 @@ pub enum ActivationError {
     Io(std::io::Error),
     PasswordTooLong,
     UsernameTooLong,
-    GetSessionChallenge(IpmiError<RmcpIpmiError, ParseResponseError<AuthError>>),
+    GetSessionChallenge(IpmiError<RmcpIpmiError, AuthError>),
     NoSupportedAuthenticationType,
-    ActivateSession(IpmiError<RmcpIpmiError, ParseResponseError<AuthError>>),
+    ActivateSession(IpmiError<RmcpIpmiError, AuthError>),
 }
 
 #[derive(Debug)]

@@ -17,9 +17,7 @@ mod tests;
 
 pub use fmt::{LogOutput, Loggable, Logger};
 
-use connection::{
-    IpmiCommand, LogicalUnit, NetFn, ParseResponseError, Request, RequestTargetAddress,
-};
+use connection::{IpmiCommand, LogicalUnit, NetFn, Request, RequestTargetAddress};
 use storage::sdr::{self, record::Record as SdrRecord};
 
 pub struct Ipmi<CON> {
@@ -40,8 +38,6 @@ where
         Self::new(value)
     }
 }
-
-pub type IpmiCommandError<T, E> = IpmiError<T, ParseResponseError<E>>;
 
 impl<CON> Ipmi<CON>
 where
@@ -65,7 +61,7 @@ where
     pub fn send_recv<CMD>(
         &mut self,
         request: CMD,
-    ) -> Result<CMD::Output, IpmiCommandError<CON::Error, CMD::Error>>
+    ) -> Result<CMD::Output, IpmiError<CON::Error, CMD::Error>>
     where
         CMD: IpmiCommand,
     {
@@ -89,15 +85,30 @@ where
             });
         }
 
-        CMD::parse_response(response.cc().into(), response.data()).map_err(|error| {
-            IpmiError::ParsingFailed {
-                error,
+        let (completion_code, data) = (response.cc().into(), response.data());
+
+        let map_error = |error| IpmiError::ParsingFailed {
+            error,
+            netfn: response.netfn(),
+            cmd: response.cmd(),
+            completion_code: response.cc(),
+            data: data.to_vec(),
+        };
+
+        if let Some(error) = CMD::handle_completion_code(completion_code, data) {
+            return Err(map_error(error));
+        }
+
+        if !completion_code.is_success() {
+            return Err(IpmiError::Failed {
                 netfn: response.netfn(),
-                completion_code: response.cc(),
                 cmd: response.cmd(),
-                data: response.data().to_vec(),
-            }
-        })
+                completion_code: response.cc(),
+                data: data.to_vec(),
+            });
+        }
+
+        CMD::parse_success_response(data).map_err(map_error)
     }
 }
 
@@ -135,7 +146,7 @@ where
                     return Some(record.record);
                 }
                 Err(IpmiError::ParsingFailed {
-                    error: ParseResponseError::Parse((e, next_record_id)),
+                    error: (e, Some(next_record_id)),
                     ..
                 }) => {
                     log::warn!(

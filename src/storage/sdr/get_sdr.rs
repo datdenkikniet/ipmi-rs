@@ -2,7 +2,7 @@ use std::num::NonZeroU16;
 
 use nonmax::NonMaxU8;
 
-use crate::connection::{IpmiCommand, Message, NetFn, ParseResponseError};
+use crate::connection::{IpmiCommand, Message, NetFn};
 
 use super::{Record, RecordId, RecordParseError};
 
@@ -56,21 +56,16 @@ impl From<GetDeviceSdr> for Message {
 impl IpmiCommand for GetDeviceSdr {
     type Output = RecordInfo;
 
-    type Error = (RecordParseError, RecordId);
+    type Error = (RecordParseError, Option<RecordId>);
 
-    fn parse_response(
-        completion_code: crate::connection::CompletionCode,
-        data: &[u8],
-    ) -> Result<Self::Output, ParseResponseError<Self::Error>> {
-        Self::check_cc_success(completion_code)?;
-
+    fn parse_success_response(data: &[u8]) -> Result<Self::Output, Self::Error> {
         if data.len() < 9 {
-            return Err(ParseResponseError::NotEnoughData);
+            return Err((RecordParseError::NotEnoughData, None));
         }
 
         let next_id = RecordId::new_raw(u16::from_le_bytes([data[0], data[1]]));
 
-        let res = RecordInfo::parse(data).map_err(|e| (e, next_id))?;
+        let res = RecordInfo::parse(data).map_err(|e| (e, Some(next_id)))?;
 
         Ok(res)
     }

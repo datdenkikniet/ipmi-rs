@@ -1,6 +1,6 @@
 use std::num::NonZeroU32;
 
-use crate::connection::{CompletionCode, IpmiCommand, Message, NetFn, ParseResponseError};
+use crate::connection::{IpmiCommand, Message, NetFn};
 
 use super::{AuthError, AuthType};
 
@@ -58,14 +58,9 @@ impl IpmiCommand for GetSessionChallenge {
 
     type Error = AuthError;
 
-    fn parse_response(
-        completion_code: CompletionCode,
-        data: &[u8],
-    ) -> Result<Self::Output, ParseResponseError<Self::Error>> {
-        Self::check_cc_success(completion_code)?;
-
+    fn parse_success_response(data: &[u8]) -> Result<Self::Output, Self::Error> {
         if data.len() != 20 {
-            return Err(ParseResponseError::NotEnoughData);
+            return Err(AuthError::NotEnoughData);
         }
 
         let temporary_session_id =
