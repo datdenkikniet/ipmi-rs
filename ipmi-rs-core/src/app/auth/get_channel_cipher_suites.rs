@@ -64,6 +64,7 @@ impl ChannelCipherSuites {
                     let id = if let Some(id) = self.inner.next() {
                         *id
                     } else {
+                        #[cfg(feature = "log")]
                         log::warn!("Got correct start of record, but missing Cipher Suite ID.");
                         return None;
                     };
@@ -71,6 +72,7 @@ impl ChannelCipherSuites {
                     let suite = if let Some(suite) = CipherSuite::from_id(id) {
                         suite
                     } else {
+                        #[cfg(feature = "log")]
                         log::warn!("Unknown cipher suite ID: 0x{id:02X?}");
                         return None;
                     };
@@ -78,6 +80,7 @@ impl ChannelCipherSuites {
                     if let Some(auth) = self.inner.next() {
                         *auth & 0x3F
                     } else {
+                        #[cfg(feature = "log")]
                         log::warn!("Got correct start of record, but missing Authentication Algorithm Number.");
                         return None;
                     };
@@ -85,6 +88,7 @@ impl ChannelCipherSuites {
                     if let Some(integ) = self.inner.next() {
                         *integ & 0x3F
                     } else {
+                        #[cfg(feature = "log")]
                         log::warn!(
                             "Got correct start of record, but missing Integrity Algorithm Number."
                         );
@@ -94,12 +98,14 @@ impl ChannelCipherSuites {
                     if let Some(conf) = self.inner.next() {
                         *conf & 0x3F
                     } else {
+                        #[cfg(feature = "log")]
                         log::warn!("Got correct start of record, but missing Confidentiality Algorithm Number.");
                         return None;
                     };
 
                     Some(suite)
                 } else {
+                    #[cfg(feature = "log")]
                     log::debug!("Got a non-standard start of record: {start_of_record:02X}");
                     self.failed = true;
                     None
