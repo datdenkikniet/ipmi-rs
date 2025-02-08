@@ -140,6 +140,12 @@ impl LogicalUnit {
     }
 }
 
+impl From<LogicalUnit> for u8 {
+    fn from(value: LogicalUnit) -> Self {
+        value.value()
+    }
+}
+
 pub trait IpmiConnection {
     type SendError: core::fmt::Debug;
     type RecvError: core::fmt::Debug;
