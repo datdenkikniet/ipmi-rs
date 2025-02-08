@@ -1,0 +1,13 @@
+[package]
+name = "ipmi-rs-core"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bitflags = "1.3.0"
+log = { version = "0.4.25", default-features = false }
+nonmax = "0.5.5"
+time = { version = "0.3", optional = true, default-features = false, features = [ "formatting" ] }
+
+[features]
+default = [ "time" ]

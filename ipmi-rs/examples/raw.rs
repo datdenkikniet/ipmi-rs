@@ -2,10 +2,11 @@ use std::io::ErrorKind;
 
 use clap::Parser;
 use common::CommonOpts;
-use ipmi_rs::connection::rmcp::{
+
+use ipmi_rs::connection::RequestTargetAddress;
+use ipmi_rs::rmcp::{
     RmcpIpmiError, RmcpIpmiReceiveError, RmcpIpmiSendError, V1_5WriteError, V2_0WriteError,
 };
-use ipmi_rs::connection::RequestTargetAddress;
 use ipmi_rs::{
     connection::Message,
     connection::{IpmiConnection, LogicalUnit, Request},
