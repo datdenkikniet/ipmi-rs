@@ -4,7 +4,7 @@
 mod completion_code;
 use std::num::NonZeroU8;
 
-pub use completion_code::CompletionCode;
+pub use completion_code::CompletionErrorCode;
 
 mod impls;
 
@@ -262,7 +262,10 @@ pub trait IpmiCommand: Into<Message> {
     /// The default implementation of this function performs no special handling
     /// and returns `None`.
     #[allow(unused)]
-    fn handle_completion_code(completion_code: CompletionCode, data: &[u8]) -> Option<Self::Error> {
+    fn handle_completion_code(
+        completion_code: CompletionErrorCode,
+        data: &[u8],
+    ) -> Option<Self::Error> {
         None
     }
 
