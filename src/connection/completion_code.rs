@@ -7,6 +7,7 @@ pub enum ResponseUnavailableReason {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[allow(missing_docs)]
 pub enum CompletionCode {
     Success,
     NodeBusy,
@@ -79,10 +80,12 @@ impl From<u8> for CompletionCode {
 }
 
 impl CompletionCode {
+    /// Whether this completion code is a success or not.
     pub fn is_success(&self) -> bool {
         matches!(self, Self::Success)
     }
 
+    /// Whether this completion code is a reserved value or not.
     pub fn is_reserved(&self) -> bool {
         matches!(self, Self::Reserved(_))
     }
