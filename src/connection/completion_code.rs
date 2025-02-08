@@ -9,7 +9,6 @@ pub enum ResponseUnavailableReason {
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[allow(missing_docs)]
 pub enum CompletionCode {
-    Success,
     NodeBusy,
     InvalidCommand,
     InvalidCommandForLun,
@@ -36,10 +35,12 @@ pub enum CompletionCode {
     Reserved(u8),
 }
 
-impl From<u8> for CompletionCode {
-    fn from(value: u8) -> Self {
-        match value {
-            0x00 => Self::Success,
+impl TryFrom<u8> for CompletionCode {
+    type Error = ();
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        let value = match value {
+            0 => return Err(()),
             0xC0 => Self::NodeBusy,
             0xC1 => Self::InvalidCommand,
             0xC2 => Self::InvalidCommandForLun,
@@ -75,16 +76,13 @@ impl From<u8> for CompletionCode {
             0x01..=0x7E => Self::Oem(value),
             0x80..=0xBE => Self::CommandSpecific(value),
             v => Self::Reserved(v),
-        }
+        };
+
+        Ok(value)
     }
 }
 
 impl CompletionCode {
-    /// Whether this completion code is a success or not.
-    pub fn is_success(&self) -> bool {
-        matches!(self, Self::Success)
-    }
-
     /// Whether this completion code is a reserved value or not.
     pub fn is_reserved(&self) -> bool {
         matches!(self, Self::Reserved(_))
