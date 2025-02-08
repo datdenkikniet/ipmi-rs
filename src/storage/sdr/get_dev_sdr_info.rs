@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
 
 use crate::{
-    connection::{CompletionCode, IpmiCommand, LogicalUnit, Message, NetFn, ParseResponseError},
+    connection::{IpmiCommand, LogicalUnit, Message, NetFn, NotEnoughData},
     log_vec, Loggable,
 };
 
@@ -162,29 +162,19 @@ impl From<GetDeviceSdrInfo<SensorCount>> for Message {
 impl IpmiCommand for GetDeviceSdrInfo<SdrCount> {
     type Output = DeviceSdrInfo<NumberOfSdrs>;
 
-    type Error = ();
+    type Error = NotEnoughData;
 
-    fn parse_response(
-        completion_code: CompletionCode,
-        data: &[u8],
-    ) -> Result<Self::Output, ParseResponseError<Self::Error>> {
-        Self::check_cc_success(completion_code)?;
-
-        DeviceSdrInfo::parse(data).ok_or(ParseResponseError::NotEnoughData)
+    fn parse_success_response(data: &[u8]) -> Result<Self::Output, Self::Error> {
+        DeviceSdrInfo::parse(data).ok_or(NotEnoughData)
     }
 }
 
 impl IpmiCommand for GetDeviceSdrInfo<SensorCount> {
     type Output = DeviceSdrInfo<NumberOfSensors>;
 
-    type Error = ();
+    type Error = NotEnoughData;
 
-    fn parse_response(
-        completion_code: CompletionCode,
-        data: &[u8],
-    ) -> Result<Self::Output, ParseResponseError<Self::Error>> {
-        Self::check_cc_success(completion_code)?;
-
-        DeviceSdrInfo::parse(data).ok_or(ParseResponseError::NotEnoughData)
+    fn parse_success_response(data: &[u8]) -> Result<Self::Output, Self::Error> {
+        DeviceSdrInfo::parse(data).ok_or(NotEnoughData)
     }
 }

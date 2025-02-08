@@ -1,5 +1,5 @@
 use crate::{
-    connection::{IpmiCommand, Message, NetFn, ParseResponseError},
+    connection::{IpmiCommand, Message, NetFn, NotEnoughData},
     log_vec,
     storage::Timestamp,
     Loggable,
@@ -10,14 +10,10 @@ pub struct GetInfo;
 impl IpmiCommand for GetInfo {
     type Output = Info;
 
-    type Error = ();
+    type Error = NotEnoughData;
 
-    fn parse_response(
-        completion_code: crate::connection::CompletionCode,
-        data: &[u8],
-    ) -> Result<Self::Output, ParseResponseError<Self::Error>> {
-        Self::check_cc_success(completion_code)?;
-        Info::from_data(data).ok_or(ParseResponseError::NotEnoughData)
+    fn parse_success_response(data: &[u8]) -> Result<Self::Output, Self::Error> {
+        Info::from_data(data).ok_or(NotEnoughData)
     }
 }
 

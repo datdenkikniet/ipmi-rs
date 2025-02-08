@@ -3,7 +3,7 @@ use std::num::NonZeroU16;
 use nonmax::NonMaxU8;
 
 use crate::{
-    connection::{CompletionCode, IpmiCommand, Message, NetFn, ParseResponseError},
+    connection::{IpmiCommand, Message, NetFn},
     Loggable,
 };
 
@@ -50,18 +50,13 @@ impl IpmiCommand for GetEntry {
 
     type Error = ParseEntryError;
 
-    fn parse_response(
-        completion_code: CompletionCode,
-        data: &[u8],
-    ) -> Result<Self::Output, ParseResponseError<Self::Error>> {
-        Self::check_cc_success(completion_code)?;
-
+    fn parse_success_response(data: &[u8]) -> Result<Self::Output, Self::Error> {
         if data.len() < 2 {
-            return Err(ParseResponseError::NotEnoughData);
+            return Err(ParseEntryError::NotEnoughData);
         }
 
         let next_entry = RecordId::new_raw(u16::from_le_bytes([data[0], data[1]]));
-        let entry = Entry::parse(&data[2..]).map_err(ParseResponseError::Parse)?;
+        let entry = Entry::parse(&data[2..])?;
         Ok(EntryInfo { next_entry, entry })
     }
 }

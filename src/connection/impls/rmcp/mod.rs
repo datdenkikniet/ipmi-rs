@@ -1,4 +1,7 @@
-use crate::{connection::IpmiConnection, IpmiCommandError};
+use crate::{
+    connection::{IpmiConnection, NotEnoughData},
+    IpmiError,
+};
 use std::{net::ToSocketAddrs, time::Duration};
 
 mod socket;
@@ -92,7 +95,7 @@ impl From<RmcpIpmiSendError> for RmcpIpmiError {
     }
 }
 
-type CommandError<T> = IpmiCommandError<RmcpIpmiError, T>;
+type CommandError<T> = IpmiError<RmcpIpmiError, T>;
 
 #[derive(Debug)]
 pub enum ActivationError {
@@ -103,7 +106,7 @@ pub enum ActivationError {
     /// The contacted host does not support IPMI over RMCP.
     IpmiNotSupported,
     NoSupportedIpmiLANVersions,
-    GetChannelAuthenticationCapabilities(CommandError<()>),
+    GetChannelAuthenticationCapabilities(CommandError<NotEnoughData>),
     V1_5(V1_5ActivationError),
     V2_0(V2_0ActivationError),
     RmcpError(RmcpHeaderError),

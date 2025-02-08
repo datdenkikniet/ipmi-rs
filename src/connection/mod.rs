@@ -162,6 +162,11 @@ impl From<LogicalUnit> for u8 {
     }
 }
 
+/// A generic error indicating that the message did not contain
+/// enough data to constitute a valid response.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct NotEnoughData;
+
 /// A trait describing operations that can be performed on an IPMI connection.
 pub trait IpmiConnection {
     /// The type of error the can occur when sending a [`Request`].
@@ -239,23 +244,6 @@ impl Message {
     }
 }
 
-/// Generic errors that can occur while parsing a [`Response`].
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum ParseResponseError<T> {
-    /// An error, described by a [`CompletionCode`], occurred.
-    Failed(CompletionCode),
-    /// There was not enough data to parse the expected [`Response`].
-    NotEnoughData,
-    /// A different parsing error occurred.
-    Parse(T),
-}
-
-impl<T> From<T> for ParseResponseError<T> {
-    fn from(value: T) -> Self {
-        Self::Parse(value)
-    }
-}
-
 /// An IPMI command that can be turned into a request, and whose response can be parsed
 /// from response data.
 pub trait IpmiCommand: Into<Message> {
@@ -265,23 +253,22 @@ pub trait IpmiCommand: Into<Message> {
     /// command.
     type Error;
 
-    /// Try to parse the expected response for this command from the
-    /// provided [`CompletionCode`] and `data`.
-    // TODO: `parse_response` should only be called if `completion_code` is valid (i.e. only impl `parse_valid_response(&[u8])`)
-    fn parse_response(
-        completion_code: CompletionCode,
-        data: &[u8],
-    ) -> Result<Self::Output, ParseResponseError<Self::Error>>;
-
-    /// Convenience function for validating that `cc` is valid, and returning the appropriate
-    /// error otherwise.
-    fn check_cc_success(cc: CompletionCode) -> Result<(), ParseResponseError<Self::Error>> {
-        if cc.is_success() {
-            Ok(())
-        } else {
-            Err(ParseResponseError::Failed(cc))
-        }
+    /// Handle the provided completion code `completion_code` and optionally provide
+    /// a special error in case of failure.
+    ///
+    /// Non-success completion codes for which this function returns `None` should be
+    /// handled by the caller of `parse_success_response`.
+    ///
+    /// The default implementation of this function performs no special handling
+    /// and returns `None`.
+    #[allow(unused)]
+    fn handle_completion_code(completion_code: CompletionCode, data: &[u8]) -> Option<Self::Error> {
+        None
     }
+
+    /// Try to parse the expected response for this command from the
+    /// provided `data`, assuming a successful completion code.
+    fn parse_success_response(data: &[u8]) -> Result<Self::Output, Self::Error>;
 
     /// Get the intended target [`Address`] and [`Channel`] for this commmand.
     fn target(&self) -> Option<(Address, Channel)> {

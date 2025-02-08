@@ -1,5 +1,5 @@
 use crate::{
-    connection::{Address, Channel, CompletionCode, IpmiCommand, Message, ParseResponseError},
+    connection::{Address, Channel, IpmiCommand, Message, NotEnoughData},
     storage::sdr::record::{SensorKey, SensorNumber},
 };
 
@@ -72,15 +72,10 @@ impl From<GetSensorReading> for Message {
 impl IpmiCommand for GetSensorReading {
     type Output = RawSensorReading;
 
-    type Error = ();
+    type Error = NotEnoughData;
 
-    fn parse_response(
-        completion_code: CompletionCode,
-        data: &[u8],
-    ) -> Result<Self::Output, ParseResponseError<Self::Error>> {
-        Self::check_cc_success(completion_code)?;
-
-        RawSensorReading::parse(data).ok_or(ParseResponseError::NotEnoughData)
+    fn parse_success_response(data: &[u8]) -> Result<Self::Output, Self::Error> {
+        RawSensorReading::parse(data).ok_or(NotEnoughData)
     }
 
     fn target(&self) -> Option<(Address, Channel)> {

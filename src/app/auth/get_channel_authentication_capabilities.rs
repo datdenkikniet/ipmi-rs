@@ -1,4 +1,4 @@
-use crate::connection::{Channel, IpmiCommand, Message, NetFn};
+use crate::connection::{Channel, IpmiCommand, Message, NetFn, NotEnoughData};
 
 use super::{AuthType, PrivilegeLevel};
 
@@ -70,16 +70,11 @@ impl From<GetChannelAuthenticationCapabilities> for Message {
 impl IpmiCommand for GetChannelAuthenticationCapabilities {
     type Output = ChannelAuthenticationCapabilities;
 
-    type Error = ();
+    type Error = NotEnoughData;
 
-    fn parse_response(
-        completion_code: crate::connection::CompletionCode,
-        data: &[u8],
-    ) -> Result<Self::Output, crate::connection::ParseResponseError<Self::Error>> {
-        Self::check_cc_success(completion_code)?;
-
+    fn parse_success_response(data: &[u8]) -> Result<Self::Output, Self::Error> {
         if data.len() < 7 {
-            return Err(crate::connection::ParseResponseError::NotEnoughData);
+            return Err(NotEnoughData);
         }
 
         let channel_number = data[0];
@@ -99,7 +94,7 @@ impl IpmiCommand for GetChannelAuthenticationCapabilities {
 
         let (kg, v2, v15, oem_id, oem_aux) = if ipmi2_ext_cap {
             if data.len() < 8 {
-                return Err(crate::connection::ParseResponseError::NotEnoughData);
+                return Err(NotEnoughData);
             }
 
             let kg = (data[2] & 0x20) == 0x20;
