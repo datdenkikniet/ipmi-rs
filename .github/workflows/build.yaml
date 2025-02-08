@@ -11,8 +11,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: dtolnay/rust-toolchain@stable
-
       - name: Run `cargo fmt --check`
         run: cargo fmt --check
 
@@ -28,8 +26,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
-      - uses: dtolnay/rust-toolchain@stable
 
       - name: Run `cargo check --no-default-features --features "${{ matrix.features }}"`
         run: cargo check --no-default-features --features "${{ matrix.features }}" --locked
