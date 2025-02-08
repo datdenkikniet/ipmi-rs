@@ -17,7 +17,7 @@ mod tests;
 
 pub use fmt::{LogOutput, Loggable, Logger};
 
-use connection::{IpmiCommand, LogicalUnit, NetFn, Request, RequestTargetAddress};
+use connection::{CompletionCode, IpmiCommand, LogicalUnit, NetFn, Request, RequestTargetAddress};
 use storage::sdr::{self, record::Record as SdrRecord};
 
 pub struct Ipmi<CON> {
@@ -85,30 +85,34 @@ where
             });
         }
 
-        let (completion_code, data) = (response.cc().into(), response.data());
-
-        let map_error = |error| IpmiError::ParsingFailed {
+        let map_error = |completion_code, error| IpmiError::Command {
             error,
             netfn: response.netfn(),
             cmd: response.cmd(),
-            completion_code: response.cc(),
-            data: data.to_vec(),
+            completion_code,
+            data: response.data().to_vec(),
         };
 
-        if let Some(error) = CMD::handle_completion_code(completion_code, data) {
-            return Err(map_error(error));
+        if let Ok(completion_code) = CompletionCode::try_from(response.cc()) {
+            let error = CMD::handle_completion_code(completion_code, response.data())
+                .map(|e| IpmiError::Command {
+                    error: e,
+                    netfn: response.netfn(),
+                    cmd: response.cmd(),
+                    completion_code: Some(completion_code),
+                    data: response.data().to_vec(),
+                })
+                .unwrap_or_else(|| IpmiError::Failed {
+                    netfn: response.netfn(),
+                    cmd: response.cmd(),
+                    completion_code,
+                    data: response.data().to_vec(),
+                });
+
+            return Err(error);
         }
 
-        if !completion_code.is_success() {
-            return Err(IpmiError::Failed {
-                netfn: response.netfn(),
-                cmd: response.cmd(),
-                completion_code: response.cc(),
-                data: data.to_vec(),
-            });
-        }
-
-        CMD::parse_success_response(data).map_err(map_error)
+        CMD::parse_success_response(response.data()).map_err(|err| map_error(None, err))
     }
 }
 
@@ -145,7 +149,7 @@ where
                     self.next_id = Some(next_record_id);
                     return Some(record.record);
                 }
-                Err(IpmiError::ParsingFailed {
+                Err(IpmiError::Command {
                     error: (e, Some(next_record_id)),
                     ..
                 }) => {

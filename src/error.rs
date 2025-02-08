@@ -1,4 +1,4 @@
-use crate::connection::NetFn;
+use crate::connection::{CompletionCode, NetFn};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum IpmiError<CON, P> {
@@ -12,14 +12,14 @@ pub enum IpmiError<CON, P> {
     Failed {
         netfn: NetFn,
         cmd: u8,
-        completion_code: u8,
+        completion_code: CompletionCode,
         data: Vec<u8>,
     },
-    ParsingFailed {
+    Command {
         error: P,
         netfn: NetFn,
         cmd: u8,
-        completion_code: u8,
+        completion_code: Option<CompletionCode>,
         data: Vec<u8>,
     },
     Connection(CON),
@@ -49,13 +49,13 @@ impl<CON, P> IpmiError<CON, P> {
                 cmd_sent,
                 cmd_recvd,
             },
-            IpmiError::ParsingFailed {
+            IpmiError::Command {
                 error,
                 netfn,
                 cmd,
                 completion_code,
                 data,
-            } => IpmiError::ParsingFailed {
+            } => IpmiError::Command {
                 error,
                 netfn,
                 cmd,
