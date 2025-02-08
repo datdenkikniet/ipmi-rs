@@ -17,7 +17,9 @@ mod tests;
 
 pub use fmt::{LogOutput, Loggable, Logger};
 
-use connection::{CompletionCode, IpmiCommand, LogicalUnit, NetFn, Request, RequestTargetAddress};
+use connection::{
+    CompletionErrorCode, IpmiCommand, LogicalUnit, NetFn, Request, RequestTargetAddress,
+};
 use storage::sdr::{self, record::Record as SdrRecord};
 
 pub struct Ipmi<CON> {
@@ -93,7 +95,7 @@ where
             data: response.data().to_vec(),
         };
 
-        if let Ok(completion_code) = CompletionCode::try_from(response.cc()) {
+        if let Ok(completion_code) = CompletionErrorCode::try_from(response.cc()) {
             let error = CMD::handle_completion_code(completion_code, response.data())
                 .map(|e| IpmiError::Command {
                     error: e,
