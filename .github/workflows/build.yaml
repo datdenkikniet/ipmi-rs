@@ -33,9 +33,19 @@ jobs:
       - name: Run `cargo check --no-default-features --features "${{ matrix.features }}"`
         run: cargo check --no-default-features --features "${{ matrix.features }}" --locked
 
+  check-examples:
+    runs-on: ubuntu-latest
+    name: Check that the examples compile
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run `cargo check --examples`
+        run: cargo check --examples --locked
+
   ci-success:
     runs-on: ubuntu-latest
     name: ci-success
-    needs: [check-format, check]
+    needs: [check-format, check, check-examples]
     steps:
       - run: true
