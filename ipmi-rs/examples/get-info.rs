@@ -12,8 +12,8 @@ use ipmi_rs::{
         },
         sel::{GetSelEntry, GetSelInfo, RecordId as SelRecordId, SelCommand, SelGetAllocInfo},
     },
-    LogOutput,
 };
+use ipmi_rs_log::{LogOutput, Logger};
 
 fn main() -> std::io::Result<()> {
     pretty_env_logger::formatted_builder()
@@ -29,12 +29,12 @@ fn main() -> std::io::Result<()> {
 
     log::info!("Getting SEL info");
     let info = ipmi.send_recv(GetSelInfo).unwrap();
-    ipmi_rs::Logger::log(log_output, &info);
+    Logger::log(log_output, &info);
 
     if info.supported_cmds.contains(&SelCommand::GetAllocInfo) {
         log::info!("Getting SEL Alloc info");
         let alloc_info = ipmi.send_recv(SelGetAllocInfo).unwrap();
-        ipmi_rs::Logger::log(log_output, &alloc_info);
+        Logger::log(log_output, &alloc_info);
     } else {
         log::info!("Getting SEL Alloc info is not supported");
     }
@@ -45,26 +45,26 @@ fn main() -> std::io::Result<()> {
             .send_recv(GetSelEntry::new(None, SelRecordId::LAST))
             .unwrap();
 
-        ipmi_rs::Logger::log(log_output, &first_record);
+        Logger::log(log_output, &first_record);
     }
 
     let device_id = ipmi.send_recv(GetDeviceId).unwrap();
-    ipmi_rs::Logger::log(log_output, &device_id);
+    Logger::log(log_output, &device_id);
 
     log::info!("Getting Device SDR Info");
     if let Ok(sdr_info) = ipmi.send_recv(GetDeviceSdrInfo::new(SdrCount)) {
-        ipmi_rs::Logger::log(log_output, &sdr_info);
+        Logger::log(log_output, &sdr_info);
     } else {
         log::warn!("Could not get Device SDR info");
     }
 
     log::info!("Getting SDR repository info");
     let sdr_info = ipmi.send_recv(GetSdrRepositoryInfo).unwrap();
-    ipmi_rs::Logger::log(log_output, &sdr_info);
+    Logger::log(log_output, &sdr_info);
 
     if sdr_info.supported_ops.contains(&SdrOperation::GetAllocInfo) {
         let sdr_alloc_info = ipmi.send_recv(GetSdrAllocInfo).unwrap();
-        ipmi_rs::Logger::log(log_output, &sdr_alloc_info);
+        Logger::log(log_output, &sdr_alloc_info);
     };
 
     let template = "[{bar:.green/white}] {prefix} ({pos}/{len})";
@@ -100,7 +100,7 @@ fn main() -> std::io::Result<()> {
                 if let Some(reading) = reading.reading {
                     if let Some(display) = full.display_reading(reading) {
                         log::info!("  {}: {}", full.id_string(), display);
-                        ipmi_rs::Logger::log(debug_log_output, sensor);
+                        Logger::log(debug_log_output, sensor);
                     }
                 } else {
                     log::warn!("  No reading for {}", full.id_string());

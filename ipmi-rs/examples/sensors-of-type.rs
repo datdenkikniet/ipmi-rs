@@ -6,6 +6,7 @@ use ipmi_rs::{
         Record, SensorType,
     },
 };
+use ipmi_rs_log::Logger;
 use log::Level;
 
 mod common;
@@ -55,7 +56,7 @@ fn main() -> std::io::Result<()> {
         .collect();
 
     for sdr in sdrs_of_type {
-        ipmi_rs::Logger::log(&Level::Info.into(), &sdr);
+        Logger::log(&Level::Info.into(), &sdr);
 
         if let RecordContents::FullSensor(full) = sdr.contents {
             if args.reading {
