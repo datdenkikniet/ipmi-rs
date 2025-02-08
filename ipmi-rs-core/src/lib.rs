@@ -7,9 +7,6 @@ pub mod app;
 
 pub mod connection;
 
-mod error;
-pub use error::IpmiError;
-
 pub mod storage;
 pub use storage::sdr::record::WithSensorRecordCommon;
 

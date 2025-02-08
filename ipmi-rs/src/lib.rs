@@ -13,6 +13,9 @@ pub use file::File;
 
 pub mod rmcp;
 
+mod error;
+pub use error::IpmiError;
+
 use ipmi_rs_core::{
     connection::{CompletionErrorCode, IpmiCommand, LogicalUnit, Request, RequestTargetAddress},
     storage::sdr::{self, Record as SdrRecord},
