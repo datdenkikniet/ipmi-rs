@@ -1,6 +1,6 @@
 use crate::connection::{
     rmcp::{AuthenticationAlgorithm, ConfidentialityAlgorithm, IntegrityAlgorithm},
-    Channel, IpmiCommand, Message, NetFn, NotEnoughData,
+    Channel, IpmiCommand, Message, NetFn,
 };
 
 #[derive(Debug, Clone)]
@@ -119,14 +119,17 @@ impl core::ops::Deref for ChannelCipherSuites {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct TooMuchData;
+
 impl IpmiCommand for GetChannelCipherSuites {
     type Output = ChannelCipherSuites;
 
-    type Error = NotEnoughData;
+    type Error = TooMuchData;
 
     fn parse_success_response(data: &[u8]) -> Result<Self::Output, Self::Error> {
         if data.len() > 16 {
-            return Err(NotEnoughData);
+            return Err(TooMuchData);
         }
 
         let mut record_data = [0u8; 16];
