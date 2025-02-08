@@ -1,5 +1,11 @@
 # Unreleased
 
+* BREAKING: Refactor `IpmiCommand` to reduce/remove completion-code validation for ipmlementors. ([#28])
+* BREAKING: Remove `IpmiCommandError`. ([#28])
+* BREAKING: Remove `Success` variant from and rename `CompletionCode` to `CompletionErrorCode`. ([#28])
+
+[#28]: https://github.com/datdenkikniet/ipmi-rs/pull/28
+
 # [0.4.0](https://github.com/datdenkikniet/ipmi-rs/tree/v0.4.0)
 
 * Handle invalid `OwnerKey` while parsing `SensorKey`. ([#25])
