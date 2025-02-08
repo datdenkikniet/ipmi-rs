@@ -4,7 +4,6 @@
 //! for interacting with IPMI.
 
 pub use ipmi_rs_core::*;
-pub use ipmi_rs_log::*;
 
 #[cfg(feature = "unix-file")]
 mod file;
