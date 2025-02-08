@@ -1,3 +1,8 @@
+//! Implementations & convenience functions for IPMI.
+//!
+//! This crate provides unix-file and RMCP protocols, and some convenience functions
+//! for interacting with IPMI.
+
 pub use ipmi_rs_core::*;
 pub use ipmi_rs_log::*;
 
