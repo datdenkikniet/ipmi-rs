@@ -23,6 +23,9 @@ jobs:
         features:
           - ""
           - "md5"
+          - "unix-file"
+          - "log-to-file"
+          - "time"
 
     steps:
       - uses: actions/checkout@v4
