@@ -10,7 +10,7 @@ use ipmi_rs::{
             record::{IdentifiableSensor, InstancedSensor, RecordContents},
             GetDeviceSdrInfo, GetSdrAllocInfo, GetSdrRepositoryInfo, SdrCount, SdrOperation,
         },
-        sel::{GetSelAllocInfo, GetSelEntry, GetSelInfo, RecordId as SelRecordId, SelCommand},
+        sel::{GetSelEntry, GetSelInfo, RecordId as SelRecordId, SelCommand, SelGetAllocInfo},
     },
     LogOutput,
 };
@@ -33,7 +33,7 @@ fn main() -> std::io::Result<()> {
 
     if info.supported_cmds.contains(&SelCommand::GetAllocInfo) {
         log::info!("Getting SEL Alloc info");
-        let alloc_info = ipmi.send_recv(GetSelAllocInfo).unwrap();
+        let alloc_info = ipmi.send_recv(SelGetAllocInfo).unwrap();
         ipmi_rs::Logger::log(log_output, &alloc_info);
     } else {
         log::info!("Getting SEL Alloc info is not supported");
