@@ -1,3 +1,5 @@
+//! Logging extensions and utilities for `ipmi-rs-core`.
+
 mod impls;
 
 #[derive(Debug, Clone)]
