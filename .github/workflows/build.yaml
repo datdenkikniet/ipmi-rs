@@ -73,7 +73,7 @@ jobs:
 
   ci-success:
     runs-on: ubuntu-latest
-    name: ci-success
     needs: [check-format, check, check-examples]
+
     steps:
       - run: true
