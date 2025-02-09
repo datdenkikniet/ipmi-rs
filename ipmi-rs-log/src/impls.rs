@@ -9,8 +9,7 @@ use ipmi_rs_core::{
             record::{
                 IdentifiableSensor, InstancedSensor, RecordHeader, SensorKey, SensorOwner, Value,
             },
-            AllocInfo as SdrAllocInfo, DeviceSdrInfo, NumberOfSdrs, NumberOfSensors, Record,
-            SdrRepositoryInfo,
+            DeviceSdrInfo, NumberOfSdrs, NumberOfSensors, Record, SdrAllocInfo, SdrRepositoryInfo,
         },
         sel::{
             Entry, EventDirection, EventMessageRevision, SelAllocInfo, SelCommand, SelEntryInfo,
