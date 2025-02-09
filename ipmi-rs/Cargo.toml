@@ -14,8 +14,6 @@ documentation = "https://docs.rs/ipmi-rs/latest"
 log = "0.4"
 nonmax = "0.5"
 bitflags = "1.3"
-time = { version = "0.3", optional = true, default-features = false, features = [ "formatting" ] }
-parking_lot = { version = "0.12", optional = true }
 md5 = { version = "0.7", optional = true }
 ipmi-rs-core = { path = "../ipmi-rs-core" }
 
@@ -31,8 +29,7 @@ cbc = "0.1.2"
 getrandom = "0.2.12"
 
 [features]
-default = [ "time", "unix-file", "log-to-file", "md5" ]
-log-to-file = [ "parking_lot" ]
+default = [ "unix-file", "md5" ]
 
 # Connection features
 unix-file = [ "nix" ]
