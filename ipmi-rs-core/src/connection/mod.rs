@@ -1,5 +1,5 @@
 #![deny(missing_docs)]
-//! Implementations & connection-related details.
+//! IPMI-connection related data.
 
 mod completion_code;
 use std::num::NonZeroU8;
