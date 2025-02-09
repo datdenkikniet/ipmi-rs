@@ -14,7 +14,7 @@ pub use get_info::{
 };
 
 mod get_alloc_info;
-pub use get_alloc_info::{AllocInfo, GetAllocInfo as GetSdrAllocInfo};
+pub use get_alloc_info::{AllocInfo as SdrAllocInfo, GetAllocInfo as SdrGetAllocInfo};
 
 pub mod event_reading_type_code;
 

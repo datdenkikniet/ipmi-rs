@@ -8,7 +8,7 @@ use ipmi_rs::{
     storage::{
         sdr::{
             record::{IdentifiableSensor, InstancedSensor, RecordContents},
-            GetDeviceSdrInfo, GetSdrAllocInfo, GetSdrRepositoryInfo, SdrCount, SdrOperation,
+            GetDeviceSdrInfo, GetSdrRepositoryInfo, SdrCount, SdrGetAllocInfo, SdrOperation,
         },
         sel::{GetSelEntry, GetSelInfo, RecordId as SelRecordId, SelCommand, SelGetAllocInfo},
     },
@@ -63,7 +63,7 @@ fn main() -> std::io::Result<()> {
     Logger::log(log_output, &sdr_info);
 
     if sdr_info.supported_ops.contains(&SdrOperation::GetAllocInfo) {
-        let sdr_alloc_info = ipmi.send_recv(GetSdrAllocInfo).unwrap();
+        let sdr_alloc_info = ipmi.send_recv(SdrGetAllocInfo).unwrap();
         Logger::log(log_output, &sdr_alloc_info);
     };
 
