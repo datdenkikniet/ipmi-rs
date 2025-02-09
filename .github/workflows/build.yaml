@@ -70,3 +70,10 @@ jobs:
 
       - name: Check examples
         run: cargo check --examples --locked -p ${{ matrix.crate }}
+
+  ci-success:
+    runs-on: ubuntu-latest
+    needs: [check-format, check, check-examples]
+
+    steps:
+      - run: true
