@@ -8,11 +8,19 @@ jobs:
   check-format:
     runs-on: ubuntu-latest
     name: Check formatting of the project
+
+    strategy:
+      matrix:
+        crate:
+          - ipmi-rs-core
+          - ipmi-rs-log
+          - ipmi-rs
+
     steps:
       - uses: actions/checkout@v4
 
-      - name: Run `cargo fmt --check`
-        run: cargo fmt --check
+      - name: Run cargo fmt
+        run: cargo fmt --check --manifest-path "${{ matrix.crate }}/Cargo.toml"
 
   check:
     runs-on: ubuntu-latest
@@ -20,28 +28,48 @@ jobs:
 
     strategy:
       matrix:
-        features:
-          - ""
-          - "md5"
-          - "unix-file"
-          - "log-to-file"
-          - "time"
+        include:
+          - crate: ipmi-rs-core
+            features: ""
+          - crate: ipmi-rs-core
+            features: "time"
+          - crate: ipmi-rs-core
+            features: "log"
+          - crate: ipmi-rs-core
+            features: "time log"
+          - crate: ipmi-rs-log
+            features: ""
+          - crate: ipmi-rs-log
+            features: "log-to-file"
+          - crate: ipmi-rs
+            features: ""
+          - crate: ipmi-rs
+            features: "md5"
+          - crate: ipmi-rs
+            features: "unix-file"
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Run `cargo check --no-default-features --features "${{ matrix.features }}"`
-        run: cargo check --no-default-features --features "${{ matrix.features }}" --locked
+      - name: Check a package with specific feature combination.
+        run: cargo check --no-default-features --locked --manifest-path "${{ matrix.crate }}/Cargo.toml" --features "${{ matrix.features }}"
 
   check-examples:
     runs-on: ubuntu-latest
     name: Check that the examples compile
 
+    strategy:
+        matrix:
+          crate:
+            - ipmi-rs-core
+            - ipmi-rs-log
+            - ipmi-rs
+
     steps:
       - uses: actions/checkout@v4
 
-      - name: Run `cargo check --examples`
-        run: cargo check --examples --locked
+      - name: Check examples
+        run: cargo check --examples --locked --manifest-path "${{ matrix.crate }}/Cargo.toml"
 
   ci-success:
     runs-on: ubuntu-latest
