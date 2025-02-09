@@ -20,7 +20,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Run cargo fmt
-        run: cargo fmt --check --manifest-path "${{ matrix.crate }}/Cargo.toml"
+        run: cargo fmt --check -p ${{ matrix.crate }}
 
   check:
     runs-on: ubuntu-latest
@@ -52,7 +52,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Check a package with specific feature combination.
-        run: cargo check --no-default-features --locked --manifest-path "${{ matrix.crate }}/Cargo.toml" --features "${{ matrix.features }}"
+        run: cargo check --no-default-features --locked -p ${{ matrix.crate }} --features "${{ matrix.features }}"
 
   check-examples:
     runs-on: ubuntu-latest
@@ -69,4 +69,4 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Check examples
-        run: cargo check --examples --locked --manifest-path "${{ matrix.crate }}/Cargo.toml"
+        run: cargo check --examples --locked -p ${{ matrix.crate }}

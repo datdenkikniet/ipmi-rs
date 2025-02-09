@@ -1,0 +1,14 @@
+[workspace]
+resolver = "2"
+
+members = [
+    "ipmi-rs-core",
+    "ipmi-rs-log",
+    "ipmi-rs"
+]
+
+default-members = [
+    "ipmi-rs-core",
+    "ipmi-rs-log",
+    "ipmi-rs"
+]
