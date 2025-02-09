@@ -32,3 +32,10 @@ jobs:
 
       - name: Run `cargo check --no-default-features --features "${{ matrix.features }}"`
         run: cargo check --no-default-features --features "${{ matrix.features }}" --locked
+
+  ci-success:
+    runs-on: ubuntu-latest
+    name: ci-success
+    needs: [check-format, check]
+    steps:
+      - run: true
