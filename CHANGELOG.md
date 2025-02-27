@@ -3,8 +3,10 @@
 * BREAKING: Refactor `IpmiCommand` to reduce/remove completion-code validation for ipmlementors. ([#28])
 * BREAKING: Remove `IpmiCommandError`. ([#28])
 * BREAKING: Remove `Success` variant from and rename `CompletionCode` to `CompletionErrorCode`. ([#28])
+* BREAKING: Split into multiple crates & rename some structs. ([#33])
 
 [#28]: https://github.com/datdenkikniet/ipmi-rs/pull/28
+[#33]: https://github.com/datdenkikniet/ipmi-rs/pull/33
 
 # [0.4.0](https://github.com/datdenkikniet/ipmi-rs/tree/v0.4.0)
 
