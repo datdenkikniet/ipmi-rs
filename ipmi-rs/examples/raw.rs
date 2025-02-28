@@ -4,12 +4,9 @@ use clap::Parser;
 use common::CommonOpts;
 
 use ipmi_rs::connection::RequestTargetAddress;
+use ipmi_rs::connection::{IpmiConnection, LogicalUnit, Request};
 use ipmi_rs::rmcp::{
     RmcpIpmiError, RmcpIpmiReceiveError, RmcpIpmiSendError, V1_5WriteError, V2_0WriteError,
-};
-use ipmi_rs::{
-    connection::Message,
-    connection::{IpmiConnection, LogicalUnit, Request},
 };
 
 mod common;
@@ -23,7 +20,7 @@ pub struct Command {
     message: Vec<String>,
 }
 
-fn try_parse_message(input: &[u8]) -> std::io::Result<Message> {
+fn try_parse_message(input: &[u8], target: RequestTargetAddress) -> std::io::Result<Request> {
     if input.len() < 2 {
         let err = std::io::Error::new(
             std::io::ErrorKind::InvalidInput,
@@ -36,7 +33,7 @@ fn try_parse_message(input: &[u8]) -> std::io::Result<Message> {
 
     let data = input[2..].to_vec();
 
-    Ok(Message::new_raw(input[0], cmd, data))
+    Ok(Request::new(input[0].into(), cmd, data, target))
 }
 
 fn main() -> std::io::Result<()> {
@@ -58,9 +55,7 @@ fn main() -> std::io::Result<()> {
         data.push(u8_value);
     }
 
-    let message = try_parse_message(&data)?;
-
-    let mut request: Request = Request::new(message, RequestTargetAddress::Bmc(LogicalUnit::Zero));
+    let mut request = try_parse_message(&data, RequestTargetAddress::Bmc(LogicalUnit::Zero))?;
 
     let ipmi = command.common.get_connection()?;
 

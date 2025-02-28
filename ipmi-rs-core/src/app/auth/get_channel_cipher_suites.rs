@@ -1,4 +1,4 @@
-use crate::connection::{Channel, IpmiCommand, Message, NetFn};
+use crate::connection::{Channel, IpmiCommand, NetFn, Request};
 
 use super::{AuthenticationAlgorithm, ConfidentialityAlgorithm, IntegrityAlgorithm};
 
@@ -9,9 +9,9 @@ pub struct GetChannelCipherSuites {
     list_index: u8,
 }
 
-impl From<GetChannelCipherSuites> for Message {
+impl From<GetChannelCipherSuites> for Request {
     fn from(value: GetChannelCipherSuites) -> Self {
-        Message::new_request(
+        Request::new_default_target(
             NetFn::App,
             0x54,
             vec![value.channel.value(), 0x00, value.list_index],

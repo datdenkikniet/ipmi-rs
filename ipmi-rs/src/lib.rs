@@ -17,7 +17,7 @@ mod error;
 pub use error::IpmiError;
 
 use ipmi_rs_core::{
-    connection::{CompletionErrorCode, IpmiCommand, LogicalUnit, Request, RequestTargetAddress},
+    connection::{CompletionErrorCode, IpmiCommand},
     storage::sdr::{self, Record as SdrRecord},
 };
 
@@ -66,22 +66,15 @@ where
     where
         CMD: IpmiCommand,
     {
-        let target_address = match request.target() {
-            Some((a, c)) => RequestTargetAddress::BmcOrIpmb(a, c, LogicalUnit::Zero),
-            None => RequestTargetAddress::Bmc(LogicalUnit::Zero),
-        };
-
-        let message = request.into();
-        let (message_netfn, message_cmd) = (message.netfn(), message.cmd());
-        let mut request = Request::new(message, target_address);
+        let mut request = request.into();
 
         let response = self.inner.send_recv(&mut request)?;
 
-        if response.netfn() != message_netfn || response.cmd() != message_cmd {
+        if response.netfn() != request.netfn() || response.cmd() != request.cmd() {
             return Err(IpmiError::UnexpectedResponse {
-                netfn_sent: message_netfn,
+                netfn_sent: request.netfn(),
                 netfn_recvd: response.netfn(),
-                cmd_sent: message_cmd,
+                cmd_sent: request.cmd(),
                 cmd_recvd: response.cmd(),
             });
         }

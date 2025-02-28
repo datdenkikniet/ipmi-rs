@@ -473,10 +473,7 @@ impl State {
 
         // TODO: validate sequence, checksums, etc.
 
-        let response = if let Some(resp) = Response::new(
-            crate::connection::Message::new_raw(netfn, cmd, response_data),
-            0,
-        ) {
+        let response = if let Some(resp) = Response::new(netfn, cmd, response_data, 0) {
             resp
         } else {
             // TODO: need better message here :)

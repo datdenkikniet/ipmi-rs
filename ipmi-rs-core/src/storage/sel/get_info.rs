@@ -1,5 +1,5 @@
 use crate::{
-    connection::{IpmiCommand, Message, NetFn, NotEnoughData},
+    connection::{IpmiCommand, NetFn, NotEnoughData, Request},
     storage::Timestamp,
 };
 
@@ -15,9 +15,9 @@ impl IpmiCommand for GetInfo {
     }
 }
 
-impl From<GetInfo> for Message {
+impl From<GetInfo> for Request {
     fn from(_: GetInfo) -> Self {
-        Message::new_request(NetFn::Storage, 0x40, Vec::new())
+        Request::new_default_target(NetFn::Storage, 0x40, Vec::new())
     }
 }
 

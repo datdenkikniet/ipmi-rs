@@ -241,10 +241,7 @@ impl IpmiConnection for State {
 
         // TODO: validate sequence number
 
-        if let Some(resp) = Response::new(
-            crate::connection::Message::new_raw(netfn, cmd, response_data),
-            0,
-        ) {
+        if let Some(resp) = Response::new(netfn, cmd, response_data, 0) {
             Ok(resp)
         } else {
             // TODO: need better message here :)

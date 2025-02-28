@@ -175,71 +175,13 @@ pub trait IpmiConnection {
     /// Receive a response from the remote end of this connection.
     fn recv(&mut self) -> Result<Response, Self::RecvError>;
 
-    /// Send `request` to and reveive a response from the remote end of this connection.
+    /// Send `request` to and receive a response from the remote end of this connection.
     fn send_recv(&mut self, request: &mut Request) -> Result<Response, Self::Error>;
-}
-
-/// The wire representation of an IPMI messag.e
-#[derive(Clone, Debug, PartialEq)]
-pub struct Message {
-    netfn: u8,
-    cmd: u8,
-    data: Vec<u8>,
-}
-
-impl Message {
-    /// Create a new request message with the provided `netfn`, `cmd` and `data`.
-    pub fn new_request(netfn: NetFn, cmd: u8, data: Vec<u8>) -> Self {
-        Self {
-            netfn: netfn.request_value(),
-            cmd,
-            data,
-        }
-    }
-
-    /// Create a new response message with the provided `netfn`, `cmd` and `data`.
-    pub fn new_response(netfn: NetFn, cmd: u8, data: Vec<u8>) -> Self {
-        Self {
-            netfn: netfn.response_value(),
-            cmd,
-            data,
-        }
-    }
-
-    /// Create a new message with the provided raw `netfn`, `cmd` and `data`.
-    pub fn new_raw(netfn: u8, cmd: u8, data: Vec<u8>) -> Self {
-        Self { netfn, cmd, data }
-    }
-
-    /// Get the netfn of the message.
-    pub fn netfn(&self) -> NetFn {
-        NetFn::from(self.netfn)
-    }
-
-    /// Get the raw netfn value for the message.
-    pub fn netfn_raw(&self) -> u8 {
-        self.netfn
-    }
-
-    /// Get the command value for this message.
-    pub fn cmd(&self) -> u8 {
-        self.cmd
-    }
-
-    /// Get a reference to the data for this message.
-    pub fn data(&self) -> &[u8] {
-        &self.data
-    }
-
-    /// Get a mutable reference to the data for this message.
-    pub fn data_mut(&mut self) -> &mut [u8] {
-        &mut self.data
-    }
 }
 
 /// An IPMI command that can be turned into a request, and whose response can be parsed
 /// from response data.
-pub trait IpmiCommand: Into<Message> {
+pub trait IpmiCommand: Into<Request> {
     /// The output of this command, i.e. the expected response type.
     type Output;
     /// The type of error that can occur while parsing the response for this
@@ -265,9 +207,4 @@ pub trait IpmiCommand: Into<Message> {
     /// Try to parse the expected response for this command from the
     /// provided `data`, assuming a successful completion code.
     fn parse_success_response(data: &[u8]) -> Result<Self::Output, Self::Error>;
-
-    /// Get the intended target [`Address`] and [`Channel`] for this commmand.
-    fn target(&self) -> Option<(Address, Channel)> {
-        None
-    }
 }

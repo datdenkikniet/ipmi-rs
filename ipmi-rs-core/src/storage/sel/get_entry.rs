@@ -2,7 +2,7 @@ use std::num::NonZeroU16;
 
 use nonmax::NonMaxU8;
 
-use crate::connection::{IpmiCommand, Message, NetFn};
+use crate::connection::{IpmiCommand, NetFn, Request};
 
 use super::{Entry, ParseEntryError, RecordId};
 
@@ -48,7 +48,7 @@ impl IpmiCommand for GetEntry {
     }
 }
 
-impl From<GetEntry> for Message {
+impl From<GetEntry> for Request {
     fn from(value: GetEntry) -> Self {
         let GetEntry {
             reservation_id,
@@ -64,6 +64,6 @@ impl From<GetEntry> for Message {
         data[4] = offset;
         data[5] = bytes_to_read.map(|v| v.get()).unwrap_or(0xFF);
 
-        Message::new_request(NetFn::Storage, 0x43, data)
+        Request::new_default_target(NetFn::Storage, 0x43, data)
     }
 }

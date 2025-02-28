@@ -297,11 +297,11 @@ pub fn next_ipmb_message(
 
 #[test]
 fn ipmb_message_test() {
-    use crate::connection::Message;
-
     let data = next_ipmb_message(
         &crate::connection::Request::new(
-            Message::new_raw(0x0D, 0x0B, vec![0x01, 0x02, 0x03]),
+            ipmi_rs_core::connection::NetFn::Transport,
+            0x0B,
+            vec![0x01, 0x02, 0x03],
             crate::connection::RequestTargetAddress::Bmc(crate::connection::LogicalUnit::One),
         ),
         &mut IpmbState::default(),

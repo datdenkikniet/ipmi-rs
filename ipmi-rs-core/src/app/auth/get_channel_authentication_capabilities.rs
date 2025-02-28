@@ -1,4 +1,4 @@
-use crate::connection::{Channel, IpmiCommand, Message, NetFn, NotEnoughData};
+use crate::connection::{Channel, IpmiCommand, NetFn, NotEnoughData, Request};
 
 use super::{AuthType, PrivilegeLevel};
 
@@ -54,9 +54,9 @@ impl GetChannelAuthenticationCapabilities {
     }
 }
 
-impl From<GetChannelAuthenticationCapabilities> for Message {
-    fn from(value: GetChannelAuthenticationCapabilities) -> Message {
-        Message::new_request(
+impl From<GetChannelAuthenticationCapabilities> for Request {
+    fn from(value: GetChannelAuthenticationCapabilities) -> Self {
+        Request::new_default_target(
             NetFn::App,
             0x38,
             vec![

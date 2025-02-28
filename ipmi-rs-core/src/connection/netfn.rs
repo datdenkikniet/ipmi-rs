@@ -19,12 +19,12 @@ macro_rules! netfn {
 
         impl NetFn {
             /// Get the raw data for the request value of this netfn.
-            pub fn request_value(&self) -> u8 {
+            pub const fn request_value(&self) -> u8 {
                 match self {
                     $(Self::$name => $req,)*
                     Self::Reserved(v) => {
-                        if v % 2 == 1 {
-                            v - 1
+                        if *v % 2 == 1 {
+                            *v - 1
                         } else {
                             *v
                         }
@@ -33,12 +33,12 @@ macro_rules! netfn {
             }
 
             /// Get the raw data for the response value of this netfn.
-            pub fn response_value(&self) -> u8 {
+            pub const fn response_value(&self) -> u8 {
                 match self {
                     $(Self::$name => $resp,)*
                     NetFn::Reserved(v) => {
-                        if v % 2 == 0 {
-                            v + 1
+                        if *v % 2 == 0 {
+                            *v + 1
                         } else {
                             *v
                         }
