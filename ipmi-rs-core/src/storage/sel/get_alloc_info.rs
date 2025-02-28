@@ -1,4 +1,4 @@
-use crate::connection::{IpmiCommand, Message, NetFn, NotEnoughData};
+use crate::connection::{IpmiCommand, NetFn, NotEnoughData, Request};
 
 pub struct GetAllocInfo;
 
@@ -12,9 +12,9 @@ impl IpmiCommand for GetAllocInfo {
     }
 }
 
-impl From<GetAllocInfo> for Message {
+impl From<GetAllocInfo> for Request {
     fn from(_: GetAllocInfo) -> Self {
-        Message::new_request(NetFn::Storage, 0x41, Vec::new())
+        Request::new_default_target(NetFn::Storage, 0x41, Vec::new())
     }
 }
 

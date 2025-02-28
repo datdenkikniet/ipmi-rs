@@ -1,6 +1,6 @@
 use std::num::NonZeroU32;
 
-use crate::connection::{IpmiCommand, Message, NetFn};
+use crate::connection::{IpmiCommand, NetFn, Request};
 
 use super::{AuthError, AuthType, PrivilegeLevel};
 
@@ -20,7 +20,7 @@ pub struct BeginSessionInfo {
     pub maximum_privilege_level: PrivilegeLevel,
 }
 
-impl From<ActivateSession> for Message {
+impl From<ActivateSession> for Request {
     fn from(value: ActivateSession) -> Self {
         let mut data = vec![0u8; 22];
 
@@ -29,7 +29,7 @@ impl From<ActivateSession> for Message {
         data[2..18].copy_from_slice(&value.challenge_string);
         data[18..22].copy_from_slice(&value.initial_sequence_number.to_le_bytes());
 
-        Message::new_request(NetFn::App, 0x3A, data)
+        Request::new_default_target(NetFn::App, 0x3A, data)
     }
 }
 

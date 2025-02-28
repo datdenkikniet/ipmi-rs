@@ -1,6 +1,6 @@
 use std::num::NonZeroU32;
 
-use crate::connection::{IpmiCommand, Message, NetFn};
+use crate::connection::{IpmiCommand, NetFn, Request};
 
 use super::{AuthError, AuthType};
 
@@ -58,14 +58,14 @@ impl GetSessionChallenge {
     }
 }
 
-impl From<GetSessionChallenge> for Message {
-    fn from(value: GetSessionChallenge) -> Message {
+impl From<GetSessionChallenge> for Request {
+    fn from(value: GetSessionChallenge) -> Self {
         let mut data = vec![0u8; 17];
 
         data[0] = value.auth_type.into();
         data[1..].copy_from_slice(&value.username);
 
-        Message::new_request(NetFn::App, 0x39, data)
+        Request::new_default_target(NetFn::App, 0x39, data)
     }
 }
 

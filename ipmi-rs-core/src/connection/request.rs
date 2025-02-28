@@ -1,52 +1,59 @@
 use crate::connection::{LogicalUnit, NetFn};
 
-use super::{Address, Channel, Message};
+use super::{Address, Channel};
 
 /// An IPMI request message.
 pub struct Request {
     target: RequestTargetAddress,
-    message: Message,
+    netfn: u8,
+    cmd: u8,
+    data: Vec<u8>,
 }
 
 impl Request {
     /// Create a new IPMI request message.
-    ///
-    /// The netfn for `request` should be of the `request` variant, see [`Message::new_request`].
-    // TODO: don't accept `Message` directly (could be malformed?)
-    pub const fn new(request: Message, target: RequestTargetAddress) -> Self {
+    pub const fn new(netfn: NetFn, cmd: u8, data: Vec<u8>, target: RequestTargetAddress) -> Self {
         Self {
             target,
-            message: request,
+            netfn: netfn.request_value(),
+            cmd,
+            data,
         }
+    }
+
+    /// Create a new IPMI request message.
+    pub const fn new_default_target(netfn: NetFn, cmd: u8, data: Vec<u8>) -> Self {
+        let target = RequestTargetAddress::Bmc(LogicalUnit::Zero);
+        Self::new(netfn, cmd, data, target)
     }
 
     /// Get the netfn for the request.
     pub fn netfn(&self) -> NetFn {
-        self.message.netfn()
+        self.netfn.into()
     }
 
     /// Get the raw value of the netfn for the request.
     pub fn netfn_raw(&self) -> u8 {
-        self.message.netfn_raw()
+        self.netfn
     }
 
     /// Get the command value for the request.
     pub fn cmd(&self) -> u8 {
-        self.message.cmd
+        self.cmd
     }
 
     /// Get a shared reference to the data of the request (does not include netfn or command).
 
     pub fn data(&self) -> &[u8] {
-        self.message.data()
+        &self.data
     }
 
     /// Get a mutable reference to the data of the request (does not include netfn or command).
     pub fn data_mut(&mut self) -> &mut [u8] {
-        self.message.data_mut()
+        &mut self.data
     }
 
-    /// Get the target for the request.
+    /// Get the intended target [`Address`] and [`Channel`] for this request.
     pub fn target(&self) -> RequestTargetAddress {
         self.target
     }

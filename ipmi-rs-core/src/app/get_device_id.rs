@@ -1,11 +1,11 @@
-use crate::connection::{IpmiCommand, Message, NetFn, NotEnoughData};
+use crate::connection::{IpmiCommand, NetFn, NotEnoughData, Request};
 
 /// The Get Device ID command.
 pub struct GetDeviceId;
 
-impl From<GetDeviceId> for Message {
+impl From<GetDeviceId> for Request {
     fn from(_: GetDeviceId) -> Self {
-        Message::new_request(NetFn::App, 0x01, Vec::new())
+        Request::new_default_target(NetFn::App, 0x01, Vec::new())
     }
 }
 

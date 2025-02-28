@@ -4,7 +4,7 @@
 
 use std::num::NonZeroU16;
 
-use crate::connection::{IpmiCommand, Message, NetFn, NotEnoughData};
+use crate::connection::{IpmiCommand, NetFn, NotEnoughData, Request};
 
 /// Action to perform when clearing the SEL.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -82,7 +82,7 @@ impl IpmiCommand for ClearSel {
     }
 }
 
-impl From<ClearSel> for Message {
+impl From<ClearSel> for Request {
     /// Build the request message.
     ///
     /// Request format (IPMI 2.0 Spec, Table 31-9):
@@ -107,6 +107,6 @@ impl From<ClearSel> for Message {
         data[5] = action_byte;
 
         // NetFn: Storage (0x0A), Cmd: 0x47
-        Message::new_request(NetFn::Storage, 0x47, data)
+        Request::new_default_target(NetFn::Storage, 0x47, data)
     }
 }

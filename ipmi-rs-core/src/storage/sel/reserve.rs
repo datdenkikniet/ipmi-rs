@@ -4,7 +4,7 @@
 
 use std::num::NonZeroU16;
 
-use crate::connection::{IpmiCommand, Message, NetFn, NotEnoughData};
+use crate::connection::{IpmiCommand, NetFn, NotEnoughData, Request};
 
 /// Reserve SEL command.
 ///
@@ -37,13 +37,13 @@ impl IpmiCommand for ReserveSel {
     }
 }
 
-impl From<ReserveSel> for Message {
+impl From<ReserveSel> for Request {
     /// Build the request message.
     ///
     /// Request format (IPMI 2.0 Spec, Table 31-4):
     /// - No request data
     fn from(_: ReserveSel) -> Self {
         // NetFn: Storage (0x0A), Cmd: 0x42
-        Message::new_request(NetFn::Storage, 0x42, Vec::new())
+        Request::new_default_target(NetFn::Storage, 0x42, Vec::new())
     }
 }
