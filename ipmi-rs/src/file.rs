@@ -5,9 +5,7 @@ use ipmi_rs_core::connection::NetFn;
 use nix::errno::Errno;
 use nix::poll::{PollFd, PollFlags};
 
-use crate::connection::{
-    Address, IpmiConnection, Message, Request, RequestTargetAddress, Response,
-};
+use crate::connection::{Address, IpmiConnection, Request, RequestTargetAddress, Response};
 
 #[repr(C)]
 #[derive(Debug)]
@@ -85,9 +83,8 @@ impl TryFrom<IpmiRecv> for Response {
         let netfn_parsed = NetFn::from(netfn);
 
         if netfn_parsed.response_value() == netfn {
-            let message = Message::new_raw(netfn, cmd, value.message.data().to_vec());
-            let response =
-                Response::new(message, value.msg_id).ok_or(CreateResponseError::NotEnoughData)?;
+            let response = Response::new(netfn, cmd, value.message.data().to_vec(), value.msg_id)
+                .ok_or(CreateResponseError::NotEnoughData)?;
             Ok(response)
         } else {
             Err(CreateResponseError::NotAResponse)

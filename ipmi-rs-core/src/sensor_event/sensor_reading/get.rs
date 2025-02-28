@@ -1,5 +1,7 @@
 use crate::{
-    connection::{Address, Channel, IpmiCommand, Message, NotEnoughData},
+    connection::{
+        Address, Channel, IpmiCommand, LogicalUnit, NotEnoughData, Request, RequestTargetAddress,
+    },
     storage::sdr::record::{SensorKey, SensorNumber},
 };
 
@@ -59,12 +61,13 @@ impl GetSensorReading {
     }
 }
 
-impl From<GetSensorReading> for Message {
+impl From<GetSensorReading> for Request {
     fn from(value: GetSensorReading) -> Self {
-        Message::new_request(
+        Request::new(
             crate::connection::NetFn::SensorEvent,
             0x2D,
             vec![value.sensor_number.get()],
+            RequestTargetAddress::BmcOrIpmb(value.address, value.channel, LogicalUnit::One),
         )
     }
 }
@@ -76,9 +79,5 @@ impl IpmiCommand for GetSensorReading {
 
     fn parse_success_response(data: &[u8]) -> Result<Self::Output, Self::Error> {
         RawSensorReading::parse(data).ok_or(NotEnoughData)
-    }
-
-    fn target(&self) -> Option<(Address, Channel)> {
-        Some((self.address, self.channel))
     }
 }

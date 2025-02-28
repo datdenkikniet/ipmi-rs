@@ -1,13 +1,13 @@
 use crate::{
-    connection::{IpmiCommand, Message, NetFn, NotEnoughData},
+    connection::{IpmiCommand, NetFn, NotEnoughData, Request},
     storage::Timestamp,
 };
 
 pub struct GetRepositoryInfo;
 
-impl From<GetRepositoryInfo> for Message {
+impl From<GetRepositoryInfo> for Request {
     fn from(_: GetRepositoryInfo) -> Self {
-        Message::new_request(NetFn::Storage, 0x20, Vec::new())
+        Request::new_default_target(NetFn::Storage, 0x20, Vec::new())
     }
 }
 
