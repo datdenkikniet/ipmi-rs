@@ -33,6 +33,8 @@ pub(crate) use asf::*;
 mod internal;
 use internal::{Active, RmcpWithState, Unbound};
 
+type RecvError = RmcpIpmiReceiveError;
+
 #[derive(Debug)]
 pub enum RmcpIpmiReceiveError {
     Io(std::io::Error),
@@ -82,6 +84,7 @@ impl From<V2_0ReadError> for UnwrapSessionError {
 
 #[derive(Debug)]
 pub enum RmcpIpmiError {
+    Io(std::io::Error),
     NotActive,
     Receive(RmcpIpmiReceiveError),
     Send(RmcpIpmiSendError),
@@ -103,14 +106,19 @@ type CommandError<T> = IpmiError<RmcpIpmiError, T>;
 
 #[derive(Debug)]
 pub enum ActivationError {
+    Io(std::io::Error),
     BindSocket(std::io::Error),
     PingSend(std::io::Error),
     PongReceive(std::io::Error),
     PongRead,
+    PongParse,
     /// The contacted host does not support IPMI over RMCP.
     IpmiNotSupported,
     NoSupportedIpmiLANVersions,
-    GetChannelAuthenticationCapabilities(CommandError<NotEnoughData>),
+    SendGetChannelAuthCaps(std::io::Error),
+    RecvChannelAuthCaps(std::io::Error),
+    ReadChannelAuthCaps(RmcpIpmiReceiveError),
+    ParseChannelAuthCaps(NotEnoughData),
     V1_5(V1_5ActivationError),
     V2_0(V2_0ActivationError),
     RmcpError(RmcpHeaderError),
@@ -208,4 +216,28 @@ impl IpmiConnection for Rmcp {
         let active = self.active_state.as_mut().ok_or(RmcpIpmiError::NotActive)?;
         active.send_recv(request)
     }
+}
+
+/// Read an RMCP IPMI message from the provided `data`.
+///
+/// `data` should contain the RMCP header & all trailing data.
+pub fn read_rmcp_data(data: &mut [u8]) -> Result<&mut [u8], RmcpIpmiReceiveError> {
+    let (header, data) = RmcpHeader::from_bytes(data).map_err(RecvError::RmcpHeader)?;
+
+    if header.class().ty != RmcpType::Ipmi {
+        return Err(RecvError::NotIpmi);
+    }
+
+    Ok(data)
+}
+
+/// Create an RMCP IPMI message containing the data written by the `data` function.
+///
+/// The result will contain the full RMCP header & all data.
+pub fn write_ipmi_data<F, E>(data: F) -> Result<Vec<u8>, E>
+where
+    F: FnMut(&mut Vec<u8>) -> Result<(), E>,
+{
+    let header = RmcpHeader::new_ipmi();
+    header.write(data)
 }

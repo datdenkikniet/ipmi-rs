@@ -1,8 +1,6 @@
 use std::net::UdpSocket;
 
-use super::{RmcpHeader, RmcpIpmiReceiveError, RmcpType};
-
-type RecvError = RmcpIpmiReceiveError;
+use super::RmcpIpmiReceiveError;
 
 #[derive(Debug)]
 pub struct RmcpIpmiSocket {
@@ -23,16 +21,11 @@ impl RmcpIpmiSocket {
     }
 
     pub fn recv(&mut self) -> Result<&mut [u8], RmcpIpmiReceiveError> {
-        let received = self.socket.recv(&mut self.buffer).map_err(RecvError::Io)?;
-
-        let data = &mut self.buffer[..received];
-        let (header, data) = RmcpHeader::from_bytes(data).map_err(RecvError::RmcpHeader)?;
-
-        if header.class().ty != RmcpType::Ipmi {
-            return Err(RecvError::NotIpmi);
-        }
-
-        Ok(data)
+        let received = self
+            .socket
+            .recv(&mut self.buffer)
+            .map_err(super::RecvError::Io)?;
+        super::read_rmcp_data(&mut self.buffer[..received])
     }
 
     pub fn send<F, E>(&mut self, data: F) -> Result<(), E>
@@ -40,10 +33,7 @@ impl RmcpIpmiSocket {
         F: FnMut(&mut Vec<u8>) -> Result<(), E>,
         E: From<std::io::Error>,
     {
-        let header = RmcpHeader::new_ipmi();
-
-        let data = header.write(data)?;
-
+        let data = super::write_ipmi_data(data)?;
         self.socket.send(&data).map(|_| ()).map_err(From::from)
     }
 }

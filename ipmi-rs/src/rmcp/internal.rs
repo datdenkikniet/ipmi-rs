@@ -7,6 +7,8 @@ use std::{
     time::Duration,
 };
 
+use ipmi_rs_core::{app::auth::ChannelAuthenticationCapabilities, connection::IpmiCommand};
+
 use crate::{
     app::auth::{GetChannelAuthenticationCapabilities, PrivilegeLevel},
     connection::{Channel, IpmiConnection, LogicalUnit, Response},
@@ -49,7 +51,7 @@ pub struct Inactive {
 
 #[derive(Debug)]
 pub enum Active {
-    V1_5(V1_5State),
+    V1_5 { state: V1_5State, socket: UdpSocket },
     V2_0(V2_0State),
 }
 
@@ -96,12 +98,9 @@ impl RmcpWithState<Unbound> {
 }
 
 impl RmcpWithState<Inactive> {
-    pub fn activate(
-        self,
-        rmcp_plus: bool,
-        username: Option<&str>,
-        password: Option<&[u8]>,
-    ) -> Result<RmcpWithState<Active>, ActivationError> {
+    fn ping_pong(socket: &mut UdpSocket) -> Result<(), ActivationError> {
+        let mut recv_buf = [0u8; 1024];
+
         let message_tag = 0xC8;
 
         let ping_header = RmcpHeader::new_asf(0xFF);
@@ -110,10 +109,6 @@ impl RmcpWithState<Inactive> {
             message_tag,
             message_type: ASFMessageType::Ping,
         };
-
-        log::debug!("Starting RMCP activation sequence");
-
-        let socket = self.0.socket;
 
         // NOTE(unwrap): This cannot fail.
         let ping_bytes = ping_header.write_infallible(|buffer| {
@@ -124,16 +119,15 @@ impl RmcpWithState<Inactive> {
             .send(&ping_bytes)
             .map_err(ActivationError::PingSend)?;
 
-        let mut buf = [0u8; 1024];
         let received = socket
-            .recv(&mut buf)
+            .recv(&mut recv_buf)
             .map_err(ActivationError::PongReceive)?;
 
-        let (pong_header, pong_data) =
-            RmcpHeader::from_bytes(&mut buf[..received]).map_err(|_| ActivationError::PongRead)?;
+        let (pong_header, pong_data) = RmcpHeader::from_bytes(&mut recv_buf[..received])
+            .map_err(|_| ActivationError::PongRead)?;
 
         let (supported_entities, _) = if pong_header.class().ty == RmcpType::Asf {
-            let message = ASFMessage::from_bytes(pong_data).ok_or(ActivationError::PongRead)?;
+            let message = ASFMessage::from_bytes(pong_data).ok_or(ActivationError::PongParse)?;
 
             if message.message_tag != message_tag {
                 return Err(ActivationError::PongRead);
@@ -157,47 +151,114 @@ impl RmcpWithState<Inactive> {
             return Err(ActivationError::IpmiNotSupported);
         }
 
-        let new_state = V1_5State::new(socket);
+        Ok(())
+    }
 
-        let mut ipmi = crate::Ipmi::new(new_state);
+    fn activate_shake(
+        socket: &mut UdpSocket,
+        username: Option<&str>,
+        password: Option<&[u8]>,
+        caps: &ChannelAuthenticationCapabilities,
+        privilege_level: PrivilegeLevel,
+    ) -> Result<V1_5State, ActivationError> {
+        use ActivationError::*;
 
+        let mut recv_buffer = [0u8; 1024];
+        let state = V1_5State::new();
+
+        let (state, challenge_request) = state.activate(username, password)?;
+
+        socket.send(&challenge_request).map_err(Io)?;
+        let recv_len = socket.recv(&mut recv_buffer).map_err(Io)?;
+
+        let (state, activation) =
+            state.recv_session_challenge(&mut recv_buffer[..recv_len], caps, privilege_level)?;
+
+        socket.send(&activation).map_err(Io)?;
+        let recv_len = socket.recv(&mut recv_buffer).map_err(Io)?;
+
+        let active = state.recv_session_info(&mut recv_buffer[..recv_len])?;
+
+        Ok(active)
+    }
+
+    fn get_channel_auth_caps(
+        socket: &mut UdpSocket,
+        level: PrivilegeLevel,
+    ) -> Result<ChannelAuthenticationCapabilities, ActivationError> {
+        use ActivationError::*;
+
+        let mut recv_buf = [0u8; 1024];
         log::debug!("Obtaining channel authentication capabilities");
 
-        let privilege_level = PrivilegeLevel::Administrator;
+        let mut new_state = V1_5State::new();
 
-        let authentication_caps = match ipmi.send_recv(GetChannelAuthenticationCapabilities::new(
-            Channel::Current,
-            privilege_level,
-        )) {
-            Ok(v) => v,
-            Err(e) => return Err(ActivationError::GetChannelAuthenticationCapabilities(e)),
-        };
+        let get_command = GetChannelAuthenticationCapabilities::new(Channel::Current, level);
+
+        let data = new_state
+            .send(get_command)
+            .expect("Writing messages on newly initialized state is always valid");
+
+        socket.send(&data).map_err(SendGetChannelAuthCaps)?;
+
+        let data_len = socket.recv(&mut recv_buf).map_err(RecvChannelAuthCaps)?;
+
+        let response = new_state
+            .recv(&mut recv_buf[..data_len])
+            .map_err(ReadChannelAuthCaps)?;
+
+        let authentication_caps =
+            GetChannelAuthenticationCapabilities::parse_success_response(response.data())
+                .map_err(ParseChannelAuthCaps)?;
 
         log::debug!("Authentication capabilities: {:?}", authentication_caps);
 
+        Ok(authentication_caps)
+    }
+
+    pub fn activate(
+        self,
+        rmcp_plus: bool,
+        username: Option<&str>,
+        password: Option<&[u8]>,
+    ) -> Result<RmcpWithState<Active>, ActivationError> {
+        let privilege_level = PrivilegeLevel::Administrator;
+
+        log::debug!("Starting RMCP activation sequence");
+
+        let mut socket = self.0.socket;
+
+        Self::ping_pong(&mut socket)?;
+        let authentication_caps = Self::get_channel_auth_caps(&mut socket, privilege_level)?;
+
         if authentication_caps.ipmi2_connections_supported && rmcp_plus {
-            let username = super::v2_0::Username::new(username.unwrap_or(""))
-                .unwrap_or(super::v2_0::Username::new_empty());
+            // let username = super::v2_0::Username::new(username.unwrap_or(""))
+            //     .unwrap_or(super::v2_0::Username::new_empty());
 
-            let socket = ipmi.release();
+            // let socket = ipmi.release();
 
-            let res = V2_0State::activate(
-                socket,
-                Some(privilege_level),
-                &username,
-                password.unwrap_or(&[]),
-            )?;
+            // let res = V2_0State::activate(
+            //     socket,
+            //     Some(privilege_level),
+            //     &username,
+            //     password.unwrap_or(&[]),
+            // )?;
 
-            Ok(RmcpWithState(Active::V2_0(res)))
+            // Ok(RmcpWithState(Active::V2_0(res)))
+            todo!()
         } else if authentication_caps.ipmi15_connections_supported {
-            let activated = ipmi.release().activate(
-                &authentication_caps,
-                privilege_level,
+            let activated = Self::activate_shake(
+                &mut socket,
                 username,
                 password,
+                &authentication_caps,
+                privilege_level,
             )?;
 
-            Ok(RmcpWithState(Active::V1_5(activated)))
+            Ok(RmcpWithState(Active::V1_5 {
+                state: activated,
+                socket,
+            }))
         } else {
             Err(ActivationError::NoSupportedIpmiLANVersions)
         }
@@ -213,7 +274,13 @@ impl IpmiConnection for RmcpWithState<Active> {
 
     fn send(&mut self, request: &mut crate::connection::Request) -> Result<(), Self::SendError> {
         match self.state_mut() {
-            Active::V1_5(state) => state.send(request)?,
+            Active::V1_5 { state, socket } => {
+                let cloned = request.clone();
+                let out_data = state
+                    .send(cloned)
+                    .map_err(|e| RmcpIpmiError::Send(super::RmcpIpmiSendError::V1_5(e)))?;
+                socket.send(&out_data).map_err(RmcpIpmiError::Io)?;
+            }
             Active::V2_0(state) => state.send(request)?,
         }
 
@@ -222,7 +289,14 @@ impl IpmiConnection for RmcpWithState<Active> {
 
     fn recv(&mut self) -> Result<Response, Self::RecvError> {
         match self.state_mut() {
-            Active::V1_5(state) => state.recv(),
+            Active::V1_5 { state, socket } => {
+                let mut recv_buffer = [0u8; 1024];
+                let data_len = socket
+                    .recv(&mut recv_buffer)
+                    .map_err(RmcpIpmiReceiveError::Io)?;
+                let out = state.recv(&mut recv_buffer[..data_len])?;
+                Ok(out)
+            }
             Active::V2_0(state) => state.recv(),
         }
     }
@@ -231,10 +305,9 @@ impl IpmiConnection for RmcpWithState<Active> {
         &mut self,
         request: &mut crate::connection::Request,
     ) -> Result<Response, Self::Error> {
-        match self.state_mut() {
-            Active::V1_5(state) => state.send_recv(request),
-            Active::V2_0(state) => state.send_recv(request),
-        }
+        self.send(request)?;
+        let res = self.recv()?;
+        Ok(res)
     }
 }
 

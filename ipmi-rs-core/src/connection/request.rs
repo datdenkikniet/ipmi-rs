@@ -3,6 +3,7 @@ use crate::connection::{LogicalUnit, NetFn};
 use super::{Address, Channel};
 
 /// An IPMI request message.
+#[derive(Clone)]
 pub struct Request {
     target: RequestTargetAddress,
     netfn: u8,

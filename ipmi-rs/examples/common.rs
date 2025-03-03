@@ -51,7 +51,7 @@ impl IpmiConnectionEnum {
                 Err(e) => {
                     let mapped = e.map(|e| match e {
                         RmcpIpmiError::Receive(RmcpIpmiReceiveError::Io(io))
-                        | RmcpIpmiError::Send(RmcpIpmiSendError::V1_5(V1_5WriteError::Io(io)))
+                        | RmcpIpmiError::Io(io)
                         | RmcpIpmiError::Send(RmcpIpmiSendError::V2_0(V2_0WriteError::Io(io))) => {
                             io
                         }
