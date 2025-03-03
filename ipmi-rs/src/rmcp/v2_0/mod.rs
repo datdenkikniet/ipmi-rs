@@ -1,4 +1,4 @@
-use std::{num::NonZeroU32, ops::Add};
+use std::{net::UdpSocket, num::NonZeroU32, ops::Add};
 
 use crate::app::auth::PrivilegeLevel;
 
@@ -229,7 +229,11 @@ impl State {
     }
 
     pub fn activate(
+        // Must provide active V1_5 state to prove that
+        // connection has been activated.
+        #[allow(unused)]
         state: v1_5::State,
+        socket: UdpSocket,
         privilege_level: Option<PrivilegeLevel>,
         username: &Username,
         password: &[u8],
@@ -264,7 +268,7 @@ impl State {
                 .map_err(UnwrapSessionError::V2_0)
         }
 
-        let mut socket = RmcpIpmiSocket::new(state.release_socket());
+        let mut socket = RmcpIpmiSocket::new(socket);
 
         let remote_console_session_id: NonZeroU32 = rng.gen();
 

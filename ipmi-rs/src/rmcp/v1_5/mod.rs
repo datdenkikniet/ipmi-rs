@@ -1,20 +1,19 @@
-use std::{net::UdpSocket, num::NonZeroU32};
+use std::num::NonZeroU32;
 
 use crate::{
     app::auth::{
-        ActivateSession, AuthError, AuthType, ChannelAuthenticationCapabilities,
-        GetSessionChallenge, PrivilegeLevel,
+        ActivateSession, AuthType, ChannelAuthenticationCapabilities, GetSessionChallenge,
+        PrivilegeLevel,
     },
-    connection::{IpmiConnection, Request, Response},
-    Ipmi, IpmiError,
+    connection::{Request, Response},
 };
 
 use super::{
     internal::{validate_ipmb_checksums, IpmbState},
-    socket::RmcpIpmiSocket,
-    RmcpIpmiError, RmcpIpmiReceiveError, RmcpIpmiSendError,
+    RmcpIpmiReceiveError,
 };
 
+use ipmi_rs_core::{app::auth::AuthError, connection::IpmiCommand};
 pub use message::Message;
 
 mod auth;
@@ -28,14 +27,17 @@ pub enum ActivationError {
     Io(std::io::Error),
     PasswordTooLong,
     UsernameTooLong,
-    GetSessionChallenge(IpmiError<RmcpIpmiError, AuthError>),
+    GetSessionChallenge(WriteError),
+    ParseSessionChallenge(AuthError),
+    ReceiveSessionChallenge(RmcpIpmiReceiveError),
+    ReceiveSessionInfo(RmcpIpmiReceiveError),
+    ParseSessionInfo(AuthError),
     NoSupportedAuthenticationType,
-    ActivateSession(IpmiError<RmcpIpmiError, AuthError>),
+    ActivateSession(WriteError),
 }
 
 #[derive(Debug)]
 pub enum WriteError {
-    Io(std::io::Error),
     /// A request was made to calculate the auth code for a message authenticated
     /// using a method that requires a password, but no password was provided.
     MissingPassword,
@@ -59,121 +61,47 @@ pub enum ReadError {
     AuthcodeError,
 }
 
-pub struct State {
-    socket: RmcpIpmiSocket,
+#[derive(Debug, Clone, Copy)]
+pub struct Inactive;
+
+#[derive(Debug)]
+pub struct SessionChallengeSent;
+
+#[derive(Debug)]
+pub struct ActivationSent {
+    auth_type: AuthType,
+}
+
+#[derive(Debug)]
+pub struct Active;
+
+#[derive(Debug, Clone)]
+pub struct State<T = Active> {
     ipmb_state: IpmbState,
     session_id: Option<NonZeroU32>,
     auth_type: crate::app::auth::AuthType,
     password: Option<[u8; 16]>,
     session_sequence: u32,
+    activation_state: T,
 }
 
-impl core::fmt::Debug for State {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("State")
-            .field("socket", &self.socket)
-            .field("ipmb_state", &self.ipmb_state)
-            .field("session_id", &self.session_id)
-            .field("auth_type", &self.auth_type)
-            .field("password", &"<redacted>")
-            .field("session_sequence", &self.session_sequence)
-            .finish()
-    }
-}
-
-impl State {
-    pub fn new(socket: UdpSocket) -> Self {
-        Self {
-            socket: RmcpIpmiSocket::new(socket),
-            ipmb_state: Default::default(),
-            auth_type: AuthType::None,
-            password: None,
-            session_id: None,
-            session_sequence: 0,
+impl<T> State<T> {
+    fn with_state<TNext>(self, state: TNext) -> State<TNext> {
+        State {
+            ipmb_state: self.ipmb_state,
+            session_id: self.session_id,
+            auth_type: self.auth_type,
+            password: self.password,
+            session_sequence: self.session_sequence,
+            activation_state: state,
         }
     }
 
-    pub fn release_socket(self) -> UdpSocket {
-        self.socket.release()
-    }
-
-    pub fn activate(
-        mut self,
-        authentication_caps: &ChannelAuthenticationCapabilities,
-        privilege_level: PrivilegeLevel,
-        username: Option<&str>,
-        password: Option<&[u8]>,
-    ) -> Result<Self, ActivationError> {
-        let password = if let Some(password) = password {
-            if password.len() > 16 {
-                return Err(ActivationError::PasswordTooLong);
-            } else {
-                let mut padded = [0u8; 16];
-                padded[..password.len()].copy_from_slice(password);
-                Some(padded)
-            }
-        } else {
-            None
-        };
-
-        self.password = password;
-
-        let mut ipmi = Ipmi::new(self);
-
-        log::debug!("Requesting challenge");
-
-        let challenge_command = match GetSessionChallenge::new(AuthType::None, username) {
-            Some(v) => v,
-            None => return Err(ActivationError::UsernameTooLong),
-        };
-
-        let challenge = match ipmi.send_recv(challenge_command) {
-            Ok(v) => v,
-            Err(e) => return Err(ActivationError::GetSessionChallenge(e)),
-        };
-
-        let activation_auth_type = authentication_caps
-            .best_auth()
-            .ok_or(ActivationError::NoSupportedAuthenticationType)?;
-
-        let activate_session: ActivateSession = ActivateSession {
-            auth_type: activation_auth_type,
-            maxiumum_privilege_level: privilege_level,
-            challenge_string: challenge.challenge_string,
-            initial_sequence_number: 0xDEAD_BEEF,
-        };
-
-        ipmi.inner_mut().session_id = Some(challenge.temporary_session_id);
-        ipmi.inner_mut().auth_type = activation_auth_type;
-
-        log::debug!("Activating session");
-
-        let activation_info = match ipmi.send_recv(activate_session.clone()) {
-            Ok(v) => v,
-            Err(e) => return Err(ActivationError::ActivateSession(e)),
-        };
-
-        log::debug!("Succesfully started a session ({:?})", activation_info);
-
-        self = ipmi.release();
-
-        self.session_sequence = activation_info.initial_sequence_number;
-        self.session_id = Some(activation_info.session_id);
-
-        assert_eq!(activate_session.auth_type, activation_auth_type);
-
-        Ok(self)
-    }
-}
-
-impl IpmiConnection for State {
-    type SendError = RmcpIpmiSendError;
-
-    type RecvError = RmcpIpmiReceiveError;
-
-    type Error = RmcpIpmiError;
-
-    fn send(&mut self, request: &mut Request) -> Result<(), RmcpIpmiSendError> {
+    pub(crate) fn send<M>(&mut self, request: M) -> Result<Vec<u8>, WriteError>
+    where
+        M: Into<Request>,
+    {
+        let mut request = request.into();
         log::trace!("Sending message with auth type {:?}", self.auth_type);
 
         let request_sequence = &mut self.session_sequence;
@@ -184,7 +112,7 @@ impl IpmiConnection for State {
             *request_sequence = request_sequence.wrapping_add(1);
         }
 
-        let final_data = super::internal::next_ipmb_message(request, &mut self.ipmb_state);
+        let final_data = super::internal::next_ipmb_message(&mut request, &mut self.ipmb_state);
 
         let message = Message {
             auth_type: self.auth_type,
@@ -193,31 +121,10 @@ impl IpmiConnection for State {
             payload: final_data,
         };
 
-        enum Send {
-            Ipmi(WriteError),
-            Io(std::io::Error),
-        }
-
-        impl From<std::io::Error> for Send {
-            fn from(value: std::io::Error) -> Self {
-                Self::Io(value)
-            }
-        }
-
-        match self.socket.send(|buffer| {
-            message
-                .write_data(self.password.as_ref(), buffer)
-                .map_err(Send::Ipmi)
-        }) {
-            Ok(_) => Ok(()),
-            Err(Send::Ipmi(ipmi)) => Err(RmcpIpmiSendError::V1_5(ipmi)),
-            Err(Send::Io(io)) => Err(RmcpIpmiSendError::V1_5(WriteError::Io(io))),
-        }
+        super::write_ipmi_data(|buffer| message.write_data(self.password.as_ref(), buffer))
     }
 
-    fn recv(&mut self) -> Result<Response, RmcpIpmiReceiveError> {
-        let data = self.socket.recv()?;
-
+    pub(crate) fn recv(&mut self, data: &mut [u8]) -> Result<Response, RmcpIpmiReceiveError> {
         let data = Message::from_data(self.password.as_ref(), data)
             .map_err(|e| RmcpIpmiReceiveError::Session(super::UnwrapSessionError::V1_5(e)))?
             .payload;
@@ -248,10 +155,112 @@ impl IpmiConnection for State {
             Err(RmcpIpmiReceiveError::EmptyMessage)
         }
     }
+}
 
-    fn send_recv(&mut self, request: &mut Request) -> Result<Response, Self::Error> {
-        self.send(request)?;
-        let response = self.recv()?;
-        Ok(response)
+impl State<Inactive> {
+    pub fn new() -> Self {
+        Self {
+            ipmb_state: Default::default(),
+            auth_type: AuthType::None,
+            password: None,
+            session_id: None,
+            session_sequence: 0,
+            activation_state: Inactive,
+        }
+    }
+
+    pub fn activate(
+        mut self,
+        username: Option<&str>,
+        password: Option<&[u8]>,
+    ) -> Result<(State<SessionChallengeSent>, Vec<u8>), ActivationError> {
+        let password = if let Some(password) = password {
+            if password.len() > 16 {
+                return Err(ActivationError::PasswordTooLong);
+            } else {
+                let mut padded = [0u8; 16];
+                padded[..password.len()].copy_from_slice(password);
+                Some(padded)
+            }
+        } else {
+            None
+        };
+
+        self.password = password;
+
+        log::debug!("Requesting challenge");
+
+        let challenge_command = match GetSessionChallenge::new(AuthType::None, username) {
+            Some(v) => v,
+            None => return Err(ActivationError::UsernameTooLong),
+        };
+
+        let data: Vec<u8> = self
+            .send(challenge_command)
+            .map_err(ActivationError::GetSessionChallenge)?;
+
+        Ok((self.with_state(SessionChallengeSent), data))
+    }
+}
+
+impl State<SessionChallengeSent> {
+    pub fn recv_session_challenge(
+        mut self,
+        challenge_packet: &mut [u8],
+        authentication_caps: &ChannelAuthenticationCapabilities,
+        privilege_level: PrivilegeLevel,
+    ) -> Result<(State<ActivationSent>, Vec<u8>), ActivationError> {
+        let challenge = self
+            .recv(challenge_packet)
+            .map_err(ActivationError::ReceiveSessionChallenge)?;
+
+        let challenge = GetSessionChallenge::parse_success_response(challenge.data())
+            .map_err(ActivationError::ParseSessionChallenge)?;
+
+        let activation_auth_type = authentication_caps
+            .best_auth()
+            .ok_or(ActivationError::NoSupportedAuthenticationType)?;
+
+        let activate_session: ActivateSession = ActivateSession {
+            auth_type: activation_auth_type,
+            maxiumum_privilege_level: privilege_level,
+            challenge_string: challenge.challenge_string,
+            initial_sequence_number: 0xDEAD_BEEF,
+        };
+
+        self.session_id = Some(challenge.temporary_session_id);
+        self.auth_type = activation_auth_type;
+
+        log::debug!("Activating session");
+
+        let message = self
+            .send(activate_session)
+            .map_err(ActivationError::ActivateSession)?;
+
+        let next = self.with_state(ActivationSent {
+            auth_type: activation_auth_type,
+        });
+
+        Ok((next, message))
+    }
+}
+
+impl State<ActivationSent> {
+    pub fn recv_session_info(mut self, data: &mut [u8]) -> Result<State<Active>, ActivationError> {
+        let session_info = self
+            .recv(data)
+            .map_err(ActivationError::ReceiveSessionInfo)?;
+
+        let activation_info = ActivateSession::parse_success_response(session_info.data())
+            .map_err(ActivationError::ParseSessionInfo)?;
+
+        log::debug!("Succesfully started a session ({:?})", activation_info);
+
+        self.session_sequence = activation_info.initial_sequence_number;
+        self.session_id = Some(activation_info.session_id);
+
+        assert_eq!(activation_info.auth_type, self.activation_state.auth_type);
+
+        Ok(self.with_state(Active))
     }
 }

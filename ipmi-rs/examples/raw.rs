@@ -5,9 +5,7 @@ use common::CommonOpts;
 
 use ipmi_rs::connection::RequestTargetAddress;
 use ipmi_rs::connection::{IpmiConnection, LogicalUnit, Request};
-use ipmi_rs::rmcp::{
-    RmcpIpmiError, RmcpIpmiReceiveError, RmcpIpmiSendError, V1_5WriteError, V2_0WriteError,
-};
+use ipmi_rs::rmcp::{RmcpIpmiError, RmcpIpmiReceiveError, RmcpIpmiSendError, V2_0WriteError};
 
 mod common;
 
@@ -63,7 +61,7 @@ fn main() -> std::io::Result<()> {
         common::IpmiConnectionEnum::Rmcp(mut r) => {
             r.inner_mut().send_recv(&mut request).map_err(|e| match e {
                 RmcpIpmiError::Receive(RmcpIpmiReceiveError::Io(io))
-                | RmcpIpmiError::Send(RmcpIpmiSendError::V1_5(V1_5WriteError::Io(io)))
+                | RmcpIpmiError::Io(io)
                 | RmcpIpmiError::Send(RmcpIpmiSendError::V2_0(V2_0WriteError::Io(io))) => io,
                 e => {
                     log::error!("RMCP command failed: {e:?}");
