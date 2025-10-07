@@ -4,6 +4,7 @@ use clap::Parser;
 use indicatif::{ProgressBar, ProgressStyle};
 use ipmi_rs::{
     app::GetDeviceId,
+    connection::CompletionErrorCode,
     sensor_event::{GetSensorReading, ThresholdReading},
     storage::{
         sdr::{
@@ -12,6 +13,7 @@ use ipmi_rs::{
         },
         sel::{GetSelEntry, GetSelInfo, RecordId as SelRecordId, SelCommand, SelGetAllocInfo},
     },
+    IpmiError,
 };
 use ipmi_rs_log::{LogOutput, Logger};
 
@@ -91,9 +93,24 @@ fn main() -> std::io::Result<()> {
         match &sensor.contents {
             RecordContents::FullSensor(full) => {
                 log_id("Full Sensor Record", full);
-                let value = ipmi
-                    .send_recv(GetSensorReading::for_sensor_key(full.key_data()))
-                    .unwrap();
+                let result = ipmi.send_recv(GetSensorReading::for_sensor_key(full.key_data()));
+                let value = match result {
+                    Ok(value) => value,
+                    Err(IpmiError::Failed {
+                        completion_code: CompletionErrorCode::RequestedDatapointNotPresent,
+                        ..
+                    }) => {
+                        log::warn!("  Sensor for {} not present", full.id_string());
+                        continue;
+                    }
+                    Err(e) => {
+                        log::error!(
+                            "Failed to get sensor reading for {}: {e:?}",
+                            full.id_string()
+                        );
+                        continue;
+                    }
+                };
 
                 let reading: ThresholdReading = (&value).into();
 
