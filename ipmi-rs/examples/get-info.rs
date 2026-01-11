@@ -125,9 +125,13 @@ fn main() -> std::io::Result<()> {
             }
             RecordContents::CompactSensor(compact) => log_sensor("Compact Sensor", compact),
             RecordContents::EventOnlySensor(event) => log_sensor("Event-only Sensor", event),
+            RecordContents::GenericDeviceLocator(generic) => {
+                log_id("Generic Device Locator", generic);
+                log_device_type(generic.device_type, generic.device_type_modifier);
+            }
             RecordContents::FruDeviceLocator(fru) => {
                 log_id("FRU Device Locator", fru);
-                log::info!("  Device type: {}", fru.device_type);
+                log_device_type(fru.device_type, fru.device_type_modifier);
             }
             RecordContents::McDeviceLocator(mc) => log_id("MC Device Locator", mc),
             RecordContents::Unknown { ty, .. } => {
@@ -146,4 +150,120 @@ fn log_id<T: IdentifiableSensor>(ty: &str, sensor: &T) {
 fn log_sensor<T: InstancedSensor>(ty: &str, sensor: &T) {
     log_id(ty, sensor);
     log::info!("  Sensor type: {:?}", sensor.ty());
+}
+
+fn log_device_type(device_type: u8, device_type_modifier: u8) {
+    let name = device_type_name(device_type);
+    match name {
+        Some(name) => log::info!(
+            "  Device type: {} (0x{device_type:02X}, {name})",
+            device_type
+        ),
+        None => log::info!("  Device type: {} (0x{device_type:02X})", device_type),
+    }
+
+    let modifier_name = device_type_modifier_name(device_type, device_type_modifier);
+    match modifier_name {
+        Some(name) => log::info!(
+            "  Device type modifier: 0x{device_type_modifier:02X} ({name})"
+        ),
+        None => log::info!("  Device type modifier: 0x{device_type_modifier:02X}"),
+    }
+}
+
+fn device_type_name(device_type: u8) -> Option<&'static str> {
+    // IPMI 2.0 Specification, Table 43-12 "IPMB/I2C Device Type Codes".
+    match device_type {
+        0x00 => Some("Reserved"),
+        0x01 => Some("Reserved"),
+        0x02 => Some("DS1624 temperature sensor / EEPROM or equivalent"),
+        0x03 => Some("DS1621 temperature sensor or equivalent"),
+        0x04 => Some("LM75 temperature sensor or equivalent"),
+        0x05 => Some("Heceta ASIC or similar"),
+        0x06 => Some("Reserved"),
+        0x07 => Some("Reserved"),
+        0x08 => Some("EEPROM, 24C01 or equivalent"),
+        0x09 => Some("EEPROM, 24C02 or equivalent"),
+        0x0A => Some("EEPROM, 24C04 or equivalent"),
+        0x0B => Some("EEPROM, 24C08 or equivalent"),
+        0x0C => Some("EEPROM, 24C16 or equivalent"),
+        0x0D => Some("EEPROM, 24C17 or equivalent"),
+        0x0E => Some("EEPROM, 24C32 or equivalent"),
+        0x0F => Some("EEPROM, 24C64 or equivalent"),
+        0x10 => Some(
+            "FRU Inventory Device behind management controller (Read/Write FRU at LUN != 00b)",
+        ),
+        0x11 => Some("Reserved"),
+        0x12 => Some("Reserved"),
+        0x13 => Some("Reserved"),
+        0x14 => Some("PCF8570 256 byte RAM or equivalent"),
+        0x15 => Some("PCF8573 clock/calendar or equivalent"),
+        0x16 => Some("PCF8574A I/O port or equivalent"),
+        0x17 => Some("PCF8583 clock/calendar or equivalent"),
+        0x18 => Some("PCF8593 clock/calendar or equivalent"),
+        0x19 => Some("Clock calendar, type not specified"),
+        0x1A => Some("PCF8591 A/D, D/A Converter or equivalent"),
+        0x1B => Some("I/O port, specific device not specified"),
+        0x1C => Some("A/D Converter, specific device not specified"),
+        0x1D => Some("D/A Converter, specific device not specified"),
+        0x1E => Some("A/D, D/A Converter, specific device not specified"),
+        0x1F => Some("LCD controller/Driver, specific device not specified"),
+        0x20 => Some("Core Logic (chip set) device, specific device not specified"),
+        0x21 => Some("LMC6874 Intelligent Battery controller, or equivalent"),
+        0x22 => Some("Intelligent Battery controller, specific device not specified"),
+        0x23 => Some("Combo Management ASIC, specific device not specified"),
+        0x24 => Some("Maxim 1617 temperature sensor"),
+        0xBF => Some("Other/unspecified device"),
+        0xC0..=0xFF => Some("OEM specified device"),
+        _ => Some("Reserved"),
+    }
+}
+
+fn device_type_modifier_name(device_type: u8, modifier: u8) -> Option<&'static str> {
+    // IPMI 2.0 Specification, Table 43-12 "IPMB/I2C Device Type Codes".
+    match device_type {
+        0x05 => match modifier {
+            0x00 => Some("Heceta 1 (LM78)"),
+            0x01 => Some("Heceta 2 (LM79)"),
+            0x02 => Some("LM80"),
+            0x03 => Some("Heceta 3 (LM81/ADM9240/DS1780)"),
+            0x04 => Some("Heceta 4"),
+            0x05 => Some("Heceta 5"),
+            _ => Some("Reserved"),
+        },
+        0x08..=0x0F => eeprom_modifier_name(modifier),
+        0x10 => fru_behind_mc_modifier_name(modifier),
+        0xBF => modifier_unspecified_or_none(modifier),
+        0xC0..=0xFF => Some("OEM specific"),
+        _ => modifier_unspecified_or_none(modifier),
+    }
+}
+
+fn modifier_unspecified_or_none(modifier: u8) -> Option<&'static str> {
+    if modifier == 0x00 {
+        Some("Unspecified")
+    } else {
+        None
+    }
+}
+
+fn eeprom_modifier_name(modifier: u8) -> Option<&'static str> {
+    match modifier {
+        0x00 => Some("Unspecified"),
+        0x01 => Some("DIMM Memory ID"),
+        0x02 => Some("IPMI FRU Inventory"),
+        0x03 => Some("System Processor Cartridge FRU/PIROM"),
+        _ => Some("Reserved"),
+    }
+}
+
+fn fru_behind_mc_modifier_name(modifier: u8) -> Option<&'static str> {
+    match modifier {
+        0x00 => Some("IPMI FRU Inventory"),
+        0x01 => Some("DIMM Memory ID"),
+        0x02 => Some("IPMI FRU Inventory"),
+        0x03 => Some("System Processor Cartridge FRU/PIROM"),
+        0xFF => Some("Unspecified"),
+        _ => Some("Reserved"),
+    }
 }
