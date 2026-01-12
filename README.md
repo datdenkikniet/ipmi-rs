@@ -1,6 +1,10 @@
 # ipmi-rs
 A Rust IPMI library.
 
+This library is based on the [IPMI v2.0 Revision 1.1][0] specification.
+
+[0]: https://www.intel.com/content/dam/www/public/us/en/documents/product-briefs/ipmi-second-gen-interface-spec-v2-rev1-1.pdf
+
 ## Examples
 ### `get-info`
 Configure the log level of this example with `RUST_LOG`. `info` is recommended.
