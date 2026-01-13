@@ -199,9 +199,9 @@ impl Entry {
                 let sensor_type = data[10];
                 let sensor_number = data[11];
                 let event_direction = if (data[12] & 0x80) == 0x80 {
-                    EventDirection::Assert
-                } else {
                     EventDirection::Deassert
+                } else {
+                    EventDirection::Assert
                 };
                 let event_type = data[12] & 0x7F;
                 let event_data = EventData::parse(&[data[13], data[14], data[15]]);
