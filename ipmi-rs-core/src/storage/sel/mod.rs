@@ -1,6 +1,12 @@
+use core::fmt;
+
 use crate::connection::{Channel, LogicalUnit};
 
 use super::Timestamp;
+use crate::storage::sdr::{decode_event, EventData, SensorType};
+
+mod clear;
+pub use clear::{ClearSel, ClearSelAction, ErasureProgress};
 
 mod get_alloc_info;
 pub use get_alloc_info::{AllocInfo as SelAllocInfo, GetAllocInfo as SelGetAllocInfo};
@@ -10,6 +16,9 @@ pub use get_entry::{EntryInfo as SelEntryInfo, GetEntry as GetSelEntry};
 
 mod get_info;
 pub use get_info::{Command as SelCommand, GetInfo as GetSelInfo, Info as SelInfo};
+
+mod reserve;
+pub use reserve::ReserveSel;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct RecordId(u16);
@@ -79,9 +88,9 @@ impl From<(u8, u8)> for EventGenerator {
     fn from(value: (u8, u8)) -> Self {
         let is_software_id = (value.0 & 0x1) == 0x1;
         let i2c_or_sid = (value.0 >> 1) & 0x7F;
+        let channel_value = (value.1 >> 4) & 0xF;
 
-        // NOTE(unwrap): value is in valid range due to mask.
-        let channel_number = Channel::new((value.1 >> 4) & 0xF).unwrap();
+        let channel_number = Channel::new(channel_value).unwrap_or(Channel::Primary);
 
         if is_software_id {
             Self::SoftwareId {
@@ -134,7 +143,7 @@ pub enum Entry {
         sensor_number: u8,
         event_direction: EventDirection,
         event_type: u8,
-        event_data: [u8; 3],
+        event_data: EventData,
     },
     OemTimestamped {
         record_id: RecordId,
@@ -157,8 +166,25 @@ pub enum ParseEntryError {
 }
 
 impl Entry {
+    pub fn event_description(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Entry::System {
+                event_type,
+                sensor_type,
+                event_data,
+                ..
+            } => decode_event(
+                f,
+                *event_type,
+                SensorType::from(*sensor_type),
+                event_data.offset,
+            ),
+            _ => Ok(()),
+        }
+    }
+
     pub fn parse(data: &[u8]) -> Result<Self, ParseEntryError> {
-        if data.len() < 15 {
+        if data.len() < 16 {
             return Err(ParseEntryError::NotEnoughData);
         }
 
@@ -178,7 +204,7 @@ impl Entry {
                     EventDirection::Deassert
                 };
                 let event_type = data[12] & 0x7F;
-                let event_data = [data[13], data[14], data[15]];
+                let event_data = EventData::parse(&[data[13], data[14], data[15]]);
                 Ok(Self::System {
                     record_id,
                     timestamp: Timestamp::from(timestamp),
