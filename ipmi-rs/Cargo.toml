@@ -44,3 +44,7 @@ ipmi-rs-log = { path = "../ipmi-rs-log", version = "0.1.0" }
 [[example]]
 name = "get-info"
 required-features = [ "unix-file" ]
+
+[[example]]
+name = "sel"
+required-features = [ "unix-file" ]
