@@ -18,7 +18,7 @@ md5 = { version = "0.7", optional = true }
 ipmi-rs-core = { path = "../ipmi-rs-core", version = "0.1.0" }
 
 # For unix-file IPMI
-nix = { version = "0.26", default-features = false, features = [ "ioctl" ], optional = true }
+nix = { version = "0.26", default-features = false, features = [ "ioctl", "poll" ], optional = true }
 
 # For RMCP+
 hmac = "0.12.1"
