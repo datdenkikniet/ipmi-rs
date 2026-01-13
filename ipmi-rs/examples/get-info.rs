@@ -164,9 +164,7 @@ fn log_device_type(device_type: u8, device_type_modifier: u8) {
 
     let modifier_name = device_type_modifier_name(device_type, device_type_modifier);
     match modifier_name {
-        Some(name) => log::info!(
-            "  Device type modifier: 0x{device_type_modifier:02X} ({name})"
-        ),
+        Some(name) => log::info!("  Device type modifier: 0x{device_type_modifier:02X} ({name})"),
         None => log::info!("  Device type modifier: 0x{device_type_modifier:02X}"),
     }
 }
@@ -190,9 +188,9 @@ fn device_type_name(device_type: u8) -> Option<&'static str> {
         0x0D => Some("EEPROM, 24C17 or equivalent"),
         0x0E => Some("EEPROM, 24C32 or equivalent"),
         0x0F => Some("EEPROM, 24C64 or equivalent"),
-        0x10 => Some(
-            "FRU Inventory Device behind management controller (Read/Write FRU at LUN != 00b)",
-        ),
+        0x10 => {
+            Some("FRU Inventory Device behind management controller (Read/Write FRU at LUN != 00b)")
+        }
         0x11 => Some("Reserved"),
         0x12 => Some("Reserved"),
         0x13 => Some("Reserved"),
