@@ -120,8 +120,9 @@ impl CommonOpts {
         } else if self.connection_uri.starts_with("rmcp://") {
             let (_, data) = self.connection_uri.split_once("rmcp://").unwrap();
 
-            let err =
-                || error("Invalid connection URI. Format: `rmcp://[username]:[password]@[address]");
+            let err = || {
+                error("Invalid connection URI. Format: `rmcp://[username]:[password]@[address]:[port]")
+            };
 
             let (username, rest) = data.split_once(':').ok_or(err())?;
 
