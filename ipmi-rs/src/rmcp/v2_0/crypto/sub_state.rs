@@ -186,53 +186,49 @@ impl SubState {
         &self,
         data: &'a mut [u8],
     ) -> Result<&'a mut [u8], CryptoUnwrapError> {
-        let (data, trailer) = match self.confidentiality_algorithm {
+        let (payload, confidentiality_pad) = match self.confidentiality_algorithm {
             ConfidentialityAlgorithm::None => {
                 const EMPTY_TRAILER: &[u8] = &[];
                 (data, EMPTY_TRAILER)
             }
             ConfidentialityAlgorithm::AesCbc128 => {
-                let (iv, data_and_trailer) = data.split_at_mut(16);
-                let iv: [u8; 16] = iv.try_into().unwrap();
+                let (iv, data_and_trailer) = data
+                    .split_first_chunk_mut::<16>()
+                    .ok_or(CryptoUnwrapError::NotEnoughData)?;
 
                 let decryptor: cbc::Decryptor<aes::Aes128> =
-                    cbc::Decryptor::<aes::Aes128>::new(self.keys.aes_key(), &iv.into());
+                    cbc::Decryptor::<aes::Aes128>::new(self.keys.aes_key(), &(*iv).into());
 
                 decryptor
                     .decrypt_padded_mut::<NoPadding>(data_and_trailer)
                     .unwrap();
 
-                let trailer_len = data_and_trailer[data_and_trailer.len() - 1] as usize;
-                let data_len = data_and_trailer.len().saturating_sub(trailer_len + 1);
+                let (confidentiality_pad_len, payload_and_confidentiality_pad) = data_and_trailer
+                    .split_last_mut()
+                    .ok_or(CryptoUnwrapError::IncorrectConfidentialityTrailerLen)?;
 
-                let (data, trailer) = data_and_trailer.split_at_mut(data_len);
+                let confidentiality_pad_len = *confidentiality_pad_len as usize;
+                let data_len = payload_and_confidentiality_pad
+                    .len()
+                    .saturating_sub(confidentiality_pad_len);
 
-                if trailer.is_empty() {
+                let (payload, confidentiality_pad) =
+                    payload_and_confidentiality_pad.split_at_mut(data_len);
+
+                if confidentiality_pad.len() != confidentiality_pad_len {
                     return Err(CryptoUnwrapError::IncorrectConfidentialityTrailerLen);
                 }
 
-                let trailer = &trailer[..trailer.len() - 1];
-                if trailer.len() != trailer_len {
-                    return Err(CryptoUnwrapError::IncorrectConfidentialityTrailerLen);
-                }
-
-                if trailer_len > 0 {
-                    let trailer_len_desc = trailer[trailer.len() - 1] as usize;
-                    if trailer_len != trailer_len_desc {
-                        return Err(CryptoUnwrapError::IncorrectConfidentialityTrailerLen);
-                    }
-                }
-
-                (data, trailer)
+                (payload, &*confidentiality_pad)
             }
             ConfidentialityAlgorithm::Xrc4_128 => todo!(),
             ConfidentialityAlgorithm::Xrc4_40 => todo!(),
         };
 
-        if trailer.iter().zip(1..).any(|(l, r)| *l != r) {
+        if confidentiality_pad.iter().zip(1..).any(|(l, r)| *l != r) {
             Err(CryptoUnwrapError::InvalidConfidentialityTrailer)
         } else {
-            Ok(data)
+            Ok(payload)
         }
     }
 
@@ -316,7 +312,7 @@ mod tests {
     use ipmi_rs_core::app::auth::{ConfidentialityAlgorithm, IntegrityAlgorithm};
 
     use crate::rmcp::{
-        v2_0::crypto::{keys::Keys, SubState},
+        v2_0::crypto::{keys::Keys, CryptoUnwrapError, SubState},
         PayloadType,
     };
 
@@ -366,6 +362,22 @@ mod tests {
         assert_eq!(
             [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0].as_slice(),
             result.payload
+        );
+    }
+
+    #[test]
+    fn read_undersized() {
+        let state = SubState {
+            keys: Keys::from_sik([1u8; _]),
+            confidentiality_algorithm: ConfidentialityAlgorithm::AesCbc128,
+            integrity_algorithm: IntegrityAlgorithm::HmacSha1_96,
+        };
+
+        let mut buffer = [0u8; 15];
+
+        assert_eq!(
+            state.read_data_encrypted(&mut buffer),
+            Err(CryptoUnwrapError::NotEnoughData)
         );
     }
 }
