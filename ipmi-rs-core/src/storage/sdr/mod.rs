@@ -21,6 +21,12 @@ pub mod event_reading_type_code;
 mod sensor_type;
 pub use sensor_type::SensorType;
 
+mod event_offset;
+pub use event_offset::decode_event;
+
+mod event_data;
+pub use event_data::{EventData, EventData2Type, EventData3Type};
+
 mod units;
 pub use units::Unit;
 
