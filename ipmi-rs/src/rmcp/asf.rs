@@ -83,8 +83,8 @@ impl ASFMessageType {
         let data = match type_byte {
             0x80 if data_len == 0 => Self::Ping,
             0x40 if data_len == 0x10 => {
-                let enterprise_number = u32::from_le_bytes(data[1..5].try_into().unwrap());
-                let oem_data = u32::from_le_bytes(data[5..9].try_into().unwrap());
+                let enterprise_number = u32::from_be_bytes(data[1..5].try_into().unwrap());
+                let oem_data = u32::from_be_bytes(data[5..9].try_into().unwrap());
                 let supported_entities = SupportedEntities::from(data[9]);
                 let supported_interactions = SupportedInteractions::try_from(data[10]).ok()?;
 
@@ -137,7 +137,7 @@ pub struct ASFMessage {
 
 impl ASFMessage {
     pub(crate) fn write_data(&self, buffer: &mut Vec<u8>) {
-        buffer.extend_from_slice(&4542u32.to_le_bytes());
+        buffer.extend_from_slice(&4542u32.to_be_bytes());
 
         buffer.push(self.message_type.type_byte());
         buffer.push(self.message_tag);
@@ -151,7 +151,7 @@ impl ASFMessage {
             return None;
         }
 
-        if data[..4] != 4542u32.to_le_bytes() {
+        if data[..4] != 4542u32.to_be_bytes() {
             return None;
         }
 
