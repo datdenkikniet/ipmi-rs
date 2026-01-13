@@ -52,7 +52,7 @@ where
         Self { inner }
     }
 
-    pub fn sdrs(&mut self) -> SdrIter<CON> {
+    pub fn sdrs(&mut self) -> SdrIter<'_, CON> {
         SdrIter {
             ipmi: self,
             next_id: Some(sdr::RecordId::FIRST),
