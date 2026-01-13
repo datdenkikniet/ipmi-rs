@@ -1,12 +1,9 @@
 use std::fmt::{Display, Formatter};
-use std::{
-    ffi::c_int,
-    io,
-    os::fd::AsRawFd,
-    time::{Duration, Instant},
-};
+use std::{ffi::c_int, io, os::fd::AsRawFd, time::Duration};
 
 use ipmi_rs_core::connection::NetFn;
+use nix::errno::Errno;
+use nix::poll::{PollFd, PollFlags};
 
 use crate::connection::{
     Address, IpmiConnection, Message, Request, RequestTargetAddress, Response,
@@ -327,23 +324,31 @@ impl IpmiConnection for File {
             },
         };
 
-        let start_time = Instant::now();
+        let mut polls = [PollFd::new(self.fd(), PollFlags::POLLIN)];
+        let poll = nix::poll::poll(
+            polls.as_mut_slice(),
+            self.recv_timeout.as_millis().try_into().unwrap_or(i32::MAX),
+        )?;
 
-        let ipmi_result = loop {
-            // SAFETY: we send a mut pointer to a fully owned struct (`recv`),
-            // which has the correct layout for this IOCTL call.
-            let ioctl_result =
-                unsafe { ioctl::ipmi_recv_msg_trunc(self.fd(), std::ptr::addr_of_mut!(recv)) };
+        if poll != 1 {
+            log::warn!(
+                "Failed to receive message after waiting for {} ms.",
+                start.elapsed().as_millis(),
+            );
 
-            match ioctl_result {
-                Ok(_) => break Ok(recv),
-                Err(e) => {
-                    if Instant::now().duration_since(start_time) > self.recv_timeout {
-                        break Err(e);
-                    } else {
-                        continue;
-                    }
-                }
+            return Err(Errno::EAGAIN.into());
+        }
+
+        // SAFETY: we send a mut pointer to a fully owned struct (`recv`),
+        // which has the correct layout for this IOCTL call.
+        let ipmi_result =
+            unsafe { ioctl::ipmi_recv_msg_trunc(self.fd(), std::ptr::addr_of_mut!(recv)) };
+
+        let ipmi_result = match ipmi_result {
+            Ok(_) => recv,
+            Err(e) => {
+                log::error!("Error occurred while reading from IPMI: {e:?}");
+                return Err(e.into());
             }
         };
 
@@ -354,43 +359,28 @@ impl IpmiConnection for File {
         #[allow(clippy::drop_non_drop)]
         drop(bmc_addr);
 
-        let end = std::time::Instant::now();
-        let duration = (end - start).as_millis() as u32;
+        log::debug!("Received response after {} ms", start.elapsed().as_millis());
+        ipmi_result.log(log::Level::Trace);
 
-        match ipmi_result {
-            Ok(recv) => {
-                log::debug!("Received response after {} ms", duration);
-                recv.log(log::Level::Trace);
-
-                match Response::try_from(recv) {
-                    Ok(response) => {
-                        if response.seq() == self.seq {
-                            Ok(response)
-                        } else {
-                            Err(io::Error::new(
-                                io::ErrorKind::Other,
-                                format!(
-                                    "Invalid sequence number on response. Expected {}, got {}",
-                                    self.seq,
-                                    response.seq()
-                                ),
-                            ))
-                        }
-                    }
-                    Err(e) => Err(io::Error::new(
+        match Response::try_from(ipmi_result) {
+            Ok(response) => {
+                if response.seq() == self.seq {
+                    Ok(response)
+                } else {
+                    Err(io::Error::new(
                         io::ErrorKind::Other,
-                        format!("Error while creating response. {:?}", e),
-                    )),
+                        format!(
+                            "Invalid sequence number on response. Expected {}, got {}",
+                            self.seq,
+                            response.seq()
+                        ),
+                    ))
                 }
             }
-            Err(e) => {
-                log::warn!(
-                    "Failed to receive message after waiting for {} ms. {:?}",
-                    e,
-                    duration
-                );
-                Err(e.into())
-            }
+            Err(e) => Err(io::Error::new(
+                io::ErrorKind::Other,
+                format!("Error while creating response. {:?}", e),
+            )),
         }
     }
 
