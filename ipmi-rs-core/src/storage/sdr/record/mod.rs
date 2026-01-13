@@ -829,6 +829,19 @@ impl RecordContents {
             RecordContents::Unknown { .. } => None,
         }
     }
+
+    /// Get the sensor type for sensor records (Full, Compact, Event-Only).
+    pub fn sensor_type(&self) -> Option<SensorType> {
+        match self {
+            RecordContents::FullSensor(full) => Some(*full.ty()),
+            RecordContents::CompactSensor(compact) => Some(*compact.ty()),
+            RecordContents::EventOnlySensor(event) => Some(event.ty),
+            RecordContents::GenericDeviceLocator(_)
+            | RecordContents::FruDeviceLocator(_)
+            | RecordContents::McDeviceLocator(_) => None,
+            RecordContents::Unknown { .. } => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
