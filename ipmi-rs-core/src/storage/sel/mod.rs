@@ -75,15 +75,18 @@ pub enum EventGenerator {
     },
 }
 
-impl From<(u8, u8)> for EventGenerator {
-    fn from(value: (u8, u8)) -> Self {
+impl TryFrom<(u8, u8)> for EventGenerator {
+    type Error = ParseEntryError;
+
+    fn try_from(value: (u8, u8)) -> Result<Self, ParseEntryError> {
         let is_software_id = (value.0 & 0x1) == 0x1;
         let i2c_or_sid = (value.0 >> 1) & 0x7F;
+        let channel_value = (value.1 >> 4) & 0xF;
 
-        // NOTE(unwrap): value is in valid range due to mask.
-        let channel_number = Channel::new((value.1 >> 4) & 0xF).unwrap();
+        let channel_number =
+            Channel::new(channel_value).ok_or(ParseEntryError::InvalidChannel(channel_value))?;
 
-        if is_software_id {
+        let generator = if is_software_id {
             Self::SoftwareId {
                 software_id: i2c_or_sid,
                 channel_number,
@@ -96,7 +99,9 @@ impl From<(u8, u8)> for EventGenerator {
                 channel_number,
                 lun,
             }
-        }
+        };
+
+        Ok(generator)
     }
 }
 
@@ -154,6 +159,7 @@ pub enum Entry {
 pub enum ParseEntryError {
     NotEnoughData,
     UnknownRecordType(u8),
+    InvalidChannel(u8),
 }
 
 impl Entry {
@@ -168,7 +174,7 @@ impl Entry {
 
         match record_type {
             SelRecordType::System => {
-                let generator_id = EventGenerator::from((data[7], data[8]));
+                let generator_id = EventGenerator::try_from((data[7], data[8]))?;
                 let event_message_format = EventMessageRevision::from(data[9]);
                 let sensor_type = data[10];
                 let sensor_number = data[11];
