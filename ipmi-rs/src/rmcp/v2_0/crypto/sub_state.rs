@@ -84,7 +84,9 @@ impl SubState {
         match self.integrity_algorithm {
             IntegrityAlgorithm::None => Ok(data),
             IntegrityAlgorithm::HmacSha1_96 => {
-                let (data, checksum_data) = data.split_at_mut(data.len() - 12);
+                let (data, checksum_data) = data
+                    .split_last_chunk_mut::<12>()
+                    .ok_or(CryptoUnwrapError::IncorrectIntegrityTrailerLen)?;
 
                 let checksum = Sha1Hmac::new(&self.keys.k1).feed(data).finalize();
 
@@ -92,17 +94,24 @@ impl SubState {
                     return Err(CryptoUnwrapError::AuthCodeMismatch);
                 }
 
-                let data_len = data.len();
-                let pad_len = data[data_len - 2] as usize;
-                let next_header = data[data_len - 1];
+                let (data, [pad_len, next_header]) = data
+                    .split_last_chunk_mut()
+                    .ok_or(CryptoUnwrapError::IncorrectIntegrityTrailerLen)?;
+
+                let pad_len = *pad_len as usize;
+                let next_header = *next_header;
 
                 if next_header != 0x07 {
                     return Err(CryptoUnwrapError::UnknownNextHeader(next_header));
                 }
 
-                // strip 2 bytes (pad_len and next_header) and the length
-                // of the pad.
-                Ok(&mut data[..data_len - 2 - pad_len])
+                let data_len = data.len();
+                // Strip the length of the pad
+                let (data, _) = data
+                    .split_at_mut_checked(data_len.saturating_sub(pad_len))
+                    .ok_or(CryptoUnwrapError::IncorrectIntegrityTrailerLen)?;
+
+                Ok(data)
             }
             IntegrityAlgorithm::HmacMd5_128 => todo!(),
             IntegrityAlgorithm::Md5_128 => todo!(),
@@ -379,5 +388,18 @@ mod tests {
             state.read_data_encrypted(&mut buffer),
             Err(CryptoUnwrapError::NotEnoughData)
         );
+    }
+
+    #[test]
+    fn sha1_hmac_trailer_all_lens() {
+        let state = SubState {
+            keys: Keys::from_sik([1u8; _]),
+            confidentiality_algorithm: ConfidentialityAlgorithm::AesCbc128,
+            integrity_algorithm: IntegrityAlgorithm::HmacSha1_96,
+        };
+
+        for i in 0..32 {
+            assert!(state.validate_trailer(&mut vec![0u8; i]).is_err());
+        }
     }
 }

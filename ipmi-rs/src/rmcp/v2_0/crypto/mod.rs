@@ -17,5 +17,6 @@ pub enum CryptoUnwrapError {
     IncorrectConfidentialityTrailerLen,
     InvalidConfidentialityTrailer,
     AuthCodeMismatch,
+    IncorrectIntegrityTrailerLen,
     UnknownNextHeader(u8),
 }
