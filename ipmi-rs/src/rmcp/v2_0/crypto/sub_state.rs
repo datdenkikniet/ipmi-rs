@@ -133,7 +133,11 @@ impl SubState {
             }
             ConfidentialityAlgorithm::AesCbc128 => {
                 let mut iv = [0u8; 16];
-                getrandom::getrandom(&mut iv).unwrap();
+                if !cfg!(test) {
+                    getrandom::getrandom(&mut iv).unwrap();
+                } else {
+                    iv = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
+                }
 
                 // Length
                 // Data + Confidentiality pad length + header
@@ -303,5 +307,65 @@ impl SubState {
         self.write_trailer(buffer)?;
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use ipmi_rs_core::app::auth::{ConfidentialityAlgorithm, IntegrityAlgorithm};
+
+    use crate::rmcp::{
+        v2_0::crypto::{keys::Keys, SubState},
+        PayloadType,
+    };
+
+    #[test]
+    fn write_empty() {
+        let mut state = SubState {
+            keys: Keys::from_sik([1u8; _]),
+            confidentiality_algorithm: ConfidentialityAlgorithm::AesCbc128,
+            integrity_algorithm: IntegrityAlgorithm::None,
+        };
+
+        let empty = &[];
+
+        // Empty as encrypted with the above substate.
+        let expected = [
+            32, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 201, 89, 142, 89, 209,
+            209, 28, 35, 201, 136, 6, 196, 59, 124, 245, 173,
+        ];
+
+        let mut buffer = Vec::new();
+
+        state.write_data_encrypted(empty, &mut buffer).unwrap();
+        assert_eq!(&expected, buffer.as_slice());
+    }
+
+    #[test]
+    fn read_pad_aligned() {
+        let mut state = SubState {
+            keys: Keys::from_sik([1u8; _]),
+            confidentiality_algorithm: ConfidentialityAlgorithm::AesCbc128,
+            integrity_algorithm: IntegrityAlgorithm::HmacSha1_96,
+        };
+
+        // Basic message (excl. RMCP header) encrypted with AesCbc128
+        // that previously caused a panic.
+        let mut buffer = [
+            6, 192, 6, 0, 6, 192, 123, 0, 0, 0, 123, 0, 0, 0, 32, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+            11, 12, 13, 14, 15, 16, 254, 89, 199, 225, 247, 211, 244, 206, 160, 55, 139, 65, 232,
+            35, 220, 55, 255, 255, 2, 7, 154, 132, 72, 23, 223, 37, 194, 215, 243, 74, 161, 168,
+        ];
+
+        let result = state.read_payload(&mut buffer[4..]).unwrap();
+
+        assert_eq!(PayloadType::IpmiMessage, result.ty);
+        assert_eq!(123, result.session_id);
+        assert_eq!(123, result.session_sequence_number);
+        assert_eq!(
+            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0].as_slice(),
+            result.payload
+        );
     }
 }
