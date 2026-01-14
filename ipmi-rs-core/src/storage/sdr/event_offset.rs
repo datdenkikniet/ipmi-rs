@@ -355,7 +355,7 @@ fn sensor_event_offset_desc(sensor_type: SensorType, offset: u8) -> Option<&'sta
 ///
 /// # Arguments
 /// * `sensor_type` - The sensor type code (from IPMI Table 42-3)
-/// * `offset` - The event offset (bits [3:0] of the event type/reading byte)
+/// * `offset` - The event offset (bits \[3:0\] of the event type/reading byte)
 ///
 /// Reference: IPMI 2.0 Specification, Table 42-3
 fn decode_sensor_event_offset(
@@ -502,7 +502,7 @@ fn generic_event_offset_desc(event_type: u8, offset: u8) -> Option<&'static str>
 ///
 /// # Arguments
 /// * `event_type` - The event/reading type code
-/// * `offset` - The event offset (bits [3:0])
+/// * `offset` - The event offset (bits \[3:0\])
 ///
 /// Reference: IPMI 2.0 Specification, Table 42-2
 fn decode_generic_event_offset(
@@ -523,9 +523,9 @@ fn decode_generic_event_offset(
 /// sensor-specific events.
 ///
 /// # Arguments
-/// * `event_type` - The event/reading type code (from event data byte 0, bits [6:0])
+/// * `event_type` - The event/reading type code (from event data byte 0, bits \[6:0\])
 /// * `sensor_type` - The sensor type
-/// * `offset` - The event offset (bits [3:0])
+/// * `offset` - The event offset (bits \[3:0\])
 pub fn decode_event(
     f: &mut fmt::Formatter<'_>,
     event_type: u8,

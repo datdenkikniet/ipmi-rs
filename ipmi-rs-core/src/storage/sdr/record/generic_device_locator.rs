@@ -80,10 +80,10 @@ impl GenericDeviceLocator {
     ///
     /// | Offset | Field                              |
     /// |--------|-----------------------------------|
-    /// | 0      | Device Access Address [7:1], [0] reserved |
-    /// | 1      | Device Slave Address, channel ms-bit in [0] |
-    /// | 2      | [7:5] Channel Number (ls-3 bits), [4:3] Access LUN, [2:0] Private Bus ID |
-    /// | 3      | [7:3] reserved, [2:0] Address Span |
+    /// | 0      | Device Access Address \[7:1\], \[0\] reserved |
+    /// | 1      | Device Slave Address, channel ms-bit in \[0\] |
+    /// | 2      | \[7:5\] Channel Number (ls-3 bits), \[4:3\] Access LUN, \[2:0\] Private Bus ID |
+    /// | 3      | \[7:3\] reserved, \[2:0\] Address Span |
     /// | 4      | Reserved                          |
     /// | 5      | Device Type (Table 43-12)         |
     /// | 6      | Device Type Modifier (Table 43-12)|

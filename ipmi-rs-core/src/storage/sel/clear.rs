@@ -67,7 +67,7 @@ impl IpmiCommand for ClearSel {
     ///
     /// Response data format (IPMI 2.0 Spec, Table 31-9):
     /// - Byte 0: Erasure progress
-    ///   - [3:0]: 0h = erasure in progress, 1h = erase completed
+    ///   - \[3:0\]: 0h = erasure in progress, 1h = erase completed
     fn parse_success_response(data: &[u8]) -> Result<Self::Output, Self::Error> {
         if data.is_empty() {
             return Err(NotEnoughData);

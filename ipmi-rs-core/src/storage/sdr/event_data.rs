@@ -8,7 +8,7 @@ use core::fmt;
 
 use nonmax::NonMaxU8;
 
-/// Event data byte 2 availability/format (from event_data[0] bits [5:4])
+/// Event data byte 2 availability/format (from event_data\[0\] bits \[5:4\])
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum EventData2Type {
     /// Unspecified (00b)
@@ -21,7 +21,7 @@ pub enum EventData2Type {
     SensorSpecific(NonMaxU8),
 }
 
-/// Event data byte 3 availability/format (from event_data[0] bits [7:6])
+/// Event data byte 3 availability/format (from event_data\[0\] bits \[7:6\])
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum EventData3Type {
     /// Unspecified (00b)
@@ -101,7 +101,7 @@ impl fmt::Display for EventData3Type {
 /// Reference: IPMI 2.0 Specification, Section 29.7
 #[derive(Debug, Clone, PartialEq)]
 pub struct EventData {
-    /// Event offset (bits [3:0] of byte 1)
+    /// Event offset (bits \[3:0\] of byte 1)
     pub offset: u8,
     /// Event data byte 2 type
     pub data2_type: EventData2Type,
