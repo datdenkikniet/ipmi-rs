@@ -324,6 +324,13 @@ impl IpmiConnection for File {
             },
         };
 
+        // Poll the device for available data.
+        //
+        // As of 2026-01-14, the linux driver tracks state for our
+        // `fd`, so any data received here will be in response to
+        // command we have sent.
+        //
+        // Ref: https://github.com/datdenkikniet/ipmi-rs/issues/39#issuecomment-3747421945
         let mut polls = [PollFd::new(self.fd(), PollFlags::POLLIN)];
         let poll = nix::poll::poll(
             polls.as_mut_slice(),
