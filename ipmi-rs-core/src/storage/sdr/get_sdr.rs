@@ -10,9 +10,7 @@ use super::{Record, RecordId, RecordParseError};
 ///
 /// This command must be used in accordance with the IPMI spec, i.e.
 /// all SDRs must be obtained sequentially. It is recommended that you use
-/// the [`Ipmi::sdrs`] function for this.
-///
-/// [`Ipmi::sdrs`]: crate::Ipmi::sdrs
+/// the function `Ipmi::sdrs` in the `ipmi-rs` function for this.
 #[derive(Debug, Clone, Copy)]
 pub struct GetDeviceSdr {
     reservation_id: Option<NonZeroU16>,
