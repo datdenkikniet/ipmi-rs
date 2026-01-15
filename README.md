@@ -6,12 +6,17 @@ This library is based on the [IPMI v2.0 Revision 1.1][0] specification.
 [0]: https://www.intel.com/content/dam/www/public/us/en/documents/product-briefs/ipmi-second-gen-interface-spec-v2-rev1-1.pdf
 
 ## Examples
-### `get-info`
-Configure the log level of this example with `RUST_LOG`. `info` is recommended.
 
+This repository contains several (useful) examples, which can be found in [ipmi-rs/examples](./ipmi-rs/examples/).
+
+They have a configurable target, using the `-c` option. It supports the formats `file://<path-to-ipmi-file>` and `rmcp://<user>:<password>@<host>:<port>`.
+
+To see information produced by the examples, configure the log level using [`RUST_LOG`](https://docs.rs/env_logger/latest/env_logger/#enabling-logging). `info` is recommended.
+
+### `get-info`
 This example usually has to be run as root.
 
-This example will, using the `/dev/ipmi0` file:
+This example will:
 1. Get SEL info
 2. (If supported) get SEL allocation information
 3. (If present) get the first SEL record
@@ -22,38 +27,83 @@ This example will, using the `/dev/ipmi0` file:
 8. Load all of the SDRs from the repository
 9. Attempt to read the value of all of the sensors from the SDR repository
 
-# Features
-- [x] SEL info
-- [x] SDR repository info
-- [x] Get SDR repository entries
-- [x] Read sensor data from sensors obtained from SDR repository
-- [ ] FRU information lookup
-- [x] `ioctl`-based IPMI device file interface support
-    - Supports bridging IPMI requests to other IPMBs.
-- [x] RMCP
-    Supported auth types:
-    - [x] Unauthenticated
-    - [x] MD5
-    - [x] MD2
-    - [ ] Key
-- [x] RMCP+
-    - The security aspects of the RMCP+ implementation itself is not specifically security-vetted. It _should_ be secure, but you must not rely on it.
-    -  Authentication algorithms:
-        -  [ ] RAKP-None
-        -  [x] RAKP-HMAC-SHA1
-        -  [ ] RAKP-HMAC-MD5
-        -  [ ] RAKP-HMAC-SHA256
-    - Confidentiality algorithms:
-        - [x] None
-        - [x] AES-CBC-128
-        - [ ] xRC4-128
-        - [ ] xRC4-40
-    - Integrity algorithms:
-        - [x] None
-        - [x] HMAC-SHA1-96
-        - [ ] HMAC-MD5-128
-        - [ ] MD5-128
-        - [ ] HMAC-SHA256-128
+## `sel`
+
+This example will read out and print the SEL (System Event Log) of your target. It can also be cleared by passing the `--clear` flag.
+
+# Project structure
+
+This project contains three crates:
+
+* `ipmi-rs-core`: core primitives, commands, and other application independent structures.
+* `ipmi-rs`: implements IO for interacting with IPMI systems based on primitives from `ipmi-rs-core`.
+* `ipmi-rs-log`: logging/formatting for items from `ipmi-rs-core` (deprecated).
+
+# Supported commands
+
+The following IPMI commands are currently supported in `ipmi-rs-core`:
+
+| Command                                 | Specification section |
+| :-------------------------------------- | :-------------------- |
+| Get Device ID                           | 20.1                  |
+| Get Channel Authentication Capabilities | 22.13                 |
+| Get Channel Cipher Suites               | 22.15                 |
+| Get Session Challenge                   | 22.16                 |
+| Activate Session                        | 22.17                 |
+| Get SEL Info                            | 31.2                  |
+| Get SEL Allocation Info                 | 31.3                  |
+| Reserve SEL                             | 31.4                  |
+| Get SEL Entry                           | 31.5                  |
+| Clear SEL                               | 31.9                  |
+| Get Sensor Reading                      | 35.14                 |
+| Get Device SDR Info                     | 35.2                  |
+| Get Device SDR                          | 35.3                  |
+| Get SDR Repository Info                 | 33.9                  |
+| Get SDR Repository Allocation Info      | 33.10                 |
+| Get SDR                                 | 33.12                 |
+
+# Supported interfaces
+
+## `ioctl`-based IPMI device file
+
+The [Linux IPMI Driver][lipmid] is supported through the character device exposed by that driver, usually at `/dev/ipmi<N>`.
+
+Access to this file generally requires root privileges.
+
+[lipmid]: https://docs.kernel.org/driver-api/ipmi.html
+
+## RMCP
+
+RMCP with the following authentication types is supported:
+* Unauthenticated
+* MD5
+* MD2
+
+## RMCP+
+
+RCMP+ is supported, but the subset of authentication, confidentiality, and integrity algorithms is limited.
+
+| Authentication algorithm | Supported |
+| :----------------------- | :-------- |
+| RAKP-HMAC-SHA1           | Yes       |
+| RAKP-None                | No        |
+| RAKP-HMAC-MD5            | No        |
+| RAKP-HMAC-SHA256         | No        |
+
+| Confidentiality algorithm | Supported |
+| :------------------------ | :-------- |
+| None                      | Yes       |
+| AES-CBC-128               | Yes       |
+| xRC4-128                  | No        |
+| xRC4-40                   | No        |
+
+| Integrity algorithm | Supported |
+| :------------------ | :-------- |
+| None                | Yes       |
+| HMAC-SHA1-96        | Yes       |
+| HMAC-MD5-128        | No        |
+| MD5-128             | No        |
+| HMAC-SHA256-128     | No        |
 
 ## License
 
