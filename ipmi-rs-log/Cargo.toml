@@ -2,6 +2,13 @@
 name = "ipmi-rs-log"
 version = "0.1.0"
 edition = "2021"
+authors = [ "Johannes Cornelis Draaijer <jcdra1@gmail.com>" ]
+license = "MIT OR Apache-2.0"
+keywords = [ "ipmi", "sysadmin", "bmc" ]
+categories = [ "parser-implementations", "network-programming" ]
+description = "Logging support for primitives in ipmi-rs-core"
+repository = "https://github.com/datdenkikniet/ipmi-rs"
+documentation = "https://docs.rs/ipmi-rs/latest"
 
 [dependencies]
 log = "0.4.25"
