@@ -1,5 +1,7 @@
 # Unreleased
 
+# [0.5.0](https://github.com/datdenkikniet/ipmi-rs/tree/v0.5.0)
+
 * BREAKING: Refactor `IpmiCommand` to reduce/remove completion-code validation for ipmlementors. ([#28])
 * BREAKING: Remove `IpmiCommandError`. ([#28])
 * BREAKING: Remove `Success` variant from and rename `CompletionCode` to `CompletionErrorCode`. ([#28])
