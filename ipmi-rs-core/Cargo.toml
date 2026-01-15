@@ -2,6 +2,13 @@
 name = "ipmi-rs-core"
 version = "0.5.0"
 edition = "2021"
+authors = [ "Johannes Cornelis Draaijer <jcdra1@gmail.com>" ]
+license = "MIT OR Apache-2.0"
+keywords = [ "ipmi", "sysadmin", "bmc" ]
+categories = [ "parser-implementations" ]
+description = "A pure rust implementation of the core primitives of the IPMI spec"
+repository = "https://github.com/datdenkikniet/ipmi-rs"
+documentation = "https://docs.rs/ipmi-rs-core/latest"
 
 [dependencies]
 bitflags = "1.3.0"
