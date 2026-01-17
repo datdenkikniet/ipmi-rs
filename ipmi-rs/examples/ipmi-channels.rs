@@ -92,6 +92,7 @@ fn print_lan_config(ipmi: &mut common::IpmiConnectionEnum, channel: Channel) {
             Ok(LanConfigParameterData::Raw(value)) => {
                 println!("    {label}: {value:02X?}")
             }
+            Ok(_) => println!("    {label}: <unsupported>"),
             Err(_) => println!("    {label}: invalid data"),
         }
     }

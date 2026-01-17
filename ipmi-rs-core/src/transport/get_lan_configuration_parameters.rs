@@ -96,6 +96,10 @@ pub enum LanConfigParameter {
     DefaultGatewayMacAddress,
     BackupGatewayAddress,
     BackupGatewayMacAddress,
+    Ipv6Ipv4Support,
+    Ipv6Ipv4AddressingEnables,
+    Ipv6HeaderStaticTrafficClass,
+    Ipv6HeaderStaticHopLimit,
     Other(u8),
 }
 
@@ -114,6 +118,10 @@ impl LanConfigParameter {
             LanConfigParameter::DefaultGatewayMacAddress => 13,
             LanConfigParameter::BackupGatewayAddress => 14,
             LanConfigParameter::BackupGatewayMacAddress => 15,
+            LanConfigParameter::Ipv6Ipv4Support => 50,
+            LanConfigParameter::Ipv6Ipv4AddressingEnables => 51,
+            LanConfigParameter::Ipv6HeaderStaticTrafficClass => 52,
+            LanConfigParameter::Ipv6HeaderStaticHopLimit => 53,
             LanConfigParameter::Other(value) => *value,
         }
     }
@@ -149,6 +157,18 @@ impl LanConfigParameter {
             LanConfigParameter::BackupGatewayMacAddress => Ok(
                 LanConfigParameterData::BackupGatewayMacAddress(MacAddress::from_slice(data)?),
             ),
+            LanConfigParameter::Ipv6Ipv4Support => Ok(LanConfigParameterData::Ipv6Ipv4Support(
+                Ipv6Ipv4Support::from(data[0]),
+            )),
+            LanConfigParameter::Ipv6Ipv4AddressingEnables => Ok(
+                LanConfigParameterData::Ipv6Ipv4AddressingEnables(Ipv6Ipv4Enables::from(data[0])),
+            ),
+            LanConfigParameter::Ipv6HeaderStaticTrafficClass => Ok(
+                LanConfigParameterData::Ipv6HeaderStaticTrafficClass(data[0]),
+            ),
+            LanConfigParameter::Ipv6HeaderStaticHopLimit => {
+                Ok(LanConfigParameterData::Ipv6HeaderStaticHopLimit(data[0]))
+            }
             _ => Ok(LanConfigParameterData::Raw(data.to_vec())),
         }
     }
@@ -183,6 +203,10 @@ pub enum LanConfigParameterData {
     DefaultGatewayMacAddress(MacAddress),
     BackupGatewayAddress(Ipv4Address),
     BackupGatewayMacAddress(MacAddress),
+    Ipv6Ipv4Support(Ipv6Ipv4Support),
+    Ipv6Ipv4AddressingEnables(Ipv6Ipv4Enables),
+    Ipv6HeaderStaticTrafficClass(u8),
+    Ipv6HeaderStaticHopLimit(u8),
     Raw(Vec<u8>),
 }
 
@@ -269,6 +293,59 @@ impl From<IpAddressSource> for u8 {
     }
 }
 
+/// IPv6/IPv4 support capabilities.
+///
+/// Reference: IPMI 2.0 Specification, Table 23-4, parameter #50.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Ipv6Ipv4Support {
+    pub ipv6_alerting_supported: bool,
+    pub dual_stack_supported: bool,
+    pub ipv6_only_supported: bool,
+}
+
+impl From<u8> for Ipv6Ipv4Support {
+    fn from(value: u8) -> Self {
+        Self {
+            ipv6_alerting_supported: (value & 0x04) == 0x04,
+            dual_stack_supported: (value & 0x02) == 0x02,
+            ipv6_only_supported: (value & 0x01) == 0x01,
+        }
+    }
+}
+
+/// IPv6/IPv4 addressing enables.
+///
+/// Reference: IPMI 2.0 Specification, Table 23-4, parameter #51.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Ipv6Ipv4Enables {
+    Ipv6Disabled,
+    Ipv6Only,
+    Ipv6Ipv4Simultaneous,
+    Reserved(u8),
+}
+
+impl From<u8> for Ipv6Ipv4Enables {
+    fn from(value: u8) -> Self {
+        match value {
+            0x00 => Self::Ipv6Disabled,
+            0x01 => Self::Ipv6Only,
+            0x02 => Self::Ipv6Ipv4Simultaneous,
+            v => Self::Reserved(v),
+        }
+    }
+}
+
+impl From<Ipv6Ipv4Enables> for u8 {
+    fn from(value: Ipv6Ipv4Enables) -> Self {
+        match value {
+            Ipv6Ipv4Enables::Ipv6Disabled => 0x00,
+            Ipv6Ipv4Enables::Ipv6Only => 0x01,
+            Ipv6Ipv4Enables::Ipv6Ipv4Simultaneous => 0x02,
+            Ipv6Ipv4Enables::Reserved(v) => v,
+        }
+    }
+}
+
 impl core::fmt::Display for IpAddressSource {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
@@ -278,6 +355,17 @@ impl core::fmt::Display for IpAddressSource {
             IpAddressSource::BiosOrSystemSoftware => write!(f, "BIOS/System software"),
             IpAddressSource::Other => write!(f, "Other"),
             IpAddressSource::Reserved(v) => write!(f, "Reserved (0x{v:02X})"),
+        }
+    }
+}
+
+impl core::fmt::Display for Ipv6Ipv4Enables {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Ipv6Ipv4Enables::Ipv6Disabled => write!(f, "IPv6 disabled"),
+            Ipv6Ipv4Enables::Ipv6Only => write!(f, "IPv6 only"),
+            Ipv6Ipv4Enables::Ipv6Ipv4Simultaneous => write!(f, "IPv6/IPv4 simultaneous"),
+            Ipv6Ipv4Enables::Reserved(v) => write!(f, "Reserved (0x{v:02X})"),
         }
     }
 }
