@@ -37,6 +37,10 @@ struct LanConfig {
     default_gateway_mac: Option<String>,
     backup_gateway: Option<String>,
     backup_gateway_mac: Option<String>,
+    ipv6_ipv4_support: Option<String>,
+    ipv6_ipv4_addressing_enables: Option<String>,
+    ipv6_header_static_traffic_class: Option<String>,
+    ipv6_header_static_hop_limit: Option<String>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -49,6 +53,9 @@ struct LanConfigInput {
     default_gateway_mac: Option<String>,
     backup_gateway: Option<String>,
     backup_gateway_mac: Option<String>,
+    ipv6_ipv4_addressing_enables: Option<String>,
+    ipv6_header_static_traffic_class: Option<String>,
+    ipv6_header_static_hop_limit: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -199,6 +206,18 @@ fn render_schema() -> &'static str {
                 "type": "string",
                 "description": "Unspecified | Static | DHCP | BIOS/System software | Other | 0xNN"
               },
+              "ipv6_ipv4_addressing_enables": {
+                "type": "string",
+                "description": "disabled | ipv6 only | dual stack | 0xNN"
+              },
+              "ipv6_header_static_traffic_class": {
+                "type": "string",
+                "description": "Traffic class byte (decimal or 0xNN)"
+              },
+              "ipv6_header_static_hop_limit": {
+                "type": "string",
+                "description": "Hop limit byte (decimal or 0xNN)"
+              },
               "default_gateway_mac": { "type": "string", "description": "Default gateway MAC (often read-only)" },
               "backup_gateway": { "type": "string", "description": "Backup gateway IPv4 address" },
               "backup_gateway_mac": { "type": "string", "description": "Backup gateway MAC (often read-only)" }
@@ -321,6 +340,45 @@ fn apply_lan_config(
             );
         } else {
             log::warn!("Invalid IP source: {ip_source}");
+        }
+    }
+
+    if let Some(enables) = config.ipv6_ipv4_addressing_enables.as_deref() {
+        if let Some(value) = parse_ipv6_ipv4_enables(enables) {
+            let _ = set_param(
+                ipmi,
+                channel,
+                LanConfigParameter::Ipv6Ipv4AddressingEnables,
+                LanConfigParameterRequest::Ipv6Ipv4AddressingEnables(value),
+            );
+        } else {
+            log::warn!("Invalid IPv6/IPv4 enables: {enables}");
+        }
+    }
+
+    if let Some(value) = config.ipv6_header_static_traffic_class.as_deref() {
+        if let Some(byte) = parse_u8(value) {
+            let _ = set_param(
+                ipmi,
+                channel,
+                LanConfigParameter::Ipv6HeaderStaticTrafficClass,
+                LanConfigParameterRequest::Ipv6HeaderStaticTrafficClass(byte),
+            );
+        } else {
+            log::warn!("Invalid IPv6 traffic class: {value}");
+        }
+    }
+
+    if let Some(value) = config.ipv6_header_static_hop_limit.as_deref() {
+        if let Some(byte) = parse_u8(value) {
+            let _ = set_param(
+                ipmi,
+                channel,
+                LanConfigParameter::Ipv6HeaderStaticHopLimit,
+                LanConfigParameterRequest::Ipv6HeaderStaticHopLimit(byte),
+            );
+        } else {
+            log::warn!("Invalid IPv6 hop limit: {value}");
         }
     }
 
@@ -501,6 +559,34 @@ fn parse_ip_source(value: &str) -> Option<IpAddressSource> {
     }
 }
 
+fn parse_ipv6_ipv4_enables(value: &str) -> Option<ipmi_rs::transport::Ipv6Ipv4Enables> {
+    let lower = value.to_ascii_lowercase();
+    match lower.as_str() {
+        "disabled" | "ipv6 disabled" => Some(ipmi_rs::transport::Ipv6Ipv4Enables::Ipv6Disabled),
+        "ipv6 only" | "ipv6-only" => Some(ipmi_rs::transport::Ipv6Ipv4Enables::Ipv6Only),
+        "dual" | "dual stack" | "ipv6/ipv4" | "ipv6/ipv4 simultaneous" => {
+            Some(ipmi_rs::transport::Ipv6Ipv4Enables::Ipv6Ipv4Simultaneous)
+        }
+        _ => {
+            if let Some(hex) = lower.strip_prefix("0x") {
+                u8::from_str_radix(hex, 16)
+                    .ok()
+                    .map(ipmi_rs::transport::Ipv6Ipv4Enables::Reserved)
+            } else {
+                None
+            }
+        }
+    }
+}
+
+fn parse_u8(value: &str) -> Option<u8> {
+    if let Some(hex) = value.strip_prefix("0x") {
+        u8::from_str_radix(hex, 16).ok()
+    } else {
+        value.parse::<u8>().ok()
+    }
+}
+
 fn fetch_lan_config(ipmi: &mut common::IpmiConnectionEnum, channel: Channel) -> FetchResult {
     let mut config = LanConfig::default();
 
@@ -588,6 +674,51 @@ fn fetch_lan_config(ipmi: &mut common::IpmiConnectionEnum, channel: Channel) -> 
         };
     }
 
+    if let Err(err) = fill_param(
+        &mut config.ipv6_ipv4_support,
+        ipmi,
+        channel,
+        LanConfigParameter::Ipv6Ipv4Support,
+    ) {
+        return FetchResult {
+            config,
+            aborted: Some(err),
+        };
+    }
+    if let Err(err) = fill_param(
+        &mut config.ipv6_ipv4_addressing_enables,
+        ipmi,
+        channel,
+        LanConfigParameter::Ipv6Ipv4AddressingEnables,
+    ) {
+        return FetchResult {
+            config,
+            aborted: Some(err),
+        };
+    }
+    if let Err(err) = fill_param(
+        &mut config.ipv6_header_static_traffic_class,
+        ipmi,
+        channel,
+        LanConfigParameter::Ipv6HeaderStaticTrafficClass,
+    ) {
+        return FetchResult {
+            config,
+            aborted: Some(err),
+        };
+    }
+    if let Err(err) = fill_param(
+        &mut config.ipv6_header_static_hop_limit,
+        ipmi,
+        channel,
+        LanConfigParameter::Ipv6HeaderStaticHopLimit,
+    ) {
+        return FetchResult {
+            config,
+            aborted: Some(err),
+        };
+    }
+
     FetchResult {
         config,
         aborted: None,
@@ -642,6 +773,17 @@ fn get_param_string(
         Ok(LanConfigParameterData::DefaultGatewayMacAddress(value)) => Ok(Some(value.to_string())),
         Ok(LanConfigParameterData::BackupGatewayAddress(value)) => Ok(Some(value.to_string())),
         Ok(LanConfigParameterData::BackupGatewayMacAddress(value)) => Ok(Some(value.to_string())),
+        Ok(LanConfigParameterData::Ipv6Ipv4Support(value)) => Ok(Some(format!(
+            "alerting={}, dual_stack={}, ipv6_only={}",
+            value.ipv6_alerting_supported, value.dual_stack_supported, value.ipv6_only_supported
+        ))),
+        Ok(LanConfigParameterData::Ipv6Ipv4AddressingEnables(value)) => Ok(Some(value.to_string())),
+        Ok(LanConfigParameterData::Ipv6HeaderStaticTrafficClass(value)) => {
+            Ok(Some(format!("0x{value:02X}")))
+        }
+        Ok(LanConfigParameterData::Ipv6HeaderStaticHopLimit(value)) => {
+            Ok(Some(format!("0x{value:02X}")))
+        }
         _ => Ok(None),
     }
 }
@@ -755,6 +897,19 @@ fn render_json(channels: &[ChannelConfig]) -> String {
             ),
             ("backup_gateway", &channel.lan_config.backup_gateway),
             ("backup_gateway_mac", &channel.lan_config.backup_gateway_mac),
+            ("ipv6_ipv4_support", &channel.lan_config.ipv6_ipv4_support),
+            (
+                "ipv6_ipv4_addressing_enables",
+                &channel.lan_config.ipv6_ipv4_addressing_enables,
+            ),
+            (
+                "ipv6_header_static_traffic_class",
+                &channel.lan_config.ipv6_header_static_traffic_class,
+            ),
+            (
+                "ipv6_header_static_hop_limit",
+                &channel.lan_config.ipv6_header_static_hop_limit,
+            ),
         ];
 
         for (field_index, (name, value)) in fields.iter().enumerate() {
