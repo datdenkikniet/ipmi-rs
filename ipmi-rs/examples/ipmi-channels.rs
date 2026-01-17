@@ -4,6 +4,7 @@ use clap::Parser;
 use ipmi_rs::{
     app::{ChannelInfo, GetChannelInfo},
     connection::{Channel, CompletionErrorCode},
+    transport::{GetLanConfigParameters, LanConfigParameter, LanConfigParameterData},
     IpmiError,
 };
 
@@ -24,6 +25,76 @@ fn print_channel_info(info: &ChannelInfo) {
         "  Aux: 0x{:02X} 0x{:02X}",
         info.aux_info.byte1, info.aux_info.byte2
     );
+}
+
+fn print_lan_config(ipmi: &mut common::IpmiConnectionEnum, channel: Channel) {
+    println!("  LAN config:");
+
+    let params = [
+        ("IP Address", LanConfigParameter::IpAddress),
+        ("IP Source", LanConfigParameter::IpAddressSource),
+        ("MAC Address", LanConfigParameter::MacAddress),
+        ("Subnet Mask", LanConfigParameter::SubnetMask),
+        ("Default Gateway", LanConfigParameter::DefaultGatewayAddress),
+        (
+            "Default Gateway MAC",
+            LanConfigParameter::DefaultGatewayMacAddress,
+        ),
+        ("Backup Gateway", LanConfigParameter::BackupGatewayAddress),
+        (
+            "Backup Gateway MAC",
+            LanConfigParameter::BackupGatewayMacAddress,
+        ),
+    ];
+
+    for (label, param) in params {
+        let response = ipmi.send_recv(GetLanConfigParameters::new(channel, param));
+        let response = match response {
+            Ok(response) => response,
+            Err(IpmiError::Failed {
+                completion_code: CompletionErrorCode::CommandSpecific(0x80),
+                ..
+            })
+            | Err(IpmiError::Command {
+                completion_code: Some(CompletionErrorCode::CommandSpecific(0x80)),
+                ..
+            }) => {
+                println!("    {label}: not supported");
+                continue;
+            }
+            Err(err) => {
+                println!("    {label}: error ({err:?})");
+                continue;
+            }
+        };
+
+        let parsed = response.parse(param);
+        match parsed {
+            Ok(LanConfigParameterData::IpAddress(value)) => println!("    {label}: {value}"),
+            Ok(LanConfigParameterData::IpAddressSource(value)) => {
+                println!("    {label}: {value}")
+            }
+            Ok(LanConfigParameterData::MacAddress(value)) => println!("    {label}: {value}"),
+            Ok(LanConfigParameterData::SubnetMask(value)) => println!("    {label}: {value}"),
+            Ok(LanConfigParameterData::DefaultGatewayAddress(value)) => {
+                println!("    {label}: {value}")
+            }
+            Ok(LanConfigParameterData::DefaultGatewayMacAddress(value)) => {
+                println!("    {label}: {value}")
+            }
+            Ok(LanConfigParameterData::BackupGatewayAddress(value)) => {
+                println!("    {label}: {value}")
+            }
+            Ok(LanConfigParameterData::BackupGatewayMacAddress(value)) => {
+                println!("    {label}: {value}")
+            }
+            Ok(LanConfigParameterData::None) => println!("    {label}: <empty>"),
+            Ok(LanConfigParameterData::Raw(value)) => {
+                println!("    {label}: {value:02X?}")
+            }
+            Err(_) => println!("    {label}: invalid data"),
+        }
+    }
 }
 
 fn main() -> std::io::Result<()> {
@@ -68,6 +139,12 @@ fn main() -> std::io::Result<()> {
         };
 
         print_channel_info(&info);
+        if matches!(
+            info.medium_type,
+            ipmi_rs::app::ChannelMediumType::Lan802_3 | ipmi_rs::app::ChannelMediumType::OtherLan
+        ) {
+            print_lan_config(&mut ipmi, channel);
+        }
         println!();
     }
 
