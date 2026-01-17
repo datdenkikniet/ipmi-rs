@@ -100,6 +100,10 @@ pub enum LanConfigParameter {
     Ipv6Ipv4AddressingEnables,
     Ipv6HeaderStaticTrafficClass,
     Ipv6HeaderStaticHopLimit,
+    Ipv6HeaderFlowLabel,
+    Ipv6Status,
+    Ipv6StaticAddresses,
+    Ipv6DynamicAddress,
     Other(u8),
 }
 
@@ -122,6 +126,10 @@ impl LanConfigParameter {
             LanConfigParameter::Ipv6Ipv4AddressingEnables => 51,
             LanConfigParameter::Ipv6HeaderStaticTrafficClass => 52,
             LanConfigParameter::Ipv6HeaderStaticHopLimit => 53,
+            LanConfigParameter::Ipv6HeaderFlowLabel => 54,
+            LanConfigParameter::Ipv6Status => 55,
+            LanConfigParameter::Ipv6StaticAddresses => 56,
+            LanConfigParameter::Ipv6DynamicAddress => 59,
             LanConfigParameter::Other(value) => *value,
         }
     }
@@ -169,6 +177,18 @@ impl LanConfigParameter {
             LanConfigParameter::Ipv6HeaderStaticHopLimit => {
                 Ok(LanConfigParameterData::Ipv6HeaderStaticHopLimit(data[0]))
             }
+            LanConfigParameter::Ipv6HeaderFlowLabel => Ok(
+                LanConfigParameterData::Ipv6HeaderFlowLabel(Ipv6HeaderFlowLabel::from_slice(data)?),
+            ),
+            LanConfigParameter::Ipv6Status => Ok(LanConfigParameterData::Ipv6Status(
+                Ipv6Status::from_slice(data)?,
+            )),
+            LanConfigParameter::Ipv6StaticAddresses => Ok(
+                LanConfigParameterData::Ipv6StaticAddresses(Ipv6StaticAddress::from_slice(data)?),
+            ),
+            LanConfigParameter::Ipv6DynamicAddress => Ok(
+                LanConfigParameterData::Ipv6DynamicAddress(Ipv6DynamicAddress::from_slice(data)?),
+            ),
             _ => Ok(LanConfigParameterData::Raw(data.to_vec())),
         }
     }
@@ -207,6 +227,10 @@ pub enum LanConfigParameterData {
     Ipv6Ipv4AddressingEnables(Ipv6Ipv4Enables),
     Ipv6HeaderStaticTrafficClass(u8),
     Ipv6HeaderStaticHopLimit(u8),
+    Ipv6HeaderFlowLabel(Ipv6HeaderFlowLabel),
+    Ipv6Status(Ipv6Status),
+    Ipv6StaticAddresses(Ipv6StaticAddress),
+    Ipv6DynamicAddress(Ipv6DynamicAddress),
     Raw(Vec<u8>),
 }
 
@@ -251,6 +275,28 @@ impl core::fmt::Display for MacAddress {
             "{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}",
             self.0[0], self.0[1], self.0[2], self.0[3], self.0[4], self.0[5]
         )
+    }
+}
+
+/// IPv6 address representation.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Ipv6Address(pub [u8; 16]);
+
+impl Ipv6Address {
+    fn from_slice(data: &[u8]) -> Result<Self, NotEnoughData> {
+        if data.len() < 16 {
+            return Err(NotEnoughData);
+        }
+        let mut buf = [0u8; 16];
+        buf.copy_from_slice(&data[..16]);
+        Ok(Ipv6Address(buf))
+    }
+}
+
+impl core::fmt::Display for Ipv6Address {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let addr = std::net::Ipv6Addr::from(self.0);
+        write!(f, "{addr}")
     }
 }
 
@@ -367,5 +413,111 @@ impl core::fmt::Display for Ipv6Ipv4Enables {
             Ipv6Ipv4Enables::Ipv6Ipv4Simultaneous => write!(f, "IPv6/IPv4 simultaneous"),
             Ipv6Ipv4Enables::Reserved(v) => write!(f, "Reserved (0x{v:02X})"),
         }
+    }
+}
+
+/// IPv6 header flow label (20-bit).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Ipv6HeaderFlowLabel(pub u32);
+
+impl Ipv6HeaderFlowLabel {
+    fn from_slice(data: &[u8]) -> Result<Self, NotEnoughData> {
+        if data.len() < 3 {
+            return Err(NotEnoughData);
+        }
+        let raw = ((data[0] as u32) << 16) | ((data[1] as u32) << 8) | (data[2] as u32);
+        Ok(Ipv6HeaderFlowLabel(raw & 0x000F_FFFF))
+    }
+}
+
+/// IPv6 status capabilities.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Ipv6Status {
+    pub static_address_max: u8,
+    pub dynamic_address_max: u8,
+    pub slaac_supported: bool,
+    pub dhcpv6_supported: bool,
+}
+
+impl Ipv6Status {
+    fn from_slice(data: &[u8]) -> Result<Self, NotEnoughData> {
+        if data.len() < 3 {
+            return Err(NotEnoughData);
+        }
+        Ok(Ipv6Status {
+            static_address_max: data[0],
+            dynamic_address_max: data[1],
+            slaac_supported: (data[2] & 0x02) == 0x02,
+            dhcpv6_supported: (data[2] & 0x01) == 0x01,
+        })
+    }
+}
+
+/// IPv6 static address entry.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Ipv6StaticAddress {
+    pub set_selector: u8,
+    pub enabled: bool,
+    pub source_type: u8,
+    pub address: Ipv6Address,
+    pub prefix_length: u8,
+    pub status: u8,
+}
+
+impl Ipv6StaticAddress {
+    fn from_slice(data: &[u8]) -> Result<Self, NotEnoughData> {
+        if data.len() < 20 {
+            return Err(NotEnoughData);
+        }
+
+        let set_selector = data[0];
+        let source_raw = data[1];
+        let enabled = (source_raw & 0x80) == 0x80;
+        let source_type = source_raw & 0x0F;
+
+        let address = Ipv6Address::from_slice(&data[2..18])?;
+        let prefix_length = data[18];
+        let status = data[19];
+
+        Ok(Ipv6StaticAddress {
+            set_selector,
+            enabled,
+            source_type,
+            address,
+            prefix_length,
+            status,
+        })
+    }
+}
+
+/// IPv6 dynamic address entry (SLAAC/DHCPv6).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Ipv6DynamicAddress {
+    pub set_selector: u8,
+    pub source_type: u8,
+    pub address: Ipv6Address,
+    pub prefix_length: u8,
+    pub status: u8,
+}
+
+impl Ipv6DynamicAddress {
+    fn from_slice(data: &[u8]) -> Result<Self, NotEnoughData> {
+        if data.len() < 20 {
+            return Err(NotEnoughData);
+        }
+
+        let set_selector = data[0];
+        let source_type = data[1] & 0x0F;
+        let address = Ipv6Address::from_slice(&data[2..18])?;
+        let prefix_length = data[18];
+        let status = data[19];
+
+        Ok(Ipv6DynamicAddress {
+            set_selector,
+            source_type,
+            address,
+            prefix_length,
+            status,
+        })
     }
 }
