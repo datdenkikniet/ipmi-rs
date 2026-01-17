@@ -1146,11 +1146,21 @@ fn retry_get_param_with_set_selector(
         match response {
             Ok(response) => return Ok(Some(response)),
             Err(IpmiError::Failed {
-                completion_code: CompletionErrorCode::CommandSpecific(0x80),
+                completion_code:
+                    CompletionErrorCode::CommandSpecific(0x80)
+                    | CompletionErrorCode::ParameterOutOfRange
+                    | CompletionErrorCode::InvalidDataFieldInRequest
+                    | CompletionErrorCode::RequestedDatapointNotPresent,
                 ..
             })
             | Err(IpmiError::Command {
-                completion_code: Some(CompletionErrorCode::CommandSpecific(0x80)),
+                completion_code:
+                    Some(
+                        CompletionErrorCode::CommandSpecific(0x80)
+                        | CompletionErrorCode::ParameterOutOfRange
+                        | CompletionErrorCode::InvalidDataFieldInRequest
+                        | CompletionErrorCode::RequestedDatapointNotPresent,
+                    ),
                 ..
             }) => return Ok(None),
             Err(IpmiError::Connection(err)) => {
