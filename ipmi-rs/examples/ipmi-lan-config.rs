@@ -22,6 +22,9 @@ pub struct Command {
     /// Attempt to write all fields, including ones that are often read-only
     #[clap(long)]
     force_write_all: bool,
+    /// Print JSON schema for the --set input and exit
+    #[clap(long)]
+    print_schema: bool,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -83,6 +86,12 @@ fn main() -> std::io::Result<()> {
         .init();
 
     let command = Command::parse();
+
+    if command.print_schema {
+        println!("{}", render_schema());
+        return Ok(());
+    }
+
     let mut ipmi = command.common.get_connection()?;
 
     if let Some(path) = command.set.as_deref() {
@@ -158,6 +167,51 @@ fn main() -> std::io::Result<()> {
     println!("{}", render_json(&channels));
 
     Ok(())
+}
+
+fn render_schema() -> &'static str {
+    r#"{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ipmi-lan-config input",
+  "type": "object",
+  "required": ["channels"],
+  "properties": {
+    "channels": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["channel_number", "lan_config"],
+        "properties": {
+          "channel_number": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 15,
+            "description": "IPMI channel number (0x0..0xF)"
+          },
+          "lan_config": {
+            "type": "object",
+            "properties": {
+              "ip_address": { "type": "string", "description": "IPv4 address, e.g. 192.168.1.10" },
+              "subnet_mask": { "type": "string", "description": "IPv4 subnet mask" },
+              "gateway": { "type": "string", "description": "Default gateway IPv4 address" },
+              "mac_address": { "type": "string", "description": "MAC address (often read-only)" },
+              "ip_source": {
+                "type": "string",
+                "description": "Unspecified | Static | DHCP | BIOS/System software | Other | 0xNN"
+              },
+              "default_gateway_mac": { "type": "string", "description": "Default gateway MAC (often read-only)" },
+              "backup_gateway": { "type": "string", "description": "Backup gateway IPv4 address" },
+              "backup_gateway_mac": { "type": "string", "description": "Backup gateway MAC (often read-only)" }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}"#
 }
 
 fn apply_config_file(
