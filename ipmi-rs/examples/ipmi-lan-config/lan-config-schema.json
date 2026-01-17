@@ -1,0 +1,75 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ipmi-lan-config input",
+  "type": "object",
+  "required": ["channels"],
+  "properties": {
+    "channels": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["channel_number", "lan_config"],
+        "properties": {
+          "channel_number": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 15,
+            "description": "IPMI channel number (0x0..0xF)"
+          },
+          "lan_config": {
+            "type": "object",
+            "properties": {
+              "ip_address": { "type": "string", "description": "IPv4 address, e.g. 192.168.1.10" },
+              "subnet_mask": { "type": "string", "description": "IPv4 subnet mask" },
+              "gateway": { "type": "string", "description": "Default gateway IPv4 address" },
+              "mac_address": { "type": "string", "description": "MAC address (often read-only)" },
+              "ip_source": {
+                "type": "string",
+                "description": "Unspecified | Static | DHCP | BIOS/System software | Other | 0xNN"
+              },
+              "ipv6_ipv4_addressing_enables": {
+                "type": "string",
+                "description": "disabled | ipv6 only | dual stack | 0xNN"
+              },
+              "ipv6_header_static_traffic_class": {
+                "type": "string",
+                "description": "Traffic class byte (decimal or 0xNN)"
+              },
+              "ipv6_header_static_hop_limit": {
+                "type": "string",
+                "description": "Hop limit byte (decimal or 0xNN)"
+              },
+              "ipv6_header_flow_label": {
+                "type": "string",
+                "description": "Flow label (decimal or 0xNNNNN)"
+              },
+              "ipv6_static_addresses": {
+                "type": "array",
+                "description": "Static IPv6 address entries",
+                "items": {
+                  "type": "object",
+                  "required": ["set_selector", "address", "prefix_length"],
+                  "properties": {
+                    "set_selector": { "type": "integer", "minimum": 0, "maximum": 255 },
+                    "enabled": { "type": "boolean" },
+                    "source_type": { "type": "integer", "minimum": 0, "maximum": 15 },
+                    "address": { "type": "string" },
+                    "prefix_length": { "type": "integer", "minimum": 0, "maximum": 128 },
+                    "status": { "type": "integer", "minimum": 0, "maximum": 255 }
+                  },
+                  "additionalProperties": false
+                }
+              },
+              "default_gateway_mac": { "type": "string", "description": "Default gateway MAC (often read-only)" },
+              "backup_gateway": { "type": "string", "description": "Backup gateway IPv4 address" },
+              "backup_gateway_mac": { "type": "string", "description": "Backup gateway MAC (often read-only)" }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

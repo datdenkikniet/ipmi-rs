@@ -1,0 +1,21 @@
+{
+  "channels": [
+    {
+      "channel_number": 2,
+      "lan_config": {
+        "ipv6_ipv4_addressing_enables": "ipv6 only",
+        "ipv6_header_static_hop_limit": "64",
+        "ipv6_static_addresses": [
+          {
+            "set_selector": 0,
+            "enabled": true,
+            "source_type": 0,
+            "address": "fe80::1234:5678:9abc:def0",
+            "prefix_length": 64,
+            "status": 0
+          }
+        ]
+      }
+    }
+  ]
+}
