@@ -100,6 +100,7 @@ struct Ipv6AddressEntry {
     address: String,
     prefix_length: u8,
     status: u8,
+    status_label: String,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -1089,6 +1090,7 @@ fn format_ipv6_entry(entry: Ipv6StaticAddress) -> Ipv6AddressEntry {
         address: entry.address.to_string(),
         prefix_length: entry.prefix_length,
         status: entry.status,
+        status_label: ipv6_status_label(entry.status).to_string(),
     }
 }
 
@@ -1100,6 +1102,19 @@ fn format_ipv6_dynamic_entry(entry: Ipv6DynamicAddress) -> Ipv6AddressEntry {
         address: entry.address.to_string(),
         prefix_length: entry.prefix_length,
         status: entry.status,
+        status_label: ipv6_status_label(entry.status).to_string(),
+    }
+}
+
+fn ipv6_status_label(status: u8) -> &'static str {
+    match status {
+        0x00 => "Active",
+        0x01 => "Disabled",
+        0x02 => "Pending",
+        0x03 => "Failed",
+        0x04 => "Deprecated",
+        0x05 => "Invalid",
+        _ => "Reserved",
     }
 }
 
@@ -1290,12 +1305,13 @@ fn render_ipv6_entries_pretty(entries: &[Ipv6AddressEntry]) -> String {
         }
         out.push_str("          { ");
         out.push_str(&format!(
-            "\"set_selector\": {}, \"source_type\": {}, \"address\": \"{}\", \"prefix_length\": {}, \"status\": {}",
+            "\"set_selector\": {}, \"source_type\": {}, \"address\": \"{}\", \"prefix_length\": {}, \"status\": {}, \"status_label\": \"{}\"",
             entry.set_selector,
             entry.source_type,
             escape_json(&entry.address),
             entry.prefix_length,
-            entry.status
+            entry.status,
+            escape_json(&entry.status_label)
         ));
         if let Some(enabled) = entry.enabled {
             out.push_str(&format!(", \"enabled\": {}", enabled));
