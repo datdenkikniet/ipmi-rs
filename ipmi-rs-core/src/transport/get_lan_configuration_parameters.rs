@@ -256,6 +256,19 @@ impl From<u8> for IpAddressSource {
     }
 }
 
+impl From<IpAddressSource> for u8 {
+    fn from(value: IpAddressSource) -> Self {
+        match value {
+            IpAddressSource::Unspecified => 0x00,
+            IpAddressSource::Static => 0x01,
+            IpAddressSource::Dhcp => 0x02,
+            IpAddressSource::BiosOrSystemSoftware => 0x03,
+            IpAddressSource::Other => 0x04,
+            IpAddressSource::Reserved(v) => v & 0x0F,
+        }
+    }
+}
+
 impl core::fmt::Display for IpAddressSource {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
