@@ -5,12 +5,13 @@ use ipmi_rs::{
     app::{ChannelMediumType, GetChannelInfo},
     connection::{Channel, CompletionErrorCode},
     transport::{
-        GetLanConfigParameters, IpAddressSource, LanConfigParameter, LanConfigParameterData,
-        LanConfigParameterRequest, SetLanConfigParameters,
+        GetLanConfigParameters, IpAddressSource, Ipv6Address, Ipv6DynamicAddress,
+        Ipv6StaticAddress, LanConfigParameter, LanConfigParameterData, LanConfigParameterRequest,
+        SetLanConfigParameters,
     },
     IpmiError,
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 #[derive(Parser)]
 pub struct Command {
@@ -25,9 +26,15 @@ pub struct Command {
     /// Print JSON schema for the --set input and exit
     #[clap(long)]
     print_schema: bool,
+    /// Print an example IPv6 static address configuration JSON and exit
+    #[clap(long)]
+    print_v6_example: bool,
+    /// Pretty-print JSON output
+    #[clap(long)]
+    pretty: bool,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize)]
 struct LanConfig {
     ip_address: Option<String>,
     subnet_mask: Option<String>,
@@ -41,6 +48,10 @@ struct LanConfig {
     ipv6_ipv4_addressing_enables: Option<String>,
     ipv6_header_static_traffic_class: Option<String>,
     ipv6_header_static_hop_limit: Option<String>,
+    ipv6_header_flow_label: Option<String>,
+    ipv6_status: Option<String>,
+    ipv6_static_addresses: Option<Vec<Ipv6AddressEntry>>,
+    ipv6_dynamic_addresses: Option<Vec<Ipv6AddressEntry>>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -56,6 +67,8 @@ struct LanConfigInput {
     ipv6_ipv4_addressing_enables: Option<String>,
     ipv6_header_static_traffic_class: Option<String>,
     ipv6_header_static_hop_limit: Option<String>,
+    ipv6_header_flow_label: Option<String>,
+    ipv6_static_addresses: Option<Vec<Ipv6AddressEntryInput>>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -69,10 +82,35 @@ struct ChannelInput {
     lan_config: LanConfigInput,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize)]
+struct Ipv6AddressEntryInput {
+    set_selector: u8,
+    enabled: Option<bool>,
+    source_type: Option<u8>,
+    address: String,
+    prefix_length: u8,
+    status: Option<u8>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+struct Ipv6AddressEntry {
+    set_selector: u8,
+    enabled: Option<bool>,
+    source_type: u8,
+    address: String,
+    prefix_length: u8,
+    status: u8,
+}
+
+#[derive(Clone, Debug, Serialize)]
 struct ChannelConfig {
     channel_number: u8,
     lan_config: LanConfig,
+}
+
+#[derive(Clone, Debug, Serialize)]
+struct OutputConfig {
+    channels: Vec<ChannelConfig>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -96,6 +134,10 @@ fn main() -> std::io::Result<()> {
 
     if command.print_schema {
         println!("{}", render_schema());
+        return Ok(());
+    }
+    if command.print_v6_example {
+        println!("{}", render_ipv6_example());
         return Ok(());
     }
 
@@ -171,7 +213,14 @@ fn main() -> std::io::Result<()> {
         }
     }
 
-    println!("{}", render_json(&channels));
+    if command.pretty {
+        let output = OutputConfig { channels };
+        let json = serde_json::to_string_pretty(&output)
+            .map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))?;
+        println!("{json}");
+    } else {
+        println!("{}", render_json(&channels));
+    }
 
     Ok(())
 }
@@ -218,6 +267,27 @@ fn render_schema() -> &'static str {
                 "type": "string",
                 "description": "Hop limit byte (decimal or 0xNN)"
               },
+              "ipv6_header_flow_label": {
+                "type": "string",
+                "description": "Flow label (decimal or 0xNNNNN)"
+              },
+              "ipv6_static_addresses": {
+                "type": "array",
+                "description": "Static IPv6 address entries",
+                "items": {
+                  "type": "object",
+                  "required": ["set_selector", "address", "prefix_length"],
+                  "properties": {
+                    "set_selector": { "type": "integer", "minimum": 0, "maximum": 255 },
+                    "enabled": { "type": "boolean" },
+                    "source_type": { "type": "integer", "minimum": 0, "maximum": 15 },
+                    "address": { "type": "string" },
+                    "prefix_length": { "type": "integer", "minimum": 0, "maximum": 128 },
+                    "status": { "type": "integer", "minimum": 0, "maximum": 255 }
+                  },
+                  "additionalProperties": false
+                }
+              },
               "default_gateway_mac": { "type": "string", "description": "Default gateway MAC (often read-only)" },
               "backup_gateway": { "type": "string", "description": "Backup gateway IPv4 address" },
               "backup_gateway_mac": { "type": "string", "description": "Backup gateway MAC (often read-only)" }
@@ -230,6 +300,30 @@ fn render_schema() -> &'static str {
     }
   },
   "additionalProperties": false
+}"#
+}
+
+fn render_ipv6_example() -> &'static str {
+    r#"{
+  "channels": [
+    {
+      "channel_number": 2,
+      "lan_config": {
+        "ipv6_ipv4_addressing_enables": "ipv6 only",
+        "ipv6_header_static_hop_limit": "64",
+        "ipv6_static_addresses": [
+          {
+            "set_selector": 0,
+            "enabled": true,
+            "source_type": 0,
+            "address": "fe80::1234:5678:9abc:def0",
+            "prefix_length": 64,
+            "status": 0
+          }
+        ]
+      }
+    }
+  ]
 }"#
 }
 
@@ -379,6 +473,44 @@ fn apply_lan_config(
             );
         } else {
             log::warn!("Invalid IPv6 hop limit: {value}");
+        }
+    }
+
+    if let Some(value) = config.ipv6_header_flow_label.as_deref() {
+        if let Some(bytes) = parse_u24(value) {
+            let _ = set_param(
+                ipmi,
+                channel,
+                LanConfigParameter::Ipv6HeaderFlowLabel,
+                LanConfigParameterRequest::Raw(bytes),
+            );
+        } else {
+            log::warn!("Invalid IPv6 flow label: {value}");
+        }
+    }
+
+    if let Some(addresses) = config.ipv6_static_addresses.as_ref() {
+        for entry in addresses {
+            if let Some(address) = parse_ipv6(&entry.address) {
+                let enabled = entry.enabled.unwrap_or(true);
+                let source_type = entry.source_type.unwrap_or(0);
+                let status = entry.status.unwrap_or(0);
+                let _ = set_param(
+                    ipmi,
+                    channel,
+                    LanConfigParameter::Ipv6StaticAddresses,
+                    LanConfigParameterRequest::Ipv6StaticAddress {
+                        set_selector: entry.set_selector,
+                        enabled,
+                        source_type,
+                        address,
+                        prefix_length: entry.prefix_length,
+                        status,
+                    },
+                );
+            } else {
+                log::warn!("Invalid IPv6 address: {}", entry.address);
+            }
         }
     }
 
@@ -587,6 +719,28 @@ fn parse_u8(value: &str) -> Option<u8> {
     }
 }
 
+fn parse_u24(value: &str) -> Option<Vec<u8>> {
+    let raw = if let Some(hex) = value.strip_prefix("0x") {
+        u32::from_str_radix(hex, 16).ok()?
+    } else {
+        value.parse::<u32>().ok()?
+    };
+    if raw > 0x000F_FFFF {
+        return None;
+    }
+    let bytes = [
+        ((raw >> 16) & 0xFF) as u8,
+        ((raw >> 8) & 0xFF) as u8,
+        (raw & 0xFF) as u8,
+    ];
+    Some(bytes.to_vec())
+}
+
+fn parse_ipv6(value: &str) -> Option<Ipv6Address> {
+    let addr = value.parse::<std::net::Ipv6Addr>().ok()?;
+    Some(Ipv6Address(addr.octets()))
+}
+
 fn fetch_lan_config(ipmi: &mut common::IpmiConnectionEnum, channel: Channel) -> FetchResult {
     let mut config = LanConfig::default();
 
@@ -718,6 +872,40 @@ fn fetch_lan_config(ipmi: &mut common::IpmiConnectionEnum, channel: Channel) -> 
             aborted: Some(err),
         };
     }
+    if let Err(err) = fill_param(
+        &mut config.ipv6_header_flow_label,
+        ipmi,
+        channel,
+        LanConfigParameter::Ipv6HeaderFlowLabel,
+    ) {
+        return FetchResult {
+            config,
+            aborted: Some(err),
+        };
+    }
+    if let Err(err) = fill_param(
+        &mut config.ipv6_status,
+        ipmi,
+        channel,
+        LanConfigParameter::Ipv6Status,
+    ) {
+        return FetchResult {
+            config,
+            aborted: Some(err),
+        };
+    }
+    if let Err(err) = fill_ipv6_static_addresses(&mut config, ipmi, channel) {
+        return FetchResult {
+            config,
+            aborted: Some(err),
+        };
+    }
+    if let Err(err) = fill_ipv6_dynamic_addresses(&mut config, ipmi, channel) {
+        return FetchResult {
+            config,
+            aborted: Some(err),
+        };
+    }
 
     FetchResult {
         config,
@@ -784,6 +972,16 @@ fn get_param_string(
         Ok(LanConfigParameterData::Ipv6HeaderStaticHopLimit(value)) => {
             Ok(Some(format!("0x{value:02X}")))
         }
+        Ok(LanConfigParameterData::Ipv6HeaderFlowLabel(value)) => {
+            Ok(Some(format!("0x{:05X}", value.0)))
+        }
+        Ok(LanConfigParameterData::Ipv6Status(value)) => Ok(Some(format!(
+            "static_max={}, dynamic_max={}, slaac={}, dhcpv6={}",
+            value.static_address_max,
+            value.dynamic_address_max,
+            value.slaac_supported,
+            value.dhcpv6_supported
+        ))),
         _ => Ok(None),
     }
 }
@@ -803,16 +1001,133 @@ fn get_param_ip_source(
     }
 }
 
+fn fill_ipv6_static_addresses(
+    config: &mut LanConfig,
+    ipmi: &mut common::IpmiConnectionEnum,
+    channel: Channel,
+) -> Result<(), FetchError> {
+    let max_entries = 16;
+    let mut entries = Vec::new();
+    for set_selector in 0u8..max_entries {
+        let response = match retry_get_param_with_set_selector(
+            ipmi,
+            channel,
+            LanConfigParameter::Ipv6StaticAddresses,
+            set_selector,
+        )? {
+            Some(response) => response,
+            None => break,
+        };
+
+        let entry = match response.parse(LanConfigParameter::Ipv6StaticAddresses) {
+            Ok(LanConfigParameterData::Ipv6StaticAddresses(value)) => value,
+            _ => break,
+        };
+
+        if entry.set_selector != set_selector {
+            break;
+        }
+
+        let formatted = format_ipv6_entry(entry);
+        if !is_empty_ipv6_entry(&formatted) {
+            entries.push(formatted);
+        }
+    }
+
+    if !entries.is_empty() {
+        config.ipv6_static_addresses = Some(entries);
+    }
+
+    Ok(())
+}
+
+fn fill_ipv6_dynamic_addresses(
+    config: &mut LanConfig,
+    ipmi: &mut common::IpmiConnectionEnum,
+    channel: Channel,
+) -> Result<(), FetchError> {
+    let max_entries = 16;
+    let mut entries = Vec::new();
+    for set_selector in 0u8..max_entries {
+        let response = match retry_get_param_with_set_selector(
+            ipmi,
+            channel,
+            LanConfigParameter::Ipv6DynamicAddress,
+            set_selector,
+        )? {
+            Some(response) => response,
+            None => break,
+        };
+
+        let entry = match response.parse(LanConfigParameter::Ipv6DynamicAddress) {
+            Ok(LanConfigParameterData::Ipv6DynamicAddress(value)) => value,
+            _ => break,
+        };
+
+        if entry.set_selector != set_selector {
+            break;
+        }
+
+        let formatted = format_ipv6_dynamic_entry(entry);
+        if !is_empty_ipv6_entry(&formatted) {
+            entries.push(formatted);
+        }
+    }
+
+    if !entries.is_empty() {
+        config.ipv6_dynamic_addresses = Some(entries);
+    }
+
+    Ok(())
+}
+
+fn format_ipv6_entry(entry: Ipv6StaticAddress) -> Ipv6AddressEntry {
+    Ipv6AddressEntry {
+        set_selector: entry.set_selector,
+        enabled: Some(entry.enabled),
+        source_type: entry.source_type,
+        address: entry.address.to_string(),
+        prefix_length: entry.prefix_length,
+        status: entry.status,
+    }
+}
+
+fn format_ipv6_dynamic_entry(entry: Ipv6DynamicAddress) -> Ipv6AddressEntry {
+    Ipv6AddressEntry {
+        set_selector: entry.set_selector,
+        enabled: None,
+        source_type: entry.source_type,
+        address: entry.address.to_string(),
+        prefix_length: entry.prefix_length,
+        status: entry.status,
+    }
+}
+
+fn is_empty_ipv6_entry(entry: &Ipv6AddressEntry) -> bool {
+    let enabled = entry.enabled.unwrap_or(false);
+    entry.address == "::" && entry.prefix_length == 0 && entry.status == 0 && !enabled
+}
+
 fn retry_get_param(
     ipmi: &mut common::IpmiConnectionEnum,
     channel: Channel,
     param: LanConfigParameter,
 ) -> Result<Option<ipmi_rs::transport::LanConfigParameterResponse>, FetchError> {
+    retry_get_param_with_set_selector(ipmi, channel, param, 0)
+}
+
+fn retry_get_param_with_set_selector(
+    ipmi: &mut common::IpmiConnectionEnum,
+    channel: Channel,
+    param: LanConfigParameter,
+    set_selector: u8,
+) -> Result<Option<ipmi_rs::transport::LanConfigParameterResponse>, FetchError> {
     let retry_delay = std::time::Duration::from_millis(200);
     let max_attempts = 3;
 
     for attempt in 0..max_attempts {
-        let response = ipmi.send_recv(GetLanConfigParameters::new(channel, param));
+        let response = ipmi
+            .send_recv(GetLanConfigParameters::new(channel, param).with_set_selector(set_selector));
         match response {
             Ok(response) => return Ok(Some(response)),
             Err(IpmiError::Failed {
@@ -910,6 +1225,11 @@ fn render_json(channels: &[ChannelConfig]) -> String {
                 "ipv6_header_static_hop_limit",
                 &channel.lan_config.ipv6_header_static_hop_limit,
             ),
+            (
+                "ipv6_header_flow_label",
+                &channel.lan_config.ipv6_header_flow_label,
+            ),
+            ("ipv6_status", &channel.lan_config.ipv6_status),
         ];
 
         for (field_index, (name, value)) in fields.iter().enumerate() {
@@ -921,6 +1241,16 @@ fn render_json(channels: &[ChannelConfig]) -> String {
                 name,
                 json_value(value.as_deref())
             ));
+        }
+
+        if let Some(entries) = channel.lan_config.ipv6_static_addresses.as_ref() {
+            out.push_str(",\n        \"ipv6_static_addresses\": ");
+            out.push_str(&render_ipv6_entries_pretty(entries));
+        }
+
+        if let Some(entries) = channel.lan_config.ipv6_dynamic_addresses.as_ref() {
+            out.push_str(",\n        \"ipv6_dynamic_addresses\": ");
+            out.push_str(&render_ipv6_entries_pretty(entries));
         }
 
         out.push_str("\n      }\n    }");
@@ -950,4 +1280,28 @@ fn escape_json(value: &str) -> String {
         })
         .collect::<Vec<_>>()
         .join("")
+}
+
+fn render_ipv6_entries_pretty(entries: &[Ipv6AddressEntry]) -> String {
+    let mut out = String::from("[\n");
+    for (index, entry) in entries.iter().enumerate() {
+        if index > 0 {
+            out.push_str(",\n");
+        }
+        out.push_str("          { ");
+        out.push_str(&format!(
+            "\"set_selector\": {}, \"source_type\": {}, \"address\": \"{}\", \"prefix_length\": {}, \"status\": {}",
+            entry.set_selector,
+            entry.source_type,
+            escape_json(&entry.address),
+            entry.prefix_length,
+            entry.status
+        ));
+        if let Some(enabled) = entry.enabled {
+            out.push_str(&format!(", \"enabled\": {}", enabled));
+        }
+        out.push_str(" }");
+    }
+    out.push_str("\n        ]");
+    out
 }
