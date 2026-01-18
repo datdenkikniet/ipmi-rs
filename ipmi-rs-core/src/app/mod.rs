@@ -9,4 +9,9 @@ pub use get_channel_info::{
     GetChannelInfo,
 };
 
+mod get_channel_access;
+pub use get_channel_access::{
+    ChannelAccess, ChannelAccessMode, ChannelAccessType, ChannelPrivilegeLevel, GetChannelAccess,
+};
+
 pub mod auth;
