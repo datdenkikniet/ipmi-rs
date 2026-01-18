@@ -11,5 +11,7 @@ pub mod storage;
 
 pub mod sensor_event;
 
+pub mod transport;
+
 #[cfg(test)]
 mod tests;
