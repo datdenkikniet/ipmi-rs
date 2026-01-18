@@ -2,7 +2,7 @@ mod common;
 
 use clap::Parser;
 use ipmi_rs::{
-    app::{ChannelInfo, GetChannelInfo},
+    app::{ChannelAccess, ChannelInfo, GetChannelAccess, GetChannelInfo},
     connection::{Channel, CompletionErrorCode},
     transport::{GetLanConfigParameters, LanConfigParameter, LanConfigParameterData},
     IpmiError,
@@ -25,6 +25,20 @@ fn print_channel_info(info: &ChannelInfo) {
         "  Aux: 0x{:02X} 0x{:02X}",
         info.aux_info.byte1, info.aux_info.byte2
     );
+}
+
+fn print_channel_access(access: &ChannelAccess) {
+    println!("  Access mode: {}", access.access_mode);
+    println!("  Privilege limit: {}", access.privilege_level_limit);
+    if access.alerting_disabled {
+        println!("  Alerting: disabled");
+    }
+    if access.per_msg_auth_disabled {
+        println!("  Per-message auth: disabled");
+    }
+    if access.user_level_auth_disabled {
+        println!("  User-level auth: disabled");
+    }
 }
 
 fn print_lan_config(ipmi: &mut common::IpmiConnectionEnum, channel: Channel) {
@@ -140,6 +154,25 @@ fn main() -> std::io::Result<()> {
         };
 
         print_channel_info(&info);
+
+        // Get channel access info (volatile/active settings)
+        match ipmi.send_recv(GetChannelAccess::volatile(channel)) {
+            Ok(access) => print_channel_access(&access),
+            Err(IpmiError::Failed {
+                completion_code: CompletionErrorCode::CommandSpecific(0x82),
+                ..
+            })
+            | Err(IpmiError::Command {
+                completion_code: Some(CompletionErrorCode::CommandSpecific(0x82)),
+                ..
+            }) => {
+                // Command not supported for this channel (e.g. session-less)
+            }
+            Err(err) => {
+                log::warn!("Get Channel Access failed for {}: {err:?}", info.channel);
+            }
+        }
+
         if matches!(
             info.medium_type,
             ipmi_rs::app::ChannelMediumType::Lan802_3 | ipmi_rs::app::ChannelMediumType::OtherLan
