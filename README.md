@@ -27,9 +27,15 @@ This example will:
 8. Load all of the SDRs from the repository
 9. Attempt to read the value of all of the sensors from the SDR repository
 
-## `sel`
+### `sel`
 
 This example will read out and print the SEL (System Event Log) of your target. It can also be cleared by passing the `--clear` flag.
+
+### `ipmi-channels`
+This example discovers available channels and prints channel information. For LAN channels, it also shows a small set of LAN configuration parameters (addressing and gateways).
+
+### `ipmi-lan-config`
+This example reads LAN configuration for all LAN channels and emits JSON. You can apply a JSON configuration with `--set`, print the input schema with `--print-schema`, or emit an IPv6 example payload with `--print-v6-example`.
 
 # Project structure
 
@@ -50,6 +56,10 @@ The following IPMI commands are currently supported in `ipmi-rs-core`:
 | Get Channel Cipher Suites               | 22.15                 |
 | Get Session Challenge                   | 22.16                 |
 | Activate Session                        | 22.17                 |
+| Get Channel Access                      | 22.23                 |
+| Get Channel Info                        | 22.24                 |
+| Set LAN Configuration Parameters        | 23.1                  |
+| Get LAN Configuration Parameters        | 23.2                  |
 | Get SEL Info                            | 31.2                  |
 | Get SEL Allocation Info                 | 31.3                  |
 | Reserve SEL                             | 31.4                  |
