@@ -62,11 +62,25 @@ netfn!(
 impl NetFn {
     /// Check whether `v` is a response value.
     pub fn is_response_value(v: u8) -> bool {
-        v % 2 == 0
+        v % 2 == 1
     }
 
     /// Check whether `v` is a request value.
     pub fn is_request_value(v: u8) -> bool {
         !Self::is_response_value(v)
+    }
+}
+
+#[test]
+fn even_is_request() {
+    for v in 0..u8::MAX / 2 {
+        assert!(NetFn::is_request_value(v * 2));
+    }
+}
+
+#[test]
+fn uneven_is_response() {
+    for v in 0..u8::MAX / 2 {
+        assert!(NetFn::is_response_value(v * 2 + 1));
     }
 }
