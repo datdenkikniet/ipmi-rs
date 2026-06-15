@@ -35,7 +35,7 @@ default = [ "unix-file", "md5" ]
 unix-file = [ "nix" ]
 
 [dev-dependencies]
-pretty_env_logger = "0.4"
+pretty_env_logger = "0.5"
 indicatif = "0.17"
 clap = { version = "4.3", features = [ "derive" ]}
 hex = "0.4.3"
