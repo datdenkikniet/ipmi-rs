@@ -45,8 +45,28 @@ serde_json = "1.0"
 
 [[example]]
 name = "get-info"
-required-features = [ "unix-file" ]
+required-features = ["unix-file"]
 
 [[example]]
 name = "sel"
-required-features = [ "unix-file" ]
+required-features = ["unix-file"]
+
+[[example]]
+name = "common"
+required-features = ["unix-file"]
+
+[[example]]
+name = "raw"
+required-features = ["unix-file"]
+
+[[example]]
+name = "sensors-of-type"
+required-features = ["unix-file"]
+
+[[example]]
+name = "ipmi-channels"
+required-features = ["unix-file"]
+
+[[example]]
+name = "ipmi-lan-config"
+required-features = ["unix-file"]

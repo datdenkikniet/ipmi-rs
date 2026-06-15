@@ -159,19 +159,24 @@ mod test {
         Err(ReadError::IncorrectPayloadLen)
     );
 
-    test!(
-        empty_md5,
-        [
+    #[cfg(feature = "md5")]
+    #[test]
+    pub fn empty_md5() {
+        let data = [
             2, 1, 0, 0, 0, 2, 0, 0, 0, 152, 54, 135, 85, 190, 228, 38, 149, 133, 51, 201, 23, 232,
             140, 18, 211, 0
-        ],
-        Ok(Message {
-            auth_type: AuthType::MD5,
-            session_sequence_number: 1,
-            session_id: 2,
-            payload: vec![]
-        })
-    );
+        ];
+        let encapsulated = Message::from_data(Some(b"password\0\0\0\0\0\0\0\0"), &data);
+        assert_eq!(
+            encapsulated,
+            Ok(Message {
+                auth_type: AuthType::MD5,
+                session_sequence_number: 1,
+                session_id: 2,
+                payload: vec![]
+            })
+        );
+    }
 
     test!(
         truncated_md5,
