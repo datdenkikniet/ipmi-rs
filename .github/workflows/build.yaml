@@ -22,50 +22,36 @@ jobs:
 
   check:
     runs-on: ubuntu-latest
-    name: Check that the project builds with feature combinations
+    name: Check
     strategy:
       matrix:
-        include:
-          - crate: ipmi-rs-core
-            features: ""
-          - crate: ipmi-rs-core
-            features: "time"
-          - crate: ipmi-rs-core
-            features: "log"
-          - crate: ipmi-rs-core
-            features: "time log"
-          - crate: ipmi-rs-log
-            features: ""
-          - crate: ipmi-rs-log
-            features: "log-to-file"
-          - crate: ipmi-rs
-            features: ""
-          - crate: ipmi-rs
-            features: "md5"
-          - crate: ipmi-rs
-            features: "unix-file"
+        command:
+          - "-p ipmi-rs-core --no-default-features"
+          - "-p ipmi-rs-core --no-default-features -F time"
+          - "-p ipmi-rs-core --no-default-features -F log"
+          - "-p ipmi-rs-core --all-features"
+          - "-p ipmi-rs-core --examples"
+          - "-p ipmi-rs-core --no-default-features --examples"
+
+          - "-p ipmi-rs-log --no-default-features"
+          - "-p ipmi-rs-log --no-default-features -F log-to-file"
+          - "-p ipmi-rs-log --all-features"
+          - "-p ipmi-rs-log --examples"
+          - "-p ipmi-rs-log --no-default-features --examples"
+
+          - "-p ipmi-rs --no-default-features"
+          - "-p ipmi-rs --no-default-features -F md5"
+          - "-p ipmi-rs --no-default-features -F unix-file"
+          - "-p ipmi-rs --all-features"
+          - "-p ipmi-rs --examples"
+          - "-p ipmi-rs --no-default-features --examples"
     steps:
       - uses: actions/checkout@v5
       - name: Check a package with specific feature combination.
-        run: cargo check --no-default-features --locked -p ${{ matrix.crate }} --features "${{ matrix.features }}"
-
-  check-examples:
-    runs-on: ubuntu-latest
-    name: Check that the examples compile
-    strategy:
-        matrix:
-          crate:
-            - ipmi-rs-core
-            - ipmi-rs-log
-            - ipmi-rs
-    steps:
-      - uses: actions/checkout@v5
-      - name: Check examples
-        run: cargo check --examples --locked -p ${{ matrix.crate }}
+        run: cargo check --locked ${{ matrix.command }}
 
   ci-success:
     runs-on: ubuntu-latest
-    needs: [check-format, check, check-examples]
-
+    needs: [check-format, check]
     steps:
       - run: true
