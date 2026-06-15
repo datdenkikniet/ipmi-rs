@@ -1,5 +1,5 @@
 use std::fmt::{Display, Formatter};
-use std::{ffi::c_int, io, os::fd::AsRawFd, time::Duration};
+use std::{ffi::c_int, io, os::fd::{AsFd, AsRawFd}, time::Duration};
 
 use ipmi_rs_core::connection::NetFn;
 use nix::errno::Errno;
@@ -331,10 +331,10 @@ impl IpmiConnection for File {
         // command we have sent.
         //
         // Ref: https://github.com/datdenkikniet/ipmi-rs/issues/39#issuecomment-3747421945
-        let mut polls = [PollFd::new(self.fd(), PollFlags::POLLIN)];
+        let mut polls = [PollFd::new(self.inner.as_fd(), PollFlags::POLLIN)];
         let poll = nix::poll::poll(
             polls.as_mut_slice(),
-            self.recv_timeout.as_millis().try_into().unwrap_or(i32::MAX),
+            self.recv_timeout.as_millis().try_into().unwrap_or(u16::MAX),
         )?;
 
         if poll != 1 {
