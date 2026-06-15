@@ -143,7 +143,7 @@ impl SubState {
             ConfidentialityAlgorithm::AesCbc128 => {
                 let mut iv = [0u8; 16];
                 if !cfg!(test) {
-                    getrandom::getrandom(&mut iv).unwrap();
+                    getrandom::fill(&mut iv).unwrap();
                 } else {
                     iv = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
                 }
