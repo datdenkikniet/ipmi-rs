@@ -10,5 +10,5 @@ pub fn calculate_md5(
     context.consume(data);
     context.consume(session_seq.to_le_bytes());
     context.consume(password);
-    *context.compute()
+    *context.finalize()
 }
