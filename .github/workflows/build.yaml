@@ -4,28 +4,25 @@ on:
   pull_request:
   push:
     branches: [main]
+
 jobs:
   check-format:
     runs-on: ubuntu-latest
     name: Check formatting of the project
-
     strategy:
       matrix:
         crate:
           - ipmi-rs-core
           - ipmi-rs-log
           - ipmi-rs
-
     steps:
-      - uses: actions/checkout@v4
-
+      - uses: actions/checkout@v5
       - name: Run cargo fmt
         run: cargo fmt --check -p ${{ matrix.crate }}
 
   check:
     runs-on: ubuntu-latest
     name: Check that the project builds with feature combinations
-
     strategy:
       matrix:
         include:
@@ -47,27 +44,22 @@ jobs:
             features: "md5"
           - crate: ipmi-rs
             features: "unix-file"
-
     steps:
-      - uses: actions/checkout@v4
-
+      - uses: actions/checkout@v5
       - name: Check a package with specific feature combination.
         run: cargo check --no-default-features --locked -p ${{ matrix.crate }} --features "${{ matrix.features }}"
 
   check-examples:
     runs-on: ubuntu-latest
     name: Check that the examples compile
-
     strategy:
         matrix:
           crate:
             - ipmi-rs-core
             - ipmi-rs-log
             - ipmi-rs
-
     steps:
-      - uses: actions/checkout@v4
-
+      - uses: actions/checkout@v5
       - name: Check examples
         run: cargo check --examples --locked -p ${{ matrix.crate }}
 
