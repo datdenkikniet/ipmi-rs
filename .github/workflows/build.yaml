@@ -1,5 +1,4 @@
-name: Check format, check, build
-run-name: Check format, check, build
+name: Format, check, test
 on:
   pull_request:
   push:
@@ -8,7 +7,7 @@ on:
 jobs:
   check-format:
     runs-on: ubuntu-latest
-    name: Check formatting of the project
+    name: Format
     strategy:
       matrix:
         crate:
@@ -50,8 +49,32 @@ jobs:
       - name: Check a package with specific feature combination.
         run: cargo check --locked ${{ matrix.command }}
 
+  test:
+    runs-on: ubuntu-latest
+    name: Test
+    strategy:
+      matrix:
+        command:
+          - "-p ipmi-rs-core --no-default-features"
+          - "-p ipmi-rs-core --no-default-features -F time"
+          - "-p ipmi-rs-core --no-default-features -F log"
+          - "-p ipmi-rs-core --all-features"
+
+          - "-p ipmi-rs-log --no-default-features"
+          - "-p ipmi-rs-log --no-default-features -F log-to-file"
+          - "-p ipmi-rs-log --all-features"
+
+          - "-p ipmi-rs --no-default-features"
+          - "-p ipmi-rs --no-default-features -F md5"
+          - "-p ipmi-rs --no-default-features -F unix-file"
+          - "-p ipmi-rs --all-features"
+    steps:
+      - uses: actions/checkout@v5
+      - name: Check a package with specific feature combination.
+        run: cargo test --locked ${{ matrix.command }}
+
   ci-success:
     runs-on: ubuntu-latest
-    needs: [check-format, check]
+    needs: [check-format, check, test]
     steps:
       - run: true
