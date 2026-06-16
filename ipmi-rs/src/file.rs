@@ -1,5 +1,10 @@
 use std::fmt::{Display, Formatter};
-use std::{ffi::c_int, io, os::fd::{AsFd, AsRawFd}, time::Duration};
+use std::{
+    ffi::c_int,
+    io,
+    os::fd::{AsFd, AsRawFd},
+    time::Duration,
+};
 
 use ipmi_rs_core::connection::NetFn;
 use nix::errno::Errno;
