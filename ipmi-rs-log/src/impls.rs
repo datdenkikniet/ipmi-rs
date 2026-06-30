@@ -28,7 +28,7 @@ impl Loggable for SelInfo {
             .iter()
             .map(|cmd| match cmd {
                 SelCommand::GetAllocInfo => "Get Alloc Info",
-                SelCommand::Clear => "Clear",
+                SelCommand::Delete => "Delete",
                 SelCommand::PartialAddEntry => "Partial Add",
                 SelCommand::Reserve => "Reserve",
             })

@@ -382,12 +382,6 @@ fn main() -> std::io::Result<()> {
     }
 
     if opts.clear {
-        // Clear SEL
-        if !info.supported_cmds.contains(&SelCommand::Clear) {
-            log::error!("SEL Clear command is not supported by this BMC");
-            return Ok(());
-        }
-
         if !info.supported_cmds.contains(&SelCommand::Reserve) {
             log::error!("SEL Reserve command is not supported by this BMC");
             return Ok(());

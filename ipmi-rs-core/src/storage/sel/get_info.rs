@@ -21,9 +21,14 @@ impl From<GetInfo> for Message {
     }
 }
 
+/// Optional SEL commands whose support is advertised by the Operation Support
+/// byte of the Get SEL Info response.
+///
+/// Reference: IPMI 2.0 Specification, Section 31.2, Table 31-2 "Get SEL Info
+/// Command".
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Command {
-    Clear,
+    Delete,
     PartialAddEntry,
     Reserve,
     GetAllocInfo,
@@ -60,7 +65,7 @@ impl Info {
         let mut supported_cmds = Vec::with_capacity(4);
 
         if data[13] & 0x08 == 0x08 {
-            supported_cmds.push(Command::Clear);
+            supported_cmds.push(Command::Delete);
         }
         if data[13] & 0x04 == 0x04 {
             supported_cmds.push(Command::PartialAddEntry);
