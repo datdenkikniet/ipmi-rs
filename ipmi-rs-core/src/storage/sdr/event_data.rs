@@ -1,6 +1,7 @@
 //! Event Data Field Decoding
 //!
-//! Reference: IPMI 2.0 Specification, Section 29.7 "Event Data Field Formats"
+//! Reference: IPMI 2.0 Specification, Section 29.7 "Event Data Field Formats",
+//! particularly Table 29-6 "Event Request Message Event Data Field Contents"
 //!
 //! This module provides decoding for the 3-byte event data field in SEL entries.
 
@@ -8,7 +9,7 @@ use core::fmt;
 
 use nonmax::NonMaxU8;
 
-/// Event data byte 2 availability/format (from event_data\[0\] bits \[5:4\])
+/// Event data byte 2 availability/format (from event_data\[0\] bits \[7:6\])
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum EventData2Type {
     /// Unspecified (00b)
@@ -21,7 +22,7 @@ pub enum EventData2Type {
     SensorSpecific(NonMaxU8),
 }
 
-/// Event data byte 3 availability/format (from event_data\[0\] bits \[7:6\])
+/// Event data byte 3 availability/format (from event_data\[0\] bits \[5:4\])
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum EventData3Type {
     /// Unspecified (00b)
@@ -98,7 +99,7 @@ impl fmt::Display for EventData3Type {
 
 /// Decoded event data from a SEL entry.
 ///
-/// Reference: IPMI 2.0 Specification, Section 29.7
+/// Reference: IPMI 2.0 Specification, Section 29.7, Table 29-6
 #[derive(Debug, Clone, PartialEq)]
 pub struct EventData {
     /// Event offset (bits \[3:0\] of byte 1)
@@ -113,8 +114,8 @@ impl EventData {
     /// Parse event data from the 3-byte event data field.
     pub fn parse(data: &[u8; 3]) -> Self {
         let offset = data[0] & 0x0F;
-        let data2_type = EventData2Type::parse((data[0] >> 4) & 0x03, data[1]);
-        let data3_type = EventData3Type::parse((data[0] >> 6) & 0x03, data[2]);
+        let data2_type = EventData2Type::parse((data[0] >> 6) & 0x03, data[1]);
+        let data3_type = EventData3Type::parse((data[0] >> 4) & 0x03, data[2]);
 
         Self {
             offset,
@@ -139,9 +140,6 @@ impl fmt::Display for EventData {
     }
 }
 
-/// Decode Power Supply sensor-specific event data.
-///
-/// Reference: IPMI 2.0 Specification, Table 42-3, Sensor Type 08h
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -171,5 +169,36 @@ mod tests {
     fn test_unspecified_data() {
         let data = EventData::parse(&[0x00, 0xFF, 0xFF]);
         assert_eq!(data.to_string(), "");
+    }
+
+    #[test]
+    fn test_data2_sensor_specific_selector_uses_bits_7_6() {
+        // IPMI 2.0, Table 42-3: System Firmware Progress (sensor type 0Fh),
+        // offset 02h, extension 13h means "Starting operating system boot
+        // process". Per Table 29-6, C2h selects a sensor-specific extension
+        // in Event Data 2 (bits 7:6 = 11b) and leaves Event Data 3 unspecified
+        // (bits 5:4 = 00b).
+        let data = EventData::parse(&[0xC2, 0x13, 0xFF]);
+
+        assert_eq!(data.offset, 0x02);
+        assert_eq!(
+            data.data2_type,
+            EventData2Type::SensorSpecific(NonMaxU8::new(0x13).unwrap())
+        );
+        assert_eq!(data.data3_type, EventData3Type::Unspecified);
+    }
+
+    #[test]
+    fn test_data3_sensor_specific_selector_uses_bits_5_4() {
+        // Use unequal selector fields to ensure Event Data 3 is selected only
+        // by bits 5:4, independently of Event Data 2's bits 7:6.
+        let data = EventData::parse(&[0x32, 0xFF, 0x23]);
+
+        assert_eq!(data.offset, 0x02);
+        assert_eq!(data.data2_type, EventData2Type::Unspecified);
+        assert_eq!(
+            data.data3_type,
+            EventData3Type::SensorSpecific(NonMaxU8::new(0x23).unwrap())
+        );
     }
 }
