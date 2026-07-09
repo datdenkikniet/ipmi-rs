@@ -48,7 +48,7 @@ impl From<&RawSensorReading> for ThresholdReading {
                 at_or_above_upper_critical: (d & 0x10 == 0x10),
                 at_or_above_upper_non_critical: (d & 0x08) == 0x08,
                 at_or_below_lower_non_recoverable: (d & 0x04) == 0x04,
-                at_or_below_lower_critical: (d & 0x20) == 0x20,
+                at_or_below_lower_critical: (d & 0x02) == 0x02,
                 at_or_below_lower_non_critical: (d & 0x01) == 0x01,
             })
         };
@@ -73,5 +73,27 @@ impl FromSensorReading for ThresholdReading {
 
     fn from(_: &Self::Sensor, in_reading: &RawSensorReading) -> Self {
         in_reading.into()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{RawSensorReading, ThresholdReading};
+
+    #[test]
+    fn lower_critical_uses_bit_one() {
+        let raw_reading = RawSensorReading::parse(&[0x00, 0xC0, 0x02]).unwrap();
+        let reading = ThresholdReading::from(&raw_reading);
+        let status = reading.threshold_status.unwrap();
+
+        assert!(status.at_or_below_lower_critical);
+        assert!(!status.at_or_above_non_recoverable);
+
+        let raw_reading = RawSensorReading::parse(&[0x00, 0xC0, 0x20]).unwrap();
+        let reading = ThresholdReading::from(&raw_reading);
+        let status = reading.threshold_status.unwrap();
+
+        assert!(!status.at_or_below_lower_critical);
+        assert!(status.at_or_above_non_recoverable);
     }
 }
