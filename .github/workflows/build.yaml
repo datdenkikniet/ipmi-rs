@@ -1,4 +1,4 @@
-name: Format, check, test
+name: CI
 on:
   pull_request:
   push:
@@ -47,7 +47,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - name: Check a package with specific feature combination.
-        run: cargo check --locked ${{ matrix.command }}
+        run: CARGO_BUILD_WARNINGS=deny cargo check --locked ${{ matrix.command }}
 
   test:
     runs-on: ubuntu-latest
