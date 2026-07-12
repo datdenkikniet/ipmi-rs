@@ -175,11 +175,11 @@ pub trait IpmiConnection {
     /// Receive a response from the remote end of this connection.
     fn recv(&mut self) -> Result<Response, Self::RecvError>;
 
-    /// Send `request` to and reveive a response from the remote end of this connection.
+    /// Send `request` to and receive a response from the remote end of this connection.
     fn send_recv(&mut self, request: &mut Request) -> Result<Response, Self::Error>;
 }
 
-/// The wire representation of an IPMI messag.e
+/// The wire representation of an IPMI message.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Message {
     netfn: u8,
@@ -266,7 +266,7 @@ pub trait IpmiCommand: Into<Message> {
     /// provided `data`, assuming a successful completion code.
     fn parse_success_response(data: &[u8]) -> Result<Self::Output, Self::Error>;
 
-    /// Get the intended target [`Address`] and [`Channel`] for this commmand.
+    /// Get the intended target [`Address`] and [`Channel`] for this command.
     fn target(&self) -> Option<(Address, Channel)> {
         None
     }

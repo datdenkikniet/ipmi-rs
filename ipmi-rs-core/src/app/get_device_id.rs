@@ -29,7 +29,7 @@ pub struct DeviceId {
     pub device_revision: u8,
     /// `true` if the device provides device SDRs.
     pub provides_device_sdrs: bool,
-    /// `true` if the device is availalbe, `false` if the device
+    /// `true` if the device is available, `false` if the device
     /// is in device firmware, SDR repository update, or self-initialization state.
     pub device_available: bool,
     /// The major version of the firmware revision of the device.

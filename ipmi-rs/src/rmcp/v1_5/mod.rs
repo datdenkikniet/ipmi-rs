@@ -153,7 +153,7 @@ impl State {
             Err(e) => return Err(ActivationError::ActivateSession(e)),
         };
 
-        log::debug!("Succesfully started a session ({:?})", activation_info);
+        log::debug!("Successfully started a session ({:?})", activation_info);
 
         self = ipmi.release();
 
@@ -179,7 +179,7 @@ impl IpmiConnection for State {
         let request_sequence = &mut self.session_sequence;
 
         // Only increment the request sequence once a session has been established
-        // succesfully.
+        // successfully.
         if self.session_id.is_some() {
             *request_sequence = request_sequence.wrapping_add(1);
         }
