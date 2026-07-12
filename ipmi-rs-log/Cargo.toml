@@ -1,6 +1,6 @@
 [package]
 name = "ipmi-rs-log"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 authors = [ "Johannes Cornelis Draaijer <jcdra1@gmail.com>" ]
 license = "MIT OR Apache-2.0"
@@ -13,7 +13,7 @@ documentation = "https://docs.rs/ipmi-rs/latest"
 [dependencies]
 log = "0.4.25"
 parking_lot = { version = "0.12", optional = true }
-ipmi-rs-core = { path = "../ipmi-rs-core", version = "0.5.0" }
+ipmi-rs-core = { path = "../ipmi-rs-core", version = "0.6.0" }
 
 [features]
 log-to-file = [ "parking_lot" ]
