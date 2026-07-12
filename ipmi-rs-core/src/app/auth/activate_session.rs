@@ -7,7 +7,7 @@ use super::{AuthError, AuthType, PrivilegeLevel};
 #[derive(Debug, Clone)]
 pub struct ActivateSession {
     pub auth_type: AuthType,
-    pub maxiumum_privilege_level: PrivilegeLevel,
+    pub maximum_privilege_level: PrivilegeLevel,
     pub challenge_string: [u8; 16],
     pub initial_sequence_number: u32,
 }
@@ -25,7 +25,7 @@ impl From<ActivateSession> for Message {
         let mut data = vec![0u8; 22];
 
         data[0] = value.auth_type.into();
-        data[1] = value.maxiumum_privilege_level.into();
+        data[1] = value.maximum_privilege_level.into();
         data[2..18].copy_from_slice(&value.challenge_string);
         data[18..22].copy_from_slice(&value.initial_sequence_number.to_le_bytes());
 

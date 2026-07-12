@@ -138,7 +138,7 @@ impl State {
 
         let activate_session: ActivateSession = ActivateSession {
             auth_type: activation_auth_type,
-            maxiumum_privilege_level: privilege_level,
+            maximum_privilege_level: privilege_level,
             challenge_string: challenge.challenge_string,
             initial_sequence_number: 0xDEAD_BEEF,
         };

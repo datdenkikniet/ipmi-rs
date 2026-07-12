@@ -124,7 +124,7 @@ macro_rules ! unit {
 
 unit! {
     Unspecified = [0, None, "Unspecified", "Unspecified"],
-    DegreesCelcius = [1, Some("°C"), "Degree Celcius", "Degrees Celcius"],
+    DegreesCelsius = [1, Some("°C"), "Degree Celsius", "Degrees Celsius"],
     DegreesFahrenheit = [2, Some("°F"), "Degree Fahrenheit", "Degrees Fahrenheit"],
     DegreesKelvin = [3, Some("°K"), "Degree Kelvin", "Degrees Kelvin"],
     Volt = [4, Some("V"), "Volt", "Volts"],
@@ -208,7 +208,7 @@ unit! {
     Underrun = [83, None, "Underrun", "Underruns"],
     Collision = [84, None, "Collision", "Collisions"],
     Packet = [85, None, "Packet", "Packets"],
-    Message = [86, None, "Message", "Messges"],
+    Message = [86, None, "Message", "Messages"],
     Character = [87, None, "Character", "Characters"],
     Error = [88, None, "Error", "Errors"],
     CorrectableError = [89, None, "Correctable Error", "Correctable Errors"],
@@ -221,9 +221,9 @@ unit! {
 fn display_tests() {
     use Unit::*;
 
-    assert_eq!("32 °C", DegreesCelcius.display(true, 32));
-    assert_eq!("32 Degrees Celcius", DegreesCelcius.display(false, 32));
-    assert_eq!("1 Degree Celcius", DegreesCelcius.display(false, 1));
+    assert_eq!("32 °C", DegreesCelsius.display(true, 32));
+    assert_eq!("32 Degrees Celsius", DegreesCelsius.display(false, 32));
+    assert_eq!("1 Degree Celsius", DegreesCelsius.display(false, 1));
     assert_eq!("-1 Nit", Nit.display(true, -1));
     assert_eq!("-1 Nit", Nit.display(false, -1));
     assert_eq!("-15 Nits", Nit.display(false, -15));

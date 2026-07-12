@@ -360,7 +360,7 @@ impl State {
             RakpMessage3 {
                 message_tag: 0x0A,
                 managed_system_session_id: response.managed_system_session_id,
-                contents: RakpMessage3Contents::Succes(m3),
+                contents: RakpMessage3Contents::Success(m3),
             }
         } else {
             log::warn!("Received RAKP message 2 with invalid integrity check value.");

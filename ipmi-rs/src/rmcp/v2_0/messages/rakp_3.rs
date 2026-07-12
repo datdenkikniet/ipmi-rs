@@ -15,7 +15,7 @@ impl RakpMessage3<'_> {
 
         let (status, after_id) = match &self.contents {
             RakpMessage3Contents::Failure(status) => ((*status).into(), &[][..]),
-            RakpMessage3Contents::Succes(data) => (0x00, *data),
+            RakpMessage3Contents::Success(data) => (0x00, *data),
         };
 
         // Status code: success
@@ -34,7 +34,7 @@ impl RakpMessage3<'_> {
 
 pub enum RakpMessage3Contents<'a> {
     Failure(RakpMessage3ErrorStatusCode),
-    Succes(&'a [u8]),
+    Success(&'a [u8]),
 }
 
 #[derive(Debug, Clone, Copy)]
