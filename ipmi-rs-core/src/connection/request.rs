@@ -36,7 +36,6 @@ impl Request {
     }
 
     /// Get a shared reference to the data of the request (does not include netfn or command).
-
     pub fn data(&self) -> &[u8] {
         self.message.data()
     }

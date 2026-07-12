@@ -537,7 +537,7 @@ pub fn decode_event(
     if event_type_code == 0x6F {
         // Sensor-specific event
         decode_sensor_event_offset(f, sensor_type, offset)
-    } else if event_type_code >= 0x01 && event_type_code <= 0x0C {
+    } else if (0x01..=0x0C).contains(&event_type_code) {
         // Generic event
         decode_generic_event_offset(f, event_type_code, offset)
     } else {

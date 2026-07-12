@@ -54,37 +54,36 @@ impl Message {
         let session_sequence = u32::from_le_bytes(data[1..5].try_into().unwrap());
         let session_id = u32::from_le_bytes(data[5..9].try_into().unwrap());
 
-        let (auth_type, data) = match data[0] {
-            0x00 => (AuthType::None, &data[9..]),
-            _ => {
-                if data.len() < 26 {
-                    return Err(ReadError::NotEnoughData);
-                }
-
-                let auth_code: [u8; 16] = data[9..25].try_into().unwrap();
-
-                let auth_type = match data[0] {
-                    0x01 => AuthType::MD2,
-                    0x02 => AuthType::MD5,
-                    0x04 => AuthType::Key,
-                    v => return Err(ReadError::UnsupportedAuthType(v)),
-                };
-
-                let data = &data[25..];
-
-                if !auth::verify(
-                    &auth_type,
-                    auth_code,
-                    password,
-                    session_id,
-                    session_sequence,
-                    data,
-                ) {
-                    return Err(ReadError::AuthcodeError);
-                }
-
-                (auth_type, data)
+        let (auth_type, data) = if data[0] == 0x00 {
+            (AuthType::None, &data[9..])
+        } else {
+            if data.len() < 26 {
+                return Err(ReadError::NotEnoughData);
             }
+
+            let auth_code: [u8; 16] = data[9..25].try_into().unwrap();
+
+            let auth_type = match data[0] {
+                0x01 => AuthType::MD2,
+                0x02 => AuthType::MD5,
+                0x04 => AuthType::Key,
+                v => return Err(ReadError::UnsupportedAuthType(v)),
+            };
+
+            let data = &data[25..];
+
+            if !auth::verify(
+                &auth_type,
+                auth_code,
+                password,
+                session_id,
+                session_sequence,
+                data,
+            ) {
+                return Err(ReadError::AuthcodeError);
+            }
+
+            (auth_type, data)
         };
 
         let data_len = data[0];

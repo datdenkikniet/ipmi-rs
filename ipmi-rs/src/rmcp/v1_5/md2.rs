@@ -66,7 +66,9 @@ where
             }
         }
 
-        if !self.finished {
+        if self.finished {
+            None
+        } else {
             self.finished = true;
 
             let i = 16 - chunk_len;
@@ -74,8 +76,6 @@ where
                 chunk[idx] = i as u8;
             }
             Some(chunk)
-        } else {
-            None
         }
     }
 }

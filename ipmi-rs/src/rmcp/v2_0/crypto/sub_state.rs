@@ -52,7 +52,7 @@ impl SubState {
             // Integrity PAD
             let pad_length = (4 - auth_code_data_len % 4) % 4;
 
-            buffer.extend(std::iter::repeat(0xFF).take(pad_length));
+            buffer.extend(std::iter::repeat_n(0xFF, pad_length));
 
             // Pad length
             buffer.push(pad_length as u8);
@@ -74,7 +74,7 @@ impl SubState {
                 IntegrityAlgorithm::HmacMd5_128 => todo!(),
                 IntegrityAlgorithm::Md5_128 => todo!(),
                 IntegrityAlgorithm::HmacSha256_128 => todo!(),
-            };
+            }
         }
 
         Ok(())
@@ -138,14 +138,14 @@ impl SubState {
                 buffer.extend_from_slice(&(data_len as u16).to_le_bytes());
 
                 // Data
-                buffer.extend(data)
+                buffer.extend(data);
             }
             ConfidentialityAlgorithm::AesCbc128 => {
                 let mut iv = [0u8; 16];
-                if !cfg!(test) {
-                    getrandom::fill(&mut iv).unwrap();
-                } else {
+                if cfg!(test) {
                     iv = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
+                } else {
+                    getrandom::fill(&mut iv).unwrap();
                 }
 
                 // Length

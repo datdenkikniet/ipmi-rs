@@ -26,10 +26,10 @@ pub fn calculate(
         (AuthType::MD2, Some(password)) => {
             Ok(Some(calculate_md2(password, session_id, session_seq, data)))
         }
-        (AuthType::MD5, Some(_password)) => {
+        (AuthType::MD5, Some(password)) => {
             #[cfg(feature = "md5")]
             return Ok(Some(super::md5::calculate_md5(
-                _password,
+                password,
                 session_id,
                 session_seq,
                 data,

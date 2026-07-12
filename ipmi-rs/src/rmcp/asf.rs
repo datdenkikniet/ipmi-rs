@@ -12,7 +12,7 @@ impl TryFrom<u8> for SupportedInteractions {
         let dmtf_dash = (value & 0x10) == 0x10;
 
         // All of these bits must be 0
-        if (value & 0b01011111) != 0 {
+        if (value & 0b0101_1111) != 0 {
             return Err(());
         }
 
@@ -122,7 +122,7 @@ impl ASFMessageType {
                     u8::from(*supported_entities),
                     u8::from(*supported_interactions),
                 ]);
-                buffer.extend(std::iter::repeat(0).take(6));
+                buffer.extend(std::iter::repeat_n(0, 6));
             }
         }
     }

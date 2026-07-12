@@ -35,10 +35,7 @@ impl Default for CryptoState {
 
 impl CryptoState {
     fn kg(&self) -> &[u8] {
-        self.kg
-            .as_ref()
-            .map(|v| &v[..])
-            .unwrap_or(self.password.as_ref())
+        self.kg.as_ref().map_or(self.password.as_ref(), |v| &v[..])
     }
 }
 

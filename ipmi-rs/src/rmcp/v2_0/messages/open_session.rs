@@ -44,7 +44,7 @@ impl AlgorithmPayload {
 
         // Payload len OR null byte
         if null_byte {
-            buffer.push(0x00)
+            buffer.push(0x00);
         } else {
             buffer.push(0x08);
         }
@@ -57,7 +57,10 @@ impl AlgorithmPayload {
     }
 
     pub fn from_data(data: &[u8]) -> Result<Self, AlgorithmPayloadError> {
-        use AlgorithmPayloadError::*;
+        use AlgorithmPayloadError::{
+            IncorrectDataLen, IncorrectPayloadLenValue, UnknownAuthAlgorithm,
+            UnknownConfidentialityAlgorithm, UnknownIntegrityAlgorithm, UnknownPayloadType,
+        };
 
         if data.len() != 8 {
             return Err(IncorrectDataLen);
@@ -109,7 +112,7 @@ pub struct OpenSessionRequest {
 impl OpenSessionRequest {
     pub fn write_data(&self, buffer: &mut Vec<u8>) {
         buffer.push(self.message_tag);
-        buffer.push(self.requested_max_privilege.map(Into::into).unwrap_or(0));
+        buffer.push(self.requested_max_privilege.map_or(0, Into::into));
 
         // Two reserved bytes
         buffer.push(0);
@@ -150,7 +153,12 @@ pub struct OpenSessionResponse {
 
 impl OpenSessionResponse {
     pub fn from_data(data: &[u8]) -> Result<Self, ParseSessionResponseError> {
-        use ParseSessionResponseError::*;
+        use ParseSessionResponseError::{
+            AlgorithmPayloadError, AuthPayloadWasNonAuthAlgorithm,
+            ConfidentialityPayloadWasNonConfidentialityAlgorithm, HaveErrorCode,
+            IntegrityPayloadWasNonIntegrityAlgorithm, InvalidPrivilegeLevel, NotEnoughData,
+            ZeroManagedSystemSessionId, ZeroRemoteConsoleSessionId,
+        };
 
         if data.len() < 2 {
             return Err(NotEnoughData);

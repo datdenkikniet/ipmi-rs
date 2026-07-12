@@ -52,7 +52,7 @@ pub struct IpmiRequest {
 impl IpmiRequest {
     pub fn log(&self, level: log::Level) {
         log::log!(level, "  Message ID = 0x{:02X}", self.msg_id);
-        self.message.log(level)
+        self.message.log(level);
     }
 }
 
@@ -70,7 +70,7 @@ impl IpmiRecv {
     fn log(&self, level: log::Level) {
         log::log!(level, "  Type       = 0x{:02X}", self.recv_type);
         log::log!(level, "  Message ID = 0x{:02X}", self.msg_id);
-        self.message.log(level)
+        self.message.log(level);
     }
 }
 
@@ -105,7 +105,7 @@ mod ioctl {
 
     use nix::{ioctl_read, ioctl_readwrite};
 
-    use super::*;
+    use super::{IpmiRecv, IpmiRequest};
 
     ioctl_readwrite!(ipmi_recv_msg_trunc, IPMI_IOC_MAGIC, 11, IpmiRecv);
     ioctl_read!(ipmi_send_request, IPMI_IOC_MAGIC, 13, IpmiRequest);
@@ -243,10 +243,9 @@ impl File {
         if let Ok(addr) = u8::try_from(my_addr) {
             Ok(Address(addr))
         } else {
-            Err(io::Error::new(
-                io::ErrorKind::Other,
-                format!("ipmi_get_my_address returned non-u8 address: {}", my_addr),
-            ))
+            Err(io::Error::other(format!(
+                "ipmi_get_my_address returned non-u8 address: {my_addr}"
+            )))
         }
     }
 }
@@ -379,20 +378,16 @@ impl IpmiConnection for File {
                 if response.seq() == self.seq {
                     Ok(response)
                 } else {
-                    Err(io::Error::new(
-                        io::ErrorKind::Other,
-                        format!(
-                            "Invalid sequence number on response. Expected {}, got {}",
-                            self.seq,
-                            response.seq()
-                        ),
-                    ))
+                    Err(io::Error::other(format!(
+                        "Invalid sequence number on response. Expected {}, got {}",
+                        self.seq,
+                        response.seq()
+                    )))
                 }
             }
-            Err(e) => Err(io::Error::new(
-                io::ErrorKind::Other,
-                format!("Error while creating response. {:?}", e),
-            )),
+            Err(e) => Err(io::Error::other(format!(
+                "Error while creating response. {e:?}"
+            ))),
         }
     }
 

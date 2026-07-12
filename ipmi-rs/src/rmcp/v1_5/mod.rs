@@ -85,7 +85,7 @@ impl State {
     pub fn new(socket: UdpSocket) -> Self {
         Self {
             socket: RmcpIpmiSocket::new(socket),
-            ipmb_state: Default::default(),
+            ipmb_state: IpmbState::default(),
             auth_type: AuthType::None,
             password: None,
             session_id: None,
@@ -107,11 +107,10 @@ impl State {
         let password = if let Some(password) = password {
             if password.len() > 16 {
                 return Err(ActivationError::PasswordTooLong);
-            } else {
-                let mut padded = [0u8; 16];
-                padded[..password.len()].copy_from_slice(password);
-                Some(padded)
             }
+            let mut padded = [0u8; 16];
+            padded[..password.len()].copy_from_slice(password);
+            Some(padded)
         } else {
             None
         };
@@ -189,7 +188,7 @@ impl IpmiConnection for State {
         let message = Message {
             auth_type: self.auth_type,
             session_sequence_number: self.session_sequence,
-            session_id: self.session_id.map(|v| v.get()).unwrap_or(0),
+            session_id: self.session_id.map_or(0, std::num::NonZero::get),
             payload: final_data,
         };
 
@@ -209,7 +208,7 @@ impl IpmiConnection for State {
                 .write_data(self.password.as_ref(), buffer)
                 .map_err(Send::Ipmi)
         }) {
-            Ok(_) => Ok(()),
+            Ok(()) => Ok(()),
             Err(Send::Ipmi(ipmi)) => Err(RmcpIpmiSendError::V1_5(ipmi)),
             Err(Send::Io(io)) => Err(RmcpIpmiSendError::V1_5(WriteError::Io(io))),
         }
