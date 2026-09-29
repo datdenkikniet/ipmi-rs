@@ -1,10 +1,14 @@
-use std::num::NonZeroU16;
+use core::num::NonZeroU16;
 
 use nonmax::NonMaxU8;
 
-use crate::connection::{IpmiCommand, Message, NetFn};
+#[cfg(feature = "alloc")]
+use crate::connection::IpmiCommand;
+use crate::connection::{EncodeIpmiCommand, NetFn};
 
-use super::{Record, RecordId, RecordParseError};
+use super::RecordId;
+#[cfg(feature = "alloc")]
+use super::{Record, RecordParseError};
 
 /// Get a device SDR.
 ///
@@ -31,26 +35,29 @@ impl GetDeviceSdr {
     }
 }
 
-impl From<GetDeviceSdr> for Message {
-    fn from(value: GetDeviceSdr) -> Self {
-        let mut data = vec![0u8; 6];
+impl EncodeIpmiCommand for GetDeviceSdr {
+    const NETFN: NetFn = NetFn::Storage;
+    const CMD: u8 = 0x23;
 
+    fn request_data_len(&self) -> usize {
+        6
+    }
+
+    fn write_request_data(&self, data: &mut [u8]) {
         data[0..2].copy_from_slice(
-            &value
+            &self
                 .reservation_id
                 .map(NonZeroU16::get)
                 .unwrap_or(0)
                 .to_le_bytes(),
         );
-
-        data[2..4].copy_from_slice(&value.record_id.value().to_le_bytes());
-        data[4] = value.offset;
-        data[5] = value.bytes_to_read.map(|v| v.get()).unwrap_or(0xFF);
-
-        Message::new_request(NetFn::Storage, 0x23, data)
+        data[2..4].copy_from_slice(&self.record_id.value().to_le_bytes());
+        data[4] = self.offset;
+        data[5] = self.bytes_to_read.map(|value| value.get()).unwrap_or(0xff);
     }
 }
 
+#[cfg(feature = "alloc")]
 impl IpmiCommand for GetDeviceSdr {
     type Output = RecordInfo;
 
@@ -69,12 +76,14 @@ impl IpmiCommand for GetDeviceSdr {
     }
 }
 
+#[cfg(feature = "alloc")]
 #[derive(Debug, Clone)]
 pub struct RecordInfo {
     pub next_entry: RecordId,
     pub record: Record,
 }
 
+#[cfg(feature = "alloc")]
 impl RecordInfo {
     pub fn parse(data: &[u8]) -> Result<Self, RecordParseError> {
         let next_entry = RecordId::new_raw(u16::from_le_bytes([data[0], data[1]]));

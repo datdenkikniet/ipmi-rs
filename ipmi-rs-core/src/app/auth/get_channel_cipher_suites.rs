@@ -1,4 +1,4 @@
-use crate::connection::{Channel, IpmiCommand, Message, NetFn};
+use crate::connection::{Channel, EncodeIpmiCommand, IpmiCommand, NetFn};
 
 use super::{AuthenticationAlgorithm, ConfidentialityAlgorithm, IntegrityAlgorithm};
 
@@ -9,13 +9,16 @@ pub struct GetChannelCipherSuites {
     list_index: u8,
 }
 
-impl From<GetChannelCipherSuites> for Message {
-    fn from(value: GetChannelCipherSuites) -> Self {
-        Message::new_request(
-            NetFn::App,
-            0x54,
-            vec![value.channel.value(), 0x00, value.list_index],
-        )
+impl EncodeIpmiCommand for GetChannelCipherSuites {
+    const NETFN: NetFn = NetFn::App;
+    const CMD: u8 = 0x54;
+
+    fn request_data_len(&self) -> usize {
+        3
+    }
+
+    fn write_request_data(&self, data: &mut [u8]) {
+        data.copy_from_slice(&[self.channel.value(), 0x00, self.list_index]);
     }
 }
 

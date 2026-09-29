@@ -1,3 +1,9 @@
+use alloc::{
+    format,
+    string::{String, ToString},
+    vec::Vec,
+};
+
 mod full_sensor_record;
 pub use full_sensor_record::FullSensorRecord;
 
@@ -10,6 +16,7 @@ mod mc_device_locator;
 pub mod traits;
 pub use traits::*;
 
+pub use super::SensorNumber;
 pub use compact_sensor_record::CompactSensorRecord;
 pub use generic_device_locator::GenericDeviceLocator;
 
@@ -644,7 +651,7 @@ pub enum SensorId {
 }
 
 impl core::fmt::Display for SensorId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             SensorId::Unicode(v) => write!(f, "{}", v),
             SensorId::Ascii8BAndLatin1(v) => write!(f, "{}", v),
@@ -657,19 +664,6 @@ impl core::fmt::Display for SensorId {
 impl Default for SensorId {
     fn default() -> Self {
         Self::Unicode("".into())
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct SensorNumber(pub NonMaxU8);
-
-impl SensorNumber {
-    pub fn new(value: NonMaxU8) -> Self {
-        Self(value)
-    }
-
-    pub fn get(&self) -> u8 {
-        self.0.get()
     }
 }
 

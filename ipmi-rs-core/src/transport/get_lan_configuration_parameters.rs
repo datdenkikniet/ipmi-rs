@@ -1,5 +1,9 @@
-use crate::connection::{Channel, IpmiCommand, Message, NetFn, NotEnoughData};
+#[cfg(feature = "alloc")]
+use alloc::vec::Vec;
 
+#[cfg(feature = "alloc")]
+use crate::connection::IpmiCommand;
+use crate::connection::{Channel, EncodeIpmiCommand, NetFn, NotEnoughData};
 /// Get LAN Configuration Parameters command.
 ///
 /// Reference: IPMI 2.0 Specification, Table 23-3.
@@ -43,27 +47,28 @@ impl GetLanConfigParameters {
     }
 }
 
-impl From<GetLanConfigParameters> for Message {
-    fn from(value: GetLanConfigParameters) -> Self {
-        let channel = value.channel.value() & 0x0F;
-        let channel = if value.revision_only {
+impl EncodeIpmiCommand for GetLanConfigParameters {
+    const NETFN: NetFn = NetFn::Transport;
+    const CMD: u8 = 0x02;
+
+    fn request_data_len(&self) -> usize {
+        4
+    }
+
+    fn write_request_data(&self, data: &mut [u8]) {
+        let channel = self.channel.value() & 0x0f;
+        data[0] = if self.revision_only {
             channel | 0x80
         } else {
             channel
         };
-        Message::new_request(
-            NetFn::Transport,
-            0x02,
-            vec![
-                channel,
-                value.parameter.value(),
-                value.set_selector,
-                value.block_selector,
-            ],
-        )
+        data[1] = self.parameter.value();
+        data[2] = self.set_selector;
+        data[3] = self.block_selector;
     }
 }
 
+#[cfg(feature = "alloc")]
 impl IpmiCommand for GetLanConfigParameters {
     type Output = LanConfigParameterResponse;
     type Error = NotEnoughData;
@@ -134,6 +139,7 @@ impl LanConfigParameter {
         }
     }
 
+    #[cfg(feature = "alloc")]
     /// Parse known LAN configuration parameter data.
     pub fn parse(&self, data: &[u8]) -> Result<LanConfigParameterData, NotEnoughData> {
         use LanConfigParameterData::*;
@@ -189,12 +195,14 @@ impl LanConfigParameter {
 }
 
 /// LAN configuration response data.
+#[cfg(feature = "alloc")]
 #[derive(Clone, Debug, PartialEq)]
 pub struct LanConfigParameterResponse {
     pub parameter_revision: u8,
     pub data: Vec<u8>,
 }
 
+#[cfg(feature = "alloc")]
 impl LanConfigParameterResponse {
     /// Parse LAN parameter data using a known parameter selector.
     pub fn parse(
@@ -205,6 +213,7 @@ impl LanConfigParameterResponse {
     }
 }
 
+#[cfg(feature = "alloc")]
 /// LAN configuration parameter data variants.
 #[derive(Clone, Debug, PartialEq)]
 pub enum LanConfigParameterData {
@@ -233,7 +242,8 @@ pub enum LanConfigParameterData {
 pub struct Ipv4Address(pub [u8; 4]);
 
 impl Ipv4Address {
-    fn from_slice(data: &[u8]) -> Result<Self, NotEnoughData> {
+    /// Parse an IPv4 address from its four wire bytes.
+    pub fn from_slice(data: &[u8]) -> Result<Self, NotEnoughData> {
         if data.len() < 4 {
             return Err(NotEnoughData);
         }
@@ -252,7 +262,8 @@ impl core::fmt::Display for Ipv4Address {
 pub struct MacAddress(pub [u8; 6]);
 
 impl MacAddress {
-    fn from_slice(data: &[u8]) -> Result<Self, NotEnoughData> {
+    /// Parse a MAC address from its six wire bytes.
+    pub fn from_slice(data: &[u8]) -> Result<Self, NotEnoughData> {
         if data.len() < 6 {
             return Err(NotEnoughData);
         }
@@ -277,7 +288,8 @@ impl core::fmt::Display for MacAddress {
 pub struct Ipv6Address(pub [u8; 16]);
 
 impl Ipv6Address {
-    fn from_slice(data: &[u8]) -> Result<Self, NotEnoughData> {
+    /// Parse an IPv6 address from its sixteen wire bytes.
+    pub fn from_slice(data: &[u8]) -> Result<Self, NotEnoughData> {
         if data.len() < 16 {
             return Err(NotEnoughData);
         }
@@ -289,7 +301,7 @@ impl Ipv6Address {
 
 impl core::fmt::Display for Ipv6Address {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        let addr = std::net::Ipv6Addr::from(self.0);
+        let addr = core::net::Ipv6Addr::from(self.0);
         write!(f, "{addr}")
     }
 }
@@ -415,7 +427,8 @@ impl core::fmt::Display for Ipv6Ipv4Enables {
 pub struct Ipv6HeaderFlowLabel(pub u32);
 
 impl Ipv6HeaderFlowLabel {
-    fn from_slice(data: &[u8]) -> Result<Self, NotEnoughData> {
+    /// Parse a 20-bit IPv6 flow label from its three wire bytes.
+    pub fn from_slice(data: &[u8]) -> Result<Self, NotEnoughData> {
         if data.len() < 3 {
             return Err(NotEnoughData);
         }
@@ -434,7 +447,8 @@ pub struct Ipv6Status {
 }
 
 impl Ipv6Status {
-    fn from_slice(data: &[u8]) -> Result<Self, NotEnoughData> {
+    /// Parse IPv6 capability status from its wire representation.
+    pub fn from_slice(data: &[u8]) -> Result<Self, NotEnoughData> {
         if data.len() < 3 {
             return Err(NotEnoughData);
         }
@@ -459,7 +473,8 @@ pub struct Ipv6StaticAddress {
 }
 
 impl Ipv6StaticAddress {
-    fn from_slice(data: &[u8]) -> Result<Self, NotEnoughData> {
+    /// Parse an IPv6 static-address entry from its wire representation.
+    pub fn from_slice(data: &[u8]) -> Result<Self, NotEnoughData> {
         if data.len() < 20 {
             return Err(NotEnoughData);
         }
@@ -495,7 +510,8 @@ pub struct Ipv6DynamicAddress {
 }
 
 impl Ipv6DynamicAddress {
-    fn from_slice(data: &[u8]) -> Result<Self, NotEnoughData> {
+    /// Parse an IPv6 dynamic-address entry from its wire representation.
+    pub fn from_slice(data: &[u8]) -> Result<Self, NotEnoughData> {
         if data.len() < 20 {
             return Err(NotEnoughData);
         }

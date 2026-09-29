@@ -1,10 +1,16 @@
-use crate::connection::{Channel, IpmiCommand, Message, NetFn, NotEnoughData};
+#[cfg(feature = "alloc")]
+use alloc::{vec, vec::Vec};
 
-use super::{Ipv4Address, Ipv6Address, Ipv6Ipv4Enables, LanConfigParameter, MacAddress};
+use crate::connection::{Channel, EncodeIpmiCommand, IpmiCommand, NetFn, NotEnoughData};
+
+use super::LanConfigParameter;
+#[cfg(feature = "alloc")]
+use super::{Ipv4Address, Ipv6Address, Ipv6Ipv4Enables, MacAddress};
 
 /// Set LAN Configuration Parameters command.
 ///
 /// Reference: IPMI 2.0 Specification, Table 23-2.
+#[cfg(feature = "alloc")]
 #[derive(Clone, Debug)]
 pub struct SetLanConfigParameters {
     channel: Channel,
@@ -12,6 +18,7 @@ pub struct SetLanConfigParameters {
     data: Vec<u8>,
 }
 
+#[cfg(feature = "alloc")]
 impl SetLanConfigParameters {
     /// Create a new Set LAN Configuration Parameters command.
     pub fn new(channel: Channel, parameter: LanConfigParameter, data: Vec<u8>) -> Self {
@@ -32,17 +39,23 @@ impl SetLanConfigParameters {
     }
 }
 
-impl From<SetLanConfigParameters> for Message {
-    fn from(value: SetLanConfigParameters) -> Self {
-        let channel = value.channel.value() & 0x0F;
-        let mut payload = Vec::with_capacity(2 + value.data.len());
-        payload.push(channel);
-        payload.push(value.parameter.value());
-        payload.extend_from_slice(&value.data);
-        Message::new_request(NetFn::Transport, 0x01, payload)
+#[cfg(feature = "alloc")]
+impl EncodeIpmiCommand for SetLanConfigParameters {
+    const NETFN: NetFn = NetFn::Transport;
+    const CMD: u8 = 0x01;
+
+    fn request_data_len(&self) -> usize {
+        2 + self.data.len()
+    }
+
+    fn write_request_data(&self, data: &mut [u8]) {
+        data[0] = self.channel.value() & 0x0f;
+        data[1] = self.parameter.value();
+        data[2..].copy_from_slice(&self.data);
     }
 }
 
+#[cfg(feature = "alloc")]
 impl IpmiCommand for SetLanConfigParameters {
     type Output = ();
     type Error = NotEnoughData;
@@ -52,7 +65,51 @@ impl IpmiCommand for SetLanConfigParameters {
     }
 }
 
+/// A borrowed Set LAN Configuration Parameters command for allocation-free encoding.
+#[derive(Clone, Copy, Debug)]
+pub struct SetLanConfigParametersRef<'a> {
+    channel: Channel,
+    parameter: LanConfigParameter,
+    data: &'a [u8],
+}
+
+impl<'a> SetLanConfigParametersRef<'a> {
+    /// Create a borrowed Set LAN Configuration Parameters command.
+    pub const fn new(channel: Channel, parameter: LanConfigParameter, data: &'a [u8]) -> Self {
+        Self {
+            channel,
+            parameter,
+            data,
+        }
+    }
+}
+
+impl EncodeIpmiCommand for SetLanConfigParametersRef<'_> {
+    const NETFN: NetFn = NetFn::Transport;
+    const CMD: u8 = 0x01;
+
+    fn request_data_len(&self) -> usize {
+        2 + self.data.len()
+    }
+
+    fn write_request_data(&self, data: &mut [u8]) {
+        data[0] = self.channel.value() & 0x0f;
+        data[1] = self.parameter.value();
+        data[2..].copy_from_slice(self.data);
+    }
+}
+
+impl IpmiCommand for SetLanConfigParametersRef<'_> {
+    type Output = ();
+    type Error = NotEnoughData;
+
+    fn parse_success_response(_: &[u8]) -> Result<Self::Output, Self::Error> {
+        Ok(())
+    }
+}
+
 /// LAN configuration parameter request payloads.
+#[cfg(feature = "alloc")]
 #[derive(Clone, Debug, PartialEq)]
 pub enum LanConfigParameterRequest {
     SetInProgress(u8),
@@ -78,6 +135,7 @@ pub enum LanConfigParameterRequest {
     Raw(Vec<u8>),
 }
 
+#[cfg(feature = "alloc")]
 impl LanConfigParameterRequest {
     /// Serialize a parameter request into raw bytes.
     pub fn to_bytes(&self) -> Vec<u8> {
@@ -115,5 +173,28 @@ impl LanConfigParameterRequest {
             }
             LanConfigParameterRequest::Raw(bytes) => bytes.clone(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::connection::{Channel, EncodeIpmiCommand, NetFn};
+
+    use super::{LanConfigParameter, SetLanConfigParametersRef};
+
+    #[test]
+    fn borrowed_command_encodes_without_owned_data() {
+        let command = SetLanConfigParametersRef::new(
+            Channel::Primary,
+            LanConfigParameter::IpAddress,
+            &[192, 0, 2, 1],
+        );
+        let mut buffer = [0_u8; 6];
+
+        let request = command.encode_request(&mut buffer).unwrap();
+
+        assert_eq!(request.netfn(), NetFn::Transport);
+        assert_eq!(request.cmd(), 0x01);
+        assert_eq!(request.data(), &[0x00, 0x03, 192, 0, 2, 1]);
     }
 }
