@@ -1,16 +1,29 @@
+#[cfg(feature = "alloc")]
+use alloc::vec::Vec;
+
+use crate::connection::{EncodeIpmiCommand, NetFn};
+#[cfg(feature = "alloc")]
 use crate::{
-    connection::{IpmiCommand, Message, NetFn, NotEnoughData},
+    connection::{IpmiCommand, NotEnoughData},
     storage::Timestamp,
 };
 
 pub struct GetRepositoryInfo;
 
-impl From<GetRepositoryInfo> for Message {
-    fn from(_: GetRepositoryInfo) -> Self {
-        Message::new_request(NetFn::Storage, 0x20, Vec::new())
+impl EncodeIpmiCommand for GetRepositoryInfo {
+    const NETFN: NetFn = NetFn::Storage;
+    const CMD: u8 = 0x20;
+
+    fn request_data_len(&self) -> usize {
+        0
+    }
+
+    fn write_request_data(&self, data: &mut [u8]) {
+        debug_assert!(data.is_empty());
     }
 }
 
+#[cfg(feature = "alloc")]
 impl IpmiCommand for GetRepositoryInfo {
     type Output = RepositoryInfo;
 
@@ -39,7 +52,7 @@ impl From<u16> for FreeSpace {
 }
 
 impl core::fmt::Display for FreeSpace {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             FreeSpace::Full => write!(f, "Full"),
             FreeSpace::AtLeast { bytes } => write!(f, "At least {} bytes", bytes),
@@ -60,6 +73,7 @@ pub enum Operation {
     GetAllocInfo,
 }
 
+#[cfg(feature = "alloc")]
 #[derive(Clone, Debug)]
 pub struct RepositoryInfo {
     pub version_major: u8,
@@ -72,6 +86,7 @@ pub struct RepositoryInfo {
     pub supported_ops: Vec<Operation>,
 }
 
+#[cfg(feature = "alloc")]
 impl RepositoryInfo {
     pub fn parse(v: &[u8]) -> Option<Self> {
         let version_minor = (v[0] & 0xF0) >> 4;

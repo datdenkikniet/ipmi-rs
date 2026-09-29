@@ -127,16 +127,15 @@ impl EventData {
 
 impl fmt::Display for EventData {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut parts = Vec::new();
-
-        if !self.data2_type.is_unspecified() {
-            parts.push(self.data2_type.to_string());
+        match (
+            self.data2_type.is_unspecified(),
+            self.data3_type.is_unspecified(),
+        ) {
+            (true, true) => Ok(()),
+            (false, true) => self.data2_type.fmt(f),
+            (true, false) => self.data3_type.fmt(f),
+            (false, false) => write!(f, "{}, {}", self.data2_type, self.data3_type),
         }
-        if !self.data3_type.is_unspecified() {
-            parts.push(self.data3_type.to_string());
-        }
-
-        write!(f, "{}", parts.join(", "))
     }
 }
 

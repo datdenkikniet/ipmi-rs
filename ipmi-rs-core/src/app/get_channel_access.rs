@@ -1,4 +1,4 @@
-use crate::connection::{Channel, IpmiCommand, Message, NetFn, NotEnoughData};
+use crate::connection::{Channel, EncodeIpmiCommand, IpmiCommand, NetFn, NotEnoughData};
 
 /// The Get Channel Access command.
 ///
@@ -35,14 +35,20 @@ impl GetChannelAccess {
     }
 }
 
-impl From<GetChannelAccess> for Message {
-    fn from(value: GetChannelAccess) -> Self {
-        let channel = value.channel.value() & 0x0F;
-        let access_type = match value.access_type {
+impl EncodeIpmiCommand for GetChannelAccess {
+    const NETFN: NetFn = NetFn::App;
+    const CMD: u8 = 0x41;
+
+    fn request_data_len(&self) -> usize {
+        2
+    }
+
+    fn write_request_data(&self, data: &mut [u8]) {
+        data[0] = self.channel.value() & 0x0f;
+        data[1] = match self.access_type {
             ChannelAccessType::NonVolatile => 0x40, // 01b << 6
             ChannelAccessType::Volatile => 0x80,    // 10b << 6
         };
-        Message::new_request(NetFn::App, 0x41, vec![channel, access_type])
     }
 }
 

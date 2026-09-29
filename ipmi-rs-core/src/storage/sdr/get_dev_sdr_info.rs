@@ -1,6 +1,6 @@
-use std::marker::PhantomData;
+use core::marker::PhantomData;
 
-use crate::connection::{IpmiCommand, LogicalUnit, Message, NetFn, NotEnoughData};
+use crate::connection::{EncodeIpmiCommand, IpmiCommand, LogicalUnit, NetFn, NotEnoughData};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SdrCount;
@@ -100,15 +100,19 @@ impl<T> GetDeviceSdrInfo<T> {
     }
 }
 
-impl From<GetDeviceSdrInfo<SdrCount>> for Message {
-    fn from(_: GetDeviceSdrInfo<SdrCount>) -> Self {
-        Message::new_request(NetFn::SensorEvent, 0x20, vec![0x01])
-    }
-}
+impl<T> EncodeIpmiCommand for GetDeviceSdrInfo<T>
+where
+    Self: IpmiCommand,
+{
+    const NETFN: NetFn = NetFn::SensorEvent;
+    const CMD: u8 = 0x20;
 
-impl From<GetDeviceSdrInfo<SensorCount>> for Message {
-    fn from(_: GetDeviceSdrInfo<SensorCount>) -> Self {
-        Message::new_request(NetFn::SensorEvent, 0x20, vec![0x01])
+    fn request_data_len(&self) -> usize {
+        1
+    }
+
+    fn write_request_data(&self, data: &mut [u8]) {
+        data[0] = 0x01;
     }
 }
 
