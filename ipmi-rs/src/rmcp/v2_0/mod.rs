@@ -383,7 +383,7 @@ impl State {
             .map_err(ActivationError::RakpMessage3Send)?;
 
         if rm3.is_failure() {
-            return Err(ActivationError::ServerAuthenticationFailed)?;
+            return Err(ActivationError::ServerAuthenticationFailed);
         }
 
         let data = socket
