@@ -26,17 +26,15 @@ pub fn calculate(
         (AuthType::MD2, Some(password)) => {
             Ok(Some(calculate_md2(password, session_id, session_seq, data)))
         }
-        (AuthType::MD5, Some(password)) => {
-            #[cfg(feature = "md5")]
-            return Ok(Some(super::md5::calculate_md5(
-                password,
-                session_id,
-                session_seq,
-                data,
-            )));
-            #[cfg(not(feature = "md5"))]
-            return Err(WriteError::UnsupportedAuthType(*ty));
-        }
+        #[cfg(feature = "md5")]
+        (AuthType::MD5, Some(password)) => Ok(Some(super::md5::calculate_md5(
+            password,
+            session_id,
+            session_seq,
+            data,
+        ))),
+        #[cfg(not(feature = "md5"))]
+        (AuthType::MD5, Some(_password)) => Err(WriteError::UnsupportedAuthType(*ty)),
         (AuthType::Key, Some(password)) => Ok(Some(*password)),
         _ => Err(WriteError::MissingPassword),
     }
