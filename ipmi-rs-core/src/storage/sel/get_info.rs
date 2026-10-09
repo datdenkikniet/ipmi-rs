@@ -1,10 +1,16 @@
+#[cfg(feature = "alloc")]
+use alloc::vec::Vec;
+
+use crate::connection::{EncodeIpmiCommand, NetFn};
+#[cfg(feature = "alloc")]
 use crate::{
-    connection::{IpmiCommand, Message, NetFn, NotEnoughData},
+    connection::{IpmiCommand, NotEnoughData},
     storage::Timestamp,
 };
 
 pub struct GetInfo;
 
+#[cfg(feature = "alloc")]
 impl IpmiCommand for GetInfo {
     type Output = Info;
 
@@ -15,9 +21,16 @@ impl IpmiCommand for GetInfo {
     }
 }
 
-impl From<GetInfo> for Message {
-    fn from(_: GetInfo) -> Self {
-        Message::new_request(NetFn::Storage, 0x40, Vec::new())
+impl EncodeIpmiCommand for GetInfo {
+    const NETFN: NetFn = NetFn::Storage;
+    const CMD: u8 = 0x40;
+
+    fn request_data_len(&self) -> usize {
+        0
+    }
+
+    fn write_request_data(&self, data: &mut [u8]) {
+        debug_assert!(data.is_empty());
     }
 }
 
@@ -34,6 +47,7 @@ pub enum Command {
     GetAllocInfo,
 }
 
+#[cfg(feature = "alloc")]
 #[derive(Debug, Clone)]
 pub struct Info {
     pub version_maj: u8,
@@ -46,6 +60,7 @@ pub struct Info {
     pub supported_cmds: Vec<Command>,
 }
 
+#[cfg(feature = "alloc")]
 impl Info {
     pub fn from_data(data: &[u8]) -> Option<Self> {
         if data.len() != 14 {

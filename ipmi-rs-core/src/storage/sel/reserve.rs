@@ -2,9 +2,9 @@
 //!
 //! Reference: IPMI 2.0 Specification, Section 31.4 "Reserve SEL Command"
 
-use std::num::NonZeroU16;
+use core::num::NonZeroU16;
 
-use crate::connection::{IpmiCommand, Message, NetFn, NotEnoughData};
+use crate::connection::{EncodeIpmiCommand, IpmiCommand, NetFn, NotEnoughData};
 
 /// Reserve SEL command.
 ///
@@ -37,13 +37,18 @@ impl IpmiCommand for ReserveSel {
     }
 }
 
-impl From<ReserveSel> for Message {
-    /// Build the request message.
-    ///
-    /// Request format (IPMI 2.0 Spec, Table 31-4):
-    /// - No request data
-    fn from(_: ReserveSel) -> Self {
-        // NetFn: Storage (0x0A), Cmd: 0x42
-        Message::new_request(NetFn::Storage, 0x42, Vec::new())
+impl EncodeIpmiCommand for ReserveSel {
+    const NETFN: NetFn = NetFn::Storage;
+    const CMD: u8 = 0x42;
+
+    fn request_data_len(&self) -> usize {
+        0
+    }
+
+    // Request format (IPMI 2.0 Spec, Table 31-4):
+    // - No request data
+    // NetFn: Storage (0x0A), Cmd: 0x42
+    fn write_request_data(&self, data: &mut [u8]) {
+        debug_assert!(data.is_empty());
     }
 }

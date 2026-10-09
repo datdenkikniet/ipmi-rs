@@ -1,4 +1,5 @@
-use std::num::NonZeroU8;
+use alloc::string::String;
+use core::num::NonZeroU8;
 
 use super::*;
 
@@ -219,8 +220,8 @@ impl FullSensorRecord {
 
     fn convert(&self, value: u8) -> Option<Value> {
         let m = self.m as f32;
-        let b = self.b as f32 * 10f32.powf(self.b_exponent as f32);
-        let result_mul = 10f32.powf(self.result_exponent as f32);
+        let b = self.b as f32 * libm::powf(10.0, self.b_exponent as f32);
+        let result_mul = libm::powf(10.0, self.result_exponent as f32);
         let format = self.analog_data_format?;
 
         let value = match format {

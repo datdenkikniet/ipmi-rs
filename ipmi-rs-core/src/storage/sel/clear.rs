@@ -2,9 +2,9 @@
 //!
 //! Reference: IPMI 2.0 Specification, Section 31.9 "Clear SEL Command"
 
-use std::num::NonZeroU16;
+use core::num::NonZeroU16;
 
-use crate::connection::{IpmiCommand, Message, NetFn, NotEnoughData};
+use crate::connection::{EncodeIpmiCommand, IpmiCommand, NetFn, NotEnoughData};
 
 /// Action to perform when clearing the SEL.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -82,31 +82,36 @@ impl IpmiCommand for ClearSel {
     }
 }
 
-impl From<ClearSel> for Message {
-    /// Build the request message.
-    ///
-    /// Request format (IPMI 2.0 Spec, Table 31-9):
-    /// - Byte 0-1: Reservation ID, LS byte first
-    /// - Byte 2: 'C' (0x43)
-    /// - Byte 3: 'L' (0x4C)
-    /// - Byte 4: 'R' (0x52)
-    /// - Byte 5: Action
-    ///   - 0xAA = initiate erase
-    ///   - 0x00 = get erasure status
-    fn from(value: ClearSel) -> Self {
-        let action_byte = match value.action {
-            ClearSelAction::InitiateErase => 0xAA,
-            ClearSelAction::GetStatus => 0x00,
-        };
+impl EncodeIpmiCommand for ClearSel {
+    const NETFN: NetFn = NetFn::Storage;
+    const CMD: u8 = 0x47;
 
-        let mut data = vec![0u8; 6];
-        data[0..2].copy_from_slice(&value.reservation_id.map_or(0, |id| id.get()).to_le_bytes());
+    fn request_data_len(&self) -> usize {
+        6
+    }
+
+    // Request format (IPMI 2.0 Spec, Table 31-9):
+    // - Byte 0-1: Reservation ID, LS byte first
+    // - Byte 2: 'C' (0x43)
+    // - Byte 3: 'L' (0x4C)
+    // - Byte 4: 'R' (0x52)
+    // - Byte 5: Action
+    //   - 0xAA = initiate erase
+    //   - 0x00 = get erasure status
+    fn write_request_data(&self, data: &mut [u8]) {
+        data[0..2].copy_from_slice(
+            &self
+                .reservation_id
+                .map_or(0, core::num::NonZeroU16::get)
+                .to_le_bytes(),
+        );
+        // NetFn: Storage (0x0A), Cmd: 0x47
         data[2] = 0x43; // 'C'
         data[3] = 0x4C; // 'L'
         data[4] = 0x52; // 'R'
-        data[5] = action_byte;
-
-        // NetFn: Storage (0x0A), Cmd: 0x47
-        Message::new_request(NetFn::Storage, 0x47, data)
+        data[5] = match self.action {
+            ClearSelAction::InitiateErase => 0xaa,
+            ClearSelAction::GetStatus => 0x00,
+        };
     }
 }

@@ -1,5 +1,9 @@
 # Unreleased
 
+## `ipmi-rs-core`
+
+* BREAKING: Add `no_std` support and allocation-free command encoding through a new `EncodeIpmiCommand` supertrait.
+
 # [0.5.0](https://github.com/datdenkikniet/ipmi-rs/tree/v0.5.0)
 
 * BREAKING: Refactor `IpmiCommand` to reduce/remove completion-code validation for ipmlementors. ([#28])

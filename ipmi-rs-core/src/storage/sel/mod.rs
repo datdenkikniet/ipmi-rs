@@ -15,7 +15,9 @@ mod get_entry;
 pub use get_entry::{EntryInfo as SelEntryInfo, GetEntry as GetSelEntry};
 
 mod get_info;
-pub use get_info::{Command as SelCommand, GetInfo as GetSelInfo, Info as SelInfo};
+#[cfg(feature = "alloc")]
+pub use get_info::Info as SelInfo;
+pub use get_info::{Command as SelCommand, GetInfo as GetSelInfo};
 
 mod reserve;
 pub use reserve::ReserveSel;
