@@ -51,9 +51,7 @@ impl EncodeIpmiCommand for GetLanConfigParameters {
     const NETFN: NetFn = NetFn::Transport;
     const CMD: u8 = 0x02;
 
-    fn request_data_len(&self) -> usize {
-        4
-    }
+    const REQUEST_DATA_LEN: usize = 4;
 
     fn write_request_data(&self, data: &mut [u8]) {
         let channel = self.channel.value() & 0x0f;

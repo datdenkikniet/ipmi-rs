@@ -86,9 +86,7 @@ impl EncodeIpmiCommand for ClearSel {
     const NETFN: NetFn = NetFn::Storage;
     const CMD: u8 = 0x47;
 
-    fn request_data_len(&self) -> usize {
-        6
-    }
+    const REQUEST_DATA_LEN: usize = 6;
 
     // Request format (IPMI 2.0 Spec, Table 31-9):
     // - Byte 0-1: Reservation ID, LS byte first

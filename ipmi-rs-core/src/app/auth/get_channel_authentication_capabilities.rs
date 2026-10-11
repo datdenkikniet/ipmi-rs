@@ -58,9 +58,7 @@ impl EncodeIpmiCommand for GetChannelAuthenticationCapabilities {
     const NETFN: NetFn = NetFn::App;
     const CMD: u8 = 0x38;
 
-    fn request_data_len(&self) -> usize {
-        2
-    }
+    const REQUEST_DATA_LEN: usize = 2;
 
     fn write_request_data(&self, data: &mut [u8]) {
         data[0] = 0x80 | self.channel_number.value();

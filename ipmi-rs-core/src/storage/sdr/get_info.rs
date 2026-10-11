@@ -14,9 +14,7 @@ impl EncodeIpmiCommand for GetRepositoryInfo {
     const NETFN: NetFn = NetFn::Storage;
     const CMD: u8 = 0x20;
 
-    fn request_data_len(&self) -> usize {
-        0
-    }
+    const REQUEST_DATA_LEN: usize = 0;
 
     fn write_request_data(&self, data: &mut [u8]) {
         debug_assert!(data.is_empty());

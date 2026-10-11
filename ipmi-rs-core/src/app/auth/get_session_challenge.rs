@@ -62,9 +62,7 @@ impl EncodeIpmiCommand for GetSessionChallenge {
     const NETFN: NetFn = NetFn::App;
     const CMD: u8 = 0x39;
 
-    fn request_data_len(&self) -> usize {
-        17
-    }
+    const REQUEST_DATA_LEN: usize = 17;
 
     fn write_request_data(&self, data: &mut [u8]) {
         data[0] = self.auth_type.into();

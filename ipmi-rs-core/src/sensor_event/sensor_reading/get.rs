@@ -66,9 +66,7 @@ impl EncodeIpmiCommand for GetSensorReading {
     const NETFN: NetFn = NetFn::SensorEvent;
     const CMD: u8 = 0x2d;
 
-    fn request_data_len(&self) -> usize {
-        1
-    }
+    const REQUEST_DATA_LEN: usize = 1;
 
     fn write_request_data(&self, data: &mut [u8]) {
         data[0] = self.sensor_number.get();

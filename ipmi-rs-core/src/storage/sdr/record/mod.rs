@@ -16,7 +16,7 @@ mod mc_device_locator;
 pub mod traits;
 pub use traits::*;
 
-pub use super::SensorNumber;
+use super::SensorNumber;
 pub use compact_sensor_record::CompactSensorRecord;
 pub use generic_device_locator::GenericDeviceLocator;
 

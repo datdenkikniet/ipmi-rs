@@ -237,8 +237,13 @@ pub trait EncodeIpmiCommand {
     /// Command byte within the network function.
     const CMD: u8;
 
+    /// Default request-data length; variable-length commands override [`Self::request_data_len`].
+    const REQUEST_DATA_LEN: usize = 0;
+
     /// Number of request-data bytes this command encodes.
-    fn request_data_len(&self) -> usize;
+    fn request_data_len(&self) -> usize {
+        Self::REQUEST_DATA_LEN
+    }
 
     /// Write request data into a buffer of exactly [`Self::request_data_len`] bytes.
     fn write_request_data(&self, data: &mut [u8]);

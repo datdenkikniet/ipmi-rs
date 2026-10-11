@@ -13,9 +13,7 @@ impl EncodeIpmiCommand for GetChannelCipherSuites {
     const NETFN: NetFn = NetFn::App;
     const CMD: u8 = 0x54;
 
-    fn request_data_len(&self) -> usize {
-        3
-    }
+    const REQUEST_DATA_LEN: usize = 3;
 
     fn write_request_data(&self, data: &mut [u8]) {
         data.copy_from_slice(&[self.channel.value(), 0x00, self.list_index]);

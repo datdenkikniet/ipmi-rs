@@ -41,9 +41,7 @@ impl EncodeIpmiCommand for ReserveSel {
     const NETFN: NetFn = NetFn::Storage;
     const CMD: u8 = 0x42;
 
-    fn request_data_len(&self) -> usize {
-        0
-    }
+    const REQUEST_DATA_LEN: usize = 0;
 
     // Request format (IPMI 2.0 Spec, Table 31-4):
     // - No request data

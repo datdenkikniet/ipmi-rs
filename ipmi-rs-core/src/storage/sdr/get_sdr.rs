@@ -39,9 +39,7 @@ impl EncodeIpmiCommand for GetDeviceSdr {
     const NETFN: NetFn = NetFn::Storage;
     const CMD: u8 = 0x23;
 
-    fn request_data_len(&self) -> usize {
-        6
-    }
+    const REQUEST_DATA_LEN: usize = 6;
 
     fn write_request_data(&self, data: &mut [u8]) {
         data[0..2].copy_from_slice(
