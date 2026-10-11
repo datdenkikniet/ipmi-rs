@@ -11,13 +11,15 @@ pub mod traits;
 pub use traits::*;
 
 pub use compact_sensor_record::CompactSensorRecord;
+pub use fru_device_locator::{
+    FruDevice, FruDeviceLocator, FruRecordKey, LogicalFruDevice, PhysicalFruDevice,
+};
 pub use generic_device_locator::GenericDeviceLocator;
 
 use nonmax::NonMaxU8;
 
 use crate::connection::{Channel, LogicalUnit};
 use crate::storage::sdr::record::event_only_sensor_record::EventOnlySensorRecord;
-use crate::storage::sdr::record::fru_device_locator::FruDeviceLocator;
 use crate::storage::sdr::record::mc_device_locator::McDeviceLocatorRecord;
 
 use super::{event_reading_type_code::EventReadingTypeCodes, RecordId, SensorType, Unit};

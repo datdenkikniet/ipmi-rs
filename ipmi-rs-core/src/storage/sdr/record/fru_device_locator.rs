@@ -1,3 +1,7 @@
+//! FRU Device Locator Record (SDR Type 11h).
+//!
+//! Reference: IPMI 2.0 Specification, Section 43.8, Table 43-7.
+
 use crate::connection::LogicalUnit;
 use crate::storage::sdr::record::{SensorId, TypeLengthRaw};
 
@@ -52,25 +56,26 @@ impl IdentifiableSensor for FruDeviceLocator {
 
 impl FruDeviceLocator {
     pub fn parse(record_data: &[u8]) -> Result<Self, ParseError> {
-        if record_data.len() < 8 {
+        if record_data.len() < 11 {
             return Err(ParseError::NotEnoughData);
         }
 
         let device_access_address = record_data[0] >> 1;
 
-        let fru_device = if record_data[1] & 0x80 == 0x80 {
-            FruDevice::Physical(PhysicalFruDevice {
-                i2c_address: (record_data[1] >> 1),
-            })
-        } else {
+        // Byte 8 (payload offset 2), bit 7 selects logical (1) or physical (0).
+        let fru_device = if record_data[2] & 0x80 != 0 {
             FruDevice::Logical(LogicalFruDevice {
                 fru_device_id: record_data[1],
+            })
+        } else {
+            FruDevice::Physical(PhysicalFruDevice {
+                i2c_address: record_data[1] >> 1,
             })
         };
 
         let lun = LogicalUnit::from_low_bits(record_data[2] >> 3);
         let private_bus_id = record_data[2] & 0b111;
-        let channel_number = record_data[3];
+        let channel_number = record_data[3] >> 4;
 
         let record_key = FruRecordKey {
             device_access_address,
