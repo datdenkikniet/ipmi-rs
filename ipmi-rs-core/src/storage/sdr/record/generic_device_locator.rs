@@ -6,7 +6,7 @@ use crate::connection::LogicalUnit;
 use crate::storage::sdr::record::{SensorId, TypeLengthRaw};
 
 use super::{IdentifiableSensor, ParseError};
-use std::num::NonZeroU8;
+use core::num::NonZeroU8;
 
 /// Record key for Generic Device Locator Record (SDR Type 10h).
 ///

@@ -1,3 +1,7 @@
+#[cfg(feature = "alloc")]
+use alloc::{format, string::String};
+
+#[cfg(feature = "alloc")]
 pub trait IsPlural: PartialEq {
     fn is_singular(&self) -> bool;
     fn is_plural(&self) -> bool {
@@ -5,6 +9,7 @@ pub trait IsPlural: PartialEq {
     }
 }
 
+#[cfg(feature = "alloc")]
 macro_rules ! impl_is_singular {
     ($($ty:ty: [$pos:literal$(, $neg:literal)?]),*) => {
         $(
@@ -27,6 +32,7 @@ macro_rules ! impl_is_singular {
     }
 }
 
+#[cfg(feature = "alloc")]
 impl_is_singular!(
     u8: [1],
     u16: [1],
@@ -54,6 +60,7 @@ macro_rules ! unit {
         }
 
         impl Unit {
+            #[cfg(feature = "alloc")]
             fn short_display(&self) -> Option<&str> {
                 match self {
                     $(Self::$name => $short,)*
@@ -61,6 +68,7 @@ macro_rules ! unit {
                 }
             }
 
+            #[cfg(feature = "alloc")]
             fn plural_display(&self) -> &str {
                 match self {
                     $(Self::$name => $plural,)*
@@ -68,6 +76,7 @@ macro_rules ! unit {
                 }
             }
 
+            #[cfg(feature = "alloc")]
             fn singular_display(&self) -> &str {
                 match self {
                     $(Self::$name => $singular,)*
@@ -75,6 +84,7 @@ macro_rules ! unit {
                 }
             }
 
+            #[cfg(feature = "alloc")]
             fn display_str(&self, short: bool, plural: bool) -> &str
             {
                 let short_value = if short {
@@ -94,6 +104,7 @@ macro_rules ! unit {
                 }
             }
 
+            #[cfg(feature = "alloc")]
             pub fn display<T>(&self, short: bool, value: T) -> String
                 where T: IsPlural + core::fmt::Display,
             {
@@ -217,6 +228,7 @@ unit! {
     Gram = [92, Some("gr"), "Gram", "Grams"],
 }
 
+#[cfg(feature = "alloc")]
 #[test]
 fn display_tests() {
     use Unit::*;

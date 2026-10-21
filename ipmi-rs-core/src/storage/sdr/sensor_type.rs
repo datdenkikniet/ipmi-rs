@@ -53,10 +53,8 @@ macro_rules ! sensor_type {
             type Error = ();
 
             fn try_from(input: &str) -> Result<Self, Self::Error> {
-                let to_lower = input.to_ascii_lowercase();
-
                 $(
-                    if stringify!($name).to_ascii_lowercase() == to_lower {
+                    if stringify!($name).eq_ignore_ascii_case(input) {
                         return Ok(SensorType::$name);
                     }
                 )*

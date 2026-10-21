@@ -71,7 +71,7 @@ where
             None => RequestTargetAddress::Bmc(LogicalUnit::Zero),
         };
 
-        let message = request.into();
+        let message = connection::Message::from_command(&request);
         let (message_netfn, message_cmd) = (message.netfn(), message.cmd());
         let mut request = Request::new(message, target_address);
 

@@ -1,8 +1,8 @@
-use std::num::NonZeroU16;
+use core::num::NonZeroU16;
 
 use nonmax::NonMaxU8;
 
-use crate::connection::{IpmiCommand, Message, NetFn};
+use crate::connection::{ConstantRequestDataLen, EncodeIpmiCommand, IpmiCommand, NetFn};
 
 use super::{Entry, ParseEntryError, RecordId};
 
@@ -48,22 +48,28 @@ impl IpmiCommand for GetEntry {
     }
 }
 
-impl From<GetEntry> for Message {
-    fn from(value: GetEntry) -> Self {
-        let GetEntry {
-            reservation_id,
-            record_id,
-            offset,
-            bytes_to_read,
-        } = value;
+impl ConstantRequestDataLen for GetEntry {
+    const REQUEST_DATA_LEN: usize = 6;
+}
 
-        let mut data = vec![0u8; 6];
+impl EncodeIpmiCommand for GetEntry {
+    const NETFN: NetFn = NetFn::Storage;
+    const CMD: u8 = 0x43;
 
-        data[0..2].copy_from_slice(&reservation_id.map(|v| v.get()).unwrap_or(0).to_le_bytes());
-        data[2..4].copy_from_slice(&record_id.value().to_le_bytes());
-        data[4] = offset;
-        data[5] = bytes_to_read.map(|v| v.get()).unwrap_or(0xFF);
+    fn request_data_len(&self) -> usize {
+        Self::REQUEST_DATA_LEN
+    }
 
-        Message::new_request(NetFn::Storage, 0x43, data)
+    fn write_request_data(&self, data: &mut [u8]) {
+        data[0..2].copy_from_slice(
+            &self
+                .reservation_id
+                .map(core::num::NonZeroU16::get)
+                .unwrap_or(0)
+                .to_le_bytes(),
+        );
+        data[2..4].copy_from_slice(&self.record_id.value().to_le_bytes());
+        data[4] = self.offset;
+        data[5] = self.bytes_to_read.map(|value| value.get()).unwrap_or(0xff);
     }
 }

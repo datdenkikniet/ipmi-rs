@@ -5,7 +5,7 @@ edition = "2021"
 authors = [ "Johannes Cornelis Draaijer <jcdra1@gmail.com>" ]
 license = "MIT OR Apache-2.0"
 keywords = [ "ipmi", "sysadmin", "bmc" ]
-categories = [ "parser-implementations" ]
+categories = [ "parser-implementations", "no-std" ]
 description = "A pure rust implementation of the core primitives of the IPMI spec"
 repository = "https://github.com/datdenkikniet/ipmi-rs"
 documentation = "https://docs.rs/ipmi-rs-core/latest"
@@ -13,9 +13,13 @@ documentation = "https://docs.rs/ipmi-rs-core/latest"
 [dependencies]
 bitflags = "1.3.0"
 log = { version = "0.4.25", default-features = false, optional = true }
-nonmax = "0.5.5"
+libm = { version = "0.2", optional = true }
+nonmax = { version = "0.5.5", default-features = false }
 time = { version = "0.3", optional = true, default-features = false, features = [ "formatting" ] }
 
 
 [features]
 default = [ "time", "log" ]
+alloc = [ "dep:libm" ]
+std = [ "alloc" ]
+time = [ "std", "dep:time" ]
