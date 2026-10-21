@@ -1,6 +1,6 @@
 use core::num::NonZeroU32;
 
-use crate::connection::{EncodeIpmiCommand, IpmiCommand, NetFn};
+use crate::connection::{ConstantRequestDataLen, EncodeIpmiCommand, IpmiCommand, NetFn};
 
 use super::{AuthError, AuthType};
 
@@ -58,11 +58,17 @@ impl GetSessionChallenge {
     }
 }
 
+impl ConstantRequestDataLen for GetSessionChallenge {
+    const REQUEST_DATA_LEN: usize = 17;
+}
+
 impl EncodeIpmiCommand for GetSessionChallenge {
     const NETFN: NetFn = NetFn::App;
     const CMD: u8 = 0x39;
 
-    const REQUEST_DATA_LEN: usize = 17;
+    fn request_data_len(&self) -> usize {
+        Self::REQUEST_DATA_LEN
+    }
 
     fn write_request_data(&self, data: &mut [u8]) {
         data[0] = self.auth_type.into();

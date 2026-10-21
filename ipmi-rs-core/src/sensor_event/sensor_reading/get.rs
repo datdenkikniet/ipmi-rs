@@ -1,4 +1,5 @@
 #[cfg(feature = "alloc")]
+use crate::connection::ConstantRequestDataLen;
 use crate::storage::sdr::record::SensorKey;
 use crate::{
     connection::{Address, Channel, EncodeIpmiCommand, IpmiCommand, NetFn, NotEnoughData},
@@ -62,11 +63,17 @@ impl GetSensorReading {
     }
 }
 
+impl ConstantRequestDataLen for GetSensorReading {
+    const REQUEST_DATA_LEN: usize = 1;
+}
+
 impl EncodeIpmiCommand for GetSensorReading {
     const NETFN: NetFn = NetFn::SensorEvent;
     const CMD: u8 = 0x2d;
 
-    const REQUEST_DATA_LEN: usize = 1;
+    fn request_data_len(&self) -> usize {
+        Self::REQUEST_DATA_LEN
+    }
 
     fn write_request_data(&self, data: &mut [u8]) {
         data[0] = self.sensor_number.get();

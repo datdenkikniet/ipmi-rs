@@ -2,7 +2,7 @@ use core::num::NonZeroU16;
 
 use nonmax::NonMaxU8;
 
-use crate::connection::{EncodeIpmiCommand, IpmiCommand, NetFn};
+use crate::connection::{ConstantRequestDataLen, EncodeIpmiCommand, IpmiCommand, NetFn};
 
 use super::{Entry, ParseEntryError, RecordId};
 
@@ -48,11 +48,17 @@ impl IpmiCommand for GetEntry {
     }
 }
 
+impl ConstantRequestDataLen for GetEntry {
+    const REQUEST_DATA_LEN: usize = 6;
+}
+
 impl EncodeIpmiCommand for GetEntry {
     const NETFN: NetFn = NetFn::Storage;
     const CMD: u8 = 0x43;
 
-    const REQUEST_DATA_LEN: usize = 6;
+    fn request_data_len(&self) -> usize {
+        Self::REQUEST_DATA_LEN
+    }
 
     fn write_request_data(&self, data: &mut [u8]) {
         data[0..2].copy_from_slice(

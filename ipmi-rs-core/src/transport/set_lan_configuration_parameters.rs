@@ -197,4 +197,18 @@ mod tests {
         assert_eq!(request.cmd(), 0x01);
         assert_eq!(request.data(), &[0x00, 0x03, 192, 0, 2, 1]);
     }
+
+    #[test]
+    fn dynamic_length_follows_payload_and_rejects_short_buffer() {
+        let command = SetLanConfigParametersRef::new(
+            Channel::Primary,
+            LanConfigParameter::IpAddress,
+            &[192, 0, 2, 1],
+        );
+        assert_eq!(command.request_data_len(), 6);
+
+        let mut buffer = [0_u8; 5];
+        let err = command.encode_request(&mut buffer).unwrap_err();
+        assert_eq!((err.required, err.available), (6, 5));
+    }
 }

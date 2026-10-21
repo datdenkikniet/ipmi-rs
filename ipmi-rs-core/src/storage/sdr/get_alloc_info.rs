@@ -1,13 +1,21 @@
-use crate::connection::{EncodeIpmiCommand, IpmiCommand, NetFn, NotEnoughData};
+use crate::connection::{
+    ConstantRequestDataLen, EncodeIpmiCommand, IpmiCommand, NetFn, NotEnoughData,
+};
 
 #[derive(Clone, Copy, Debug)]
 pub struct GetAllocInfo;
+
+impl ConstantRequestDataLen for GetAllocInfo {
+    const REQUEST_DATA_LEN: usize = 0;
+}
 
 impl EncodeIpmiCommand for GetAllocInfo {
     const NETFN: NetFn = NetFn::Storage;
     const CMD: u8 = 0x21;
 
-    const REQUEST_DATA_LEN: usize = 0;
+    fn request_data_len(&self) -> usize {
+        Self::REQUEST_DATA_LEN
+    }
 
     fn write_request_data(&self, data: &mut [u8]) {
         debug_assert!(data.is_empty());

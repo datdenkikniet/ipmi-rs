@@ -1,3 +1,4 @@
+use crate::connection::ConstantRequestDataLen;
 use core::num::NonZeroU16;
 
 use nonmax::NonMaxU8;
@@ -35,11 +36,17 @@ impl GetDeviceSdr {
     }
 }
 
+impl ConstantRequestDataLen for GetDeviceSdr {
+    const REQUEST_DATA_LEN: usize = 6;
+}
+
 impl EncodeIpmiCommand for GetDeviceSdr {
     const NETFN: NetFn = NetFn::Storage;
     const CMD: u8 = 0x23;
 
-    const REQUEST_DATA_LEN: usize = 6;
+    fn request_data_len(&self) -> usize {
+        Self::REQUEST_DATA_LEN
+    }
 
     fn write_request_data(&self, data: &mut [u8]) {
         data[0..2].copy_from_slice(

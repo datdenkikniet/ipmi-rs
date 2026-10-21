@@ -1,4 +1,4 @@
-use crate::connection::{Channel, EncodeIpmiCommand, IpmiCommand, NetFn};
+use crate::connection::{Channel, ConstantRequestDataLen, EncodeIpmiCommand, IpmiCommand, NetFn};
 
 use super::{AuthenticationAlgorithm, ConfidentialityAlgorithm, IntegrityAlgorithm};
 
@@ -9,11 +9,17 @@ pub struct GetChannelCipherSuites {
     list_index: u8,
 }
 
+impl ConstantRequestDataLen for GetChannelCipherSuites {
+    const REQUEST_DATA_LEN: usize = 3;
+}
+
 impl EncodeIpmiCommand for GetChannelCipherSuites {
     const NETFN: NetFn = NetFn::App;
     const CMD: u8 = 0x54;
 
-    const REQUEST_DATA_LEN: usize = 3;
+    fn request_data_len(&self) -> usize {
+        Self::REQUEST_DATA_LEN
+    }
 
     fn write_request_data(&self, data: &mut [u8]) {
         data.copy_from_slice(&[self.channel.value(), 0x00, self.list_index]);

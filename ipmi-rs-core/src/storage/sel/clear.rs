@@ -4,7 +4,9 @@
 
 use core::num::NonZeroU16;
 
-use crate::connection::{EncodeIpmiCommand, IpmiCommand, NetFn, NotEnoughData};
+use crate::connection::{
+    ConstantRequestDataLen, EncodeIpmiCommand, IpmiCommand, NetFn, NotEnoughData,
+};
 
 /// Action to perform when clearing the SEL.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -82,11 +84,17 @@ impl IpmiCommand for ClearSel {
     }
 }
 
+impl ConstantRequestDataLen for ClearSel {
+    const REQUEST_DATA_LEN: usize = 6;
+}
+
 impl EncodeIpmiCommand for ClearSel {
     const NETFN: NetFn = NetFn::Storage;
     const CMD: u8 = 0x47;
 
-    const REQUEST_DATA_LEN: usize = 6;
+    fn request_data_len(&self) -> usize {
+        Self::REQUEST_DATA_LEN
+    }
 
     // Request format (IPMI 2.0 Spec, Table 31-9):
     // - Byte 0-1: Reservation ID, LS byte first

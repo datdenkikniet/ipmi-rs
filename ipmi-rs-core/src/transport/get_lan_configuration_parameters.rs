@@ -1,4 +1,5 @@
 #[cfg(feature = "alloc")]
+use crate::connection::ConstantRequestDataLen;
 use alloc::vec::Vec;
 
 #[cfg(feature = "alloc")]
@@ -47,11 +48,17 @@ impl GetLanConfigParameters {
     }
 }
 
+impl ConstantRequestDataLen for GetLanConfigParameters {
+    const REQUEST_DATA_LEN: usize = 4;
+}
+
 impl EncodeIpmiCommand for GetLanConfigParameters {
     const NETFN: NetFn = NetFn::Transport;
     const CMD: u8 = 0x02;
 
-    const REQUEST_DATA_LEN: usize = 4;
+    fn request_data_len(&self) -> usize {
+        Self::REQUEST_DATA_LEN
+    }
 
     fn write_request_data(&self, data: &mut [u8]) {
         let channel = self.channel.value() & 0x0f;

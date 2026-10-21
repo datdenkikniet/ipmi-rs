@@ -230,6 +230,15 @@ impl core::fmt::Display for EncodeError {
     }
 }
 
+/// An [`EncodeIpmiCommand`] whose request data always has the same length.
+///
+/// Implementors MUST return [`Self::REQUEST_DATA_LEN`] from
+/// [`EncodeIpmiCommand::request_data_len`].
+pub trait ConstantRequestDataLen: EncodeIpmiCommand {
+    /// Exact number of request-data bytes every instance encodes.
+    const REQUEST_DATA_LEN: usize;
+}
+
 /// An IPMI command that can encode its request without allocating.
 pub trait EncodeIpmiCommand {
     /// Network function for this command.
@@ -237,13 +246,11 @@ pub trait EncodeIpmiCommand {
     /// Command byte within the network function.
     const CMD: u8;
 
-    /// Default request-data length; variable-length commands override [`Self::request_data_len`].
-    const REQUEST_DATA_LEN: usize = 0;
-
     /// Number of request-data bytes this command encodes.
-    fn request_data_len(&self) -> usize {
-        Self::REQUEST_DATA_LEN
-    }
+    ///
+    /// Commands with a fixed length SHOULD implement [`ConstantRequestDataLen`] and
+    /// return [`ConstantRequestDataLen::REQUEST_DATA_LEN`] from here.
+    fn request_data_len(&self) -> usize;
 
     /// Write request data into a buffer of exactly [`Self::request_data_len`] bytes.
     fn write_request_data(&self, data: &mut [u8]);

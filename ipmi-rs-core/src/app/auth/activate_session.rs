@@ -1,6 +1,6 @@
 use core::num::NonZeroU32;
 
-use crate::connection::{EncodeIpmiCommand, IpmiCommand, NetFn};
+use crate::connection::{ConstantRequestDataLen, EncodeIpmiCommand, IpmiCommand, NetFn};
 
 use super::{AuthError, AuthType, PrivilegeLevel};
 
@@ -20,11 +20,17 @@ pub struct BeginSessionInfo {
     pub maximum_privilege_level: PrivilegeLevel,
 }
 
+impl ConstantRequestDataLen for ActivateSession {
+    const REQUEST_DATA_LEN: usize = 22;
+}
+
 impl EncodeIpmiCommand for ActivateSession {
     const NETFN: NetFn = NetFn::App;
     const CMD: u8 = 0x3a;
 
-    const REQUEST_DATA_LEN: usize = 22;
+    fn request_data_len(&self) -> usize {
+        Self::REQUEST_DATA_LEN
+    }
 
     fn write_request_data(&self, data: &mut [u8]) {
         data[0] = self.auth_type.into();

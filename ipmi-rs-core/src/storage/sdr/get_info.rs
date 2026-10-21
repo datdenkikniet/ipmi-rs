@@ -1,7 +1,7 @@
 #[cfg(feature = "alloc")]
 use alloc::vec::Vec;
 
-use crate::connection::{EncodeIpmiCommand, NetFn};
+use crate::connection::{ConstantRequestDataLen, EncodeIpmiCommand, NetFn};
 #[cfg(feature = "alloc")]
 use crate::{
     connection::{IpmiCommand, NotEnoughData},
@@ -10,11 +10,17 @@ use crate::{
 
 pub struct GetRepositoryInfo;
 
+impl ConstantRequestDataLen for GetRepositoryInfo {
+    const REQUEST_DATA_LEN: usize = 0;
+}
+
 impl EncodeIpmiCommand for GetRepositoryInfo {
     const NETFN: NetFn = NetFn::Storage;
     const CMD: u8 = 0x20;
 
-    const REQUEST_DATA_LEN: usize = 0;
+    fn request_data_len(&self) -> usize {
+        Self::REQUEST_DATA_LEN
+    }
 
     fn write_request_data(&self, data: &mut [u8]) {
         debug_assert!(data.is_empty());
