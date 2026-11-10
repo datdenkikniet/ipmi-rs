@@ -1,6 +1,8 @@
+use crate::connection::ConstantRequestDataLen;
+use crate::storage::sdr::record::SensorKey;
 use crate::{
-    connection::{Address, Channel, IpmiCommand, Message, NotEnoughData},
-    storage::sdr::record::{SensorKey, SensorNumber},
+    connection::{Address, Channel, EncodeIpmiCommand, IpmiCommand, NetFn, NotEnoughData},
+    storage::sdr::SensorNumber,
 };
 
 use super::RawSensorReading;
@@ -59,13 +61,20 @@ impl GetSensorReading {
     }
 }
 
-impl From<GetSensorReading> for Message {
-    fn from(value: GetSensorReading) -> Self {
-        Message::new_request(
-            crate::connection::NetFn::SensorEvent,
-            0x2D,
-            vec![value.sensor_number.get()],
-        )
+impl ConstantRequestDataLen for GetSensorReading {
+    const REQUEST_DATA_LEN: usize = 1;
+}
+
+impl EncodeIpmiCommand for GetSensorReading {
+    const NETFN: NetFn = NetFn::SensorEvent;
+    const CMD: u8 = 0x2d;
+
+    fn request_data_len(&self) -> usize {
+        Self::REQUEST_DATA_LEN
+    }
+
+    fn write_request_data(&self, data: &mut [u8]) {
+        data[0] = self.sensor_number.get();
     }
 }
 

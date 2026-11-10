@@ -1,5 +1,12 @@
 # Unreleased
 
+## `ipmi-rs-core`
+
+* BREAKING: Add `no_std` support and allocation-free command encoding through a new `EncodeIpmiCommand` supertrait.
+* BREAKING: `SetLanConfigParameters` is now generic over its parameter data (`T: AsRef<[u8]>`, default `&'static [u8]`). Use `to_owned` to get a `SetLanConfigParameters<Vec<u8>>`.
+* BREAKING: `LanConfigParameterRequest` and `LanConfigParameterData` borrow their `Raw` payload (`&[u8]`) and are available without `alloc`. `LanConfigParameter::parse` no longer requires `alloc`; add `LanConfigParameterRequest::encode` to serialize into a caller-provided buffer.
+* Add allocation-free `Unit::with_value`/`UnitValue`, `Unit::display_str` and `Value::as_display`, and export `storage::sdr::IsPlural`.
+
 # [0.5.0](https://github.com/datdenkikniet/ipmi-rs/tree/v0.5.0)
 
 * BREAKING: Refactor `IpmiCommand` to reduce/remove completion-code validation for ipmlementors. ([#28])

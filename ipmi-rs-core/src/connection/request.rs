@@ -1,6 +1,4 @@
-use crate::connection::{LogicalUnit, NetFn};
-
-use super::{Address, Channel, Message};
+use super::{Message, NetFn, RequestTargetAddress};
 
 /// An IPMI request message.
 pub struct Request {
@@ -48,23 +46,5 @@ impl Request {
     /// Get the target for the request.
     pub fn target(&self) -> RequestTargetAddress {
         self.target
-    }
-}
-
-/// The target address of a request.
-#[derive(Copy, Clone, Debug, PartialEq)]
-pub enum RequestTargetAddress {
-    /// A logical unit on the BMC (Board Management Controller).
-    Bmc(LogicalUnit),
-    /// An address on the BMC or IPMB.
-    BmcOrIpmb(Address, Channel, LogicalUnit),
-}
-
-impl RequestTargetAddress {
-    /// Get the logical unit for the target address.
-    pub fn lun(&self) -> LogicalUnit {
-        match self {
-            RequestTargetAddress::Bmc(lun) | RequestTargetAddress::BmcOrIpmb(_, _, lun) => *lun,
-        }
     }
 }

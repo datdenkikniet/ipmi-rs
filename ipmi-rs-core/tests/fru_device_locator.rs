@@ -1,3 +1,5 @@
+#![cfg(feature = "alloc")]
+
 use ipmi_rs_core::connection::LogicalUnit;
 use ipmi_rs_core::storage::sdr::record::{
     FruDevice, FruDeviceLocator, FruRecordKey, LogicalFruDevice, ParseError, PhysicalFruDevice,

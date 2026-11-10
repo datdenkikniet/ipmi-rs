@@ -2,15 +2,20 @@ mod get_dev_sdr_info;
 pub use get_dev_sdr_info::*;
 
 mod get_sdr;
-pub use get_sdr::{GetDeviceSdr, RecordInfo as SdrRecordInfo, *};
+pub use get_sdr::GetDeviceSdr;
+#[cfg(feature = "alloc")]
+pub use get_sdr::RecordInfo as SdrRecordInfo;
 
 pub mod record;
-pub use record::{ParseError as RecordParseError, Record};
+pub use record::ParseError as RecordParseError;
+#[cfg(feature = "alloc")]
+pub use record::Record;
 
 mod get_info;
+#[cfg(feature = "alloc")]
+pub use get_info::RepositoryInfo as SdrRepositoryInfo;
 pub use get_info::{
-    FreeSpace as SdrFreeSpace, GetRepositoryInfo as GetSdrRepositoryInfo,
-    Operation as SdrOperation, RepositoryInfo as SdrRepositoryInfo,
+    FreeSpace as SdrFreeSpace, GetRepositoryInfo as GetSdrRepositoryInfo, Operation as SdrOperation,
 };
 
 mod get_alloc_info;
@@ -24,11 +29,27 @@ pub use sensor_type::SensorType;
 mod event_offset;
 pub use event_offset::decode_event;
 
+/// Sensor number, excluding the reserved `0xff` value.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SensorNumber(nonmax::NonMaxU8);
+
+impl SensorNumber {
+    /// Create a sensor number.
+    pub const fn new(value: nonmax::NonMaxU8) -> Self {
+        Self(value)
+    }
+
+    /// Get the wire value.
+    pub const fn get(self) -> u8 {
+        self.0.get()
+    }
+}
+
 mod event_data;
 pub use event_data::{EventData, EventData2Type, EventData3Type};
 
 mod units;
-pub use units::Unit;
+pub use units::{IsPlural, Unit, UnitValue};
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct RecordId(u16);

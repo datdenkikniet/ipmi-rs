@@ -1,28 +1,32 @@
-mod full_sensor_record;
-pub use full_sensor_record::FullSensorRecord;
+#[cfg(feature = "alloc")]
+use alloc::string::{String, ToString};
 
+#[cfg(feature = "alloc")]
 mod compact_sensor_record;
+#[cfg(feature = "alloc")]
 mod event_only_sensor_record;
+#[cfg(feature = "alloc")]
 mod fru_device_locator;
+#[cfg(feature = "alloc")]
+mod full_sensor_record;
+#[cfg(feature = "alloc")]
 mod generic_device_locator;
+#[cfg(feature = "alloc")]
 mod mc_device_locator;
 
 pub mod traits;
 pub use traits::*;
 
-pub use compact_sensor_record::CompactSensorRecord;
-pub use fru_device_locator::{
-    FruDevice, FruDeviceLocator, FruRecordKey, LogicalFruDevice, PhysicalFruDevice,
-};
-pub use generic_device_locator::GenericDeviceLocator;
+#[cfg(feature = "alloc")]
+pub use owned::*;
+
+use super::SensorNumber;
 
 use nonmax::NonMaxU8;
 
 use crate::connection::{Channel, LogicalUnit};
-use crate::storage::sdr::record::event_only_sensor_record::EventOnlySensorRecord;
-use crate::storage::sdr::record::mc_device_locator::McDeviceLocatorRecord;
 
-use super::{event_reading_type_code::EventReadingTypeCodes, RecordId, SensorType, Unit};
+use super::{RecordId, Unit};
 
 #[derive(Debug)]
 pub struct Value {
@@ -35,13 +39,36 @@ impl Value {
         Self { units, value }
     }
 
+    /// Borrow this value for allocation-free formatting with its unit.
+    pub fn as_display(&self, short: bool) -> ValueDisplay<'_> {
+        ValueDisplay { value: self, short }
+    }
+
+    #[cfg(feature = "alloc")]
     pub fn display(&self, short: bool) -> String {
-        if self.units.is_percentage {
-            format!("{:.2} %", self.value)
+        self.as_display(short).to_string()
+    }
+}
+
+/// A [`Value`] formatted with its unit. Created by [`Value::as_display`].
+#[derive(Debug, Clone, Copy)]
+pub struct ValueDisplay<'a> {
+    value: &'a Value,
+    short: bool,
+}
+
+impl core::fmt::Display for ValueDisplay<'_> {
+    fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let Value { units, value } = self.value;
+        if units.is_percentage {
+            write!(formatter, "{:.2} %", value)
         } else {
             // TODO: use Modifier unit and rate units
             // somehow here
-            self.units.base_unit.display(short, self.value)
+            units
+                .base_unit
+                .with_value(self.short, *value)
+                .fmt(formatter)
         }
     }
 }
@@ -610,71 +637,6 @@ impl<'a> TypeLengthRaw<'a> {
     }
 }
 
-impl<'a> TryFrom<TypeLengthRaw<'a>> for SensorId {
-    type Error = ParseError;
-
-    fn try_from(value: TypeLengthRaw<'a>) -> Result<Self, Self::Error> {
-        let TypeLengthRaw(value, data) = value;
-        let type_code = (value >> 6) & 0b11;
-
-        let length = value & 0x1F;
-
-        let data = &data[..(length as usize).min(data.len())];
-
-        let id = match type_code {
-            0b00 => SensorId::Unicode(
-                core::str::from_utf8(data)
-                    .map_err(|_| ParseError::InvalidSensorId)
-                    .map(str::to_string)?,
-            ),
-            0b01 => SensorId::BCDPlus(data.to_vec()),
-            0b10 => SensorId::Ascii6BPacked(data.to_vec()),
-            0b11 => SensorId::Ascii8BAndLatin1(data.iter().map(|v| *v as char).collect()),
-            _ => unreachable!(),
-        };
-
-        Ok(id)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum SensorId {
-    Unicode(String),
-    BCDPlus(Vec<u8>),
-    Ascii6BPacked(Vec<u8>),
-    Ascii8BAndLatin1(String),
-}
-
-impl core::fmt::Display for SensorId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            SensorId::Unicode(v) => write!(f, "{}", v),
-            SensorId::Ascii8BAndLatin1(v) => write!(f, "{}", v),
-            SensorId::Ascii6BPacked(data) => write!(f, "{:02X?}", data),
-            SensorId::BCDPlus(data) => write!(f, "{:02X?}", data),
-        }
-    }
-}
-
-impl Default for SensorId {
-    fn default() -> Self {
-        Self::Unicode("".into())
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct SensorNumber(pub NonMaxU8);
-
-impl SensorNumber {
-    pub fn new(value: NonMaxU8) -> Self {
-        Self(value)
-    }
-
-    pub fn get(&self) -> u8 {
-        self.0.get()
-    }
-}
-
 #[derive(Debug, Clone)]
 pub struct RecordHeader {
     pub id: RecordId,
@@ -683,252 +645,339 @@ pub struct RecordHeader {
     pub sdr_version_minor: u8,
 }
 
-#[derive(Debug, Clone)]
-pub struct Record {
-    pub header: RecordHeader,
-    pub contents: RecordContents,
-}
+#[cfg(feature = "alloc")]
+mod owned {
+    use alloc::{
+        string::{String, ToString},
+        vec::Vec,
+    };
 
-#[derive(Debug, Clone)]
-pub enum RecordContents {
-    FullSensor(FullSensorRecord),
-    CompactSensor(CompactSensorRecord),
-    EventOnlySensor(EventOnlySensorRecord),
-    GenericDeviceLocator(GenericDeviceLocator),
-    FruDeviceLocator(FruDeviceLocator),
-    McDeviceLocator(McDeviceLocatorRecord),
-    Unknown { ty: u8, data: Vec<u8> },
-}
+    use super::*;
+    use crate::storage::sdr::{event_reading_type_code::EventReadingTypeCodes, SensorType};
 
-impl Record {
-    pub fn common_data(&self) -> Option<&SensorRecordCommon> {
-        self.contents.common_data()
-    }
+    use super::event_only_sensor_record::EventOnlySensorRecord;
+    use super::mc_device_locator::McDeviceLocatorRecord;
+    pub use super::{
+        compact_sensor_record::CompactSensorRecord,
+        fru_device_locator::{
+            FruDevice, FruDeviceLocator, FruRecordKey, LogicalFruDevice, PhysicalFruDevice,
+        },
+        full_sensor_record::FullSensorRecord,
+        generic_device_locator::GenericDeviceLocator,
+    };
 
-    pub fn full_sensor(&self) -> Option<&FullSensorRecord> {
-        self.contents.full_sensor()
-    }
+    impl<'a> TryFrom<TypeLengthRaw<'a>> for SensorId {
+        type Error = ParseError;
 
-    pub fn compact_sensor(&self) -> Option<&CompactSensorRecord> {
-        self.contents.compact_sensor()
-    }
+        fn try_from(value: TypeLengthRaw<'a>) -> Result<Self, Self::Error> {
+            let TypeLengthRaw(value, data) = value;
+            let type_code = (value >> 6) & 0b11;
 
-    pub fn event_only(&self) -> Option<&EventOnlySensorRecord> {
-        self.contents.event_only()
-    }
+            let length = value & 0x1F;
 
-    pub fn parse(data: &[u8]) -> Result<Self, ParseError> {
-        if data.len() < 5 {
-            return Err(ParseError::NotEnoughData);
+            let data = &data[..(length as usize).min(data.len())];
+
+            let id = match type_code {
+                0b00 => SensorId::Unicode(
+                    core::str::from_utf8(data)
+                        .map_err(|_| ParseError::InvalidSensorId)
+                        .map(str::to_string)?,
+                ),
+                0b01 => SensorId::BCDPlus(data.to_vec()),
+                0b10 => SensorId::Ascii6BPacked(data.to_vec()),
+                0b11 => SensorId::Ascii8BAndLatin1(data.iter().map(|v| *v as char).collect()),
+                _ => unreachable!(),
+            };
+
+            Ok(id)
         }
+    }
 
-        let record_id = RecordId::new_raw(u16::from_le_bytes([data[0], data[1]]));
-        let sdr_version_min = (data[2] & 0xF0) >> 4;
-        let sdr_version_maj = data[2] & 0x0F;
-        let record_type = data[3];
-        let record_length = data[4];
+    #[derive(Debug, Clone, PartialEq)]
+    pub enum SensorId {
+        Unicode(String),
+        BCDPlus(Vec<u8>),
+        Ascii6BPacked(Vec<u8>),
+        Ascii8BAndLatin1(String),
+    }
 
-        let record_data = &data[5..];
-        if record_data.len() != record_length as usize {
-            return Err(ParseError::IncorrectRecordLength);
-        }
-
-        let contents = if record_type == 0x01 {
-            RecordContents::FullSensor(FullSensorRecord::parse(record_data)?)
-        } else if record_type == 0x02 {
-            RecordContents::CompactSensor(CompactSensorRecord::parse(record_data)?)
-        } else if record_type == 0x03 {
-            RecordContents::EventOnlySensor(EventOnlySensorRecord::parse(record_data)?)
-        } else if record_type == 0x10 {
-            RecordContents::GenericDeviceLocator(GenericDeviceLocator::parse(record_data)?)
-        } else if record_type == 0x11 {
-            RecordContents::FruDeviceLocator(FruDeviceLocator::parse(record_data)?)
-        } else if record_type == 0x12 {
-            RecordContents::McDeviceLocator(McDeviceLocatorRecord::parse(record_data)?)
-        } else {
-            RecordContents::Unknown {
-                ty: record_type,
-                data: record_data.to_vec(),
+    impl core::fmt::Display for SensorId {
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            match self {
+                SensorId::Unicode(v) => write!(f, "{}", v),
+                SensorId::Ascii8BAndLatin1(v) => write!(f, "{}", v),
+                SensorId::Ascii6BPacked(data) => write!(f, "{:02X?}", data),
+                SensorId::BCDPlus(data) => write!(f, "{:02X?}", data),
             }
-        };
-
-        Ok(Self {
-            header: RecordHeader {
-                id: record_id,
-                sdr_version_minor: sdr_version_min,
-                sdr_version_major: sdr_version_maj,
-            },
-            contents,
-        })
-    }
-
-    pub fn id(&self) -> Option<&SensorId> {
-        self.contents.id()
-    }
-
-    pub fn sensor_number(&self) -> Option<SensorNumber> {
-        self.contents.sensor_number()
-    }
-}
-
-impl RecordContents {
-    pub fn common_data(&self) -> Option<&SensorRecordCommon> {
-        match self {
-            RecordContents::FullSensor(s) => Some(s.common()),
-            RecordContents::CompactSensor(s) => Some(s.common()),
-            RecordContents::EventOnlySensor(_) => None,
-            RecordContents::GenericDeviceLocator(_) => None,
-            RecordContents::FruDeviceLocator(_) => None,
-            RecordContents::McDeviceLocator(_) => None,
-            RecordContents::Unknown { .. } => None,
         }
     }
 
-    pub fn full_sensor(&self) -> Option<&FullSensorRecord> {
-        if let RecordContents::FullSensor(full_sensor) = self {
-            Some(full_sensor)
-        } else {
-            None
+    impl Default for SensorId {
+        fn default() -> Self {
+            Self::Unicode("".into())
         }
     }
 
-    pub fn compact_sensor(&self) -> Option<&CompactSensorRecord> {
-        if let RecordContents::CompactSensor(compact_sensor) = self {
-            Some(compact_sensor)
-        } else {
-            None
+    #[derive(Debug, Clone)]
+    pub struct Record {
+        pub header: RecordHeader,
+        pub contents: RecordContents,
+    }
+
+    #[derive(Debug, Clone)]
+    pub enum RecordContents {
+        FullSensor(FullSensorRecord),
+        CompactSensor(CompactSensorRecord),
+        EventOnlySensor(EventOnlySensorRecord),
+        GenericDeviceLocator(GenericDeviceLocator),
+        FruDeviceLocator(FruDeviceLocator),
+        McDeviceLocator(McDeviceLocatorRecord),
+        Unknown { ty: u8, data: Vec<u8> },
+    }
+
+    impl Record {
+        pub fn common_data(&self) -> Option<&SensorRecordCommon> {
+            self.contents.common_data()
+        }
+
+        pub fn full_sensor(&self) -> Option<&FullSensorRecord> {
+            self.contents.full_sensor()
+        }
+
+        pub fn compact_sensor(&self) -> Option<&CompactSensorRecord> {
+            self.contents.compact_sensor()
+        }
+
+        pub fn event_only(&self) -> Option<&EventOnlySensorRecord> {
+            self.contents.event_only()
+        }
+
+        pub fn parse(data: &[u8]) -> Result<Self, ParseError> {
+            if data.len() < 5 {
+                return Err(ParseError::NotEnoughData);
+            }
+
+            let record_id = RecordId::new_raw(u16::from_le_bytes([data[0], data[1]]));
+            let sdr_version_min = (data[2] & 0xF0) >> 4;
+            let sdr_version_maj = data[2] & 0x0F;
+            let record_type = data[3];
+            let record_length = data[4];
+
+            let record_data = &data[5..];
+            if record_data.len() != record_length as usize {
+                return Err(ParseError::IncorrectRecordLength);
+            }
+
+            let contents = if record_type == 0x01 {
+                RecordContents::FullSensor(FullSensorRecord::parse(record_data)?)
+            } else if record_type == 0x02 {
+                RecordContents::CompactSensor(CompactSensorRecord::parse(record_data)?)
+            } else if record_type == 0x03 {
+                RecordContents::EventOnlySensor(EventOnlySensorRecord::parse(record_data)?)
+            } else if record_type == 0x10 {
+                RecordContents::GenericDeviceLocator(GenericDeviceLocator::parse(record_data)?)
+            } else if record_type == 0x11 {
+                RecordContents::FruDeviceLocator(FruDeviceLocator::parse(record_data)?)
+            } else if record_type == 0x12 {
+                RecordContents::McDeviceLocator(McDeviceLocatorRecord::parse(record_data)?)
+            } else {
+                RecordContents::Unknown {
+                    ty: record_type,
+                    data: record_data.to_vec(),
+                }
+            };
+
+            Ok(Self {
+                header: RecordHeader {
+                    id: record_id,
+                    sdr_version_minor: sdr_version_min,
+                    sdr_version_major: sdr_version_maj,
+                },
+                contents,
+            })
+        }
+
+        pub fn id(&self) -> Option<&SensorId> {
+            self.contents.id()
+        }
+
+        pub fn sensor_number(&self) -> Option<SensorNumber> {
+            self.contents.sensor_number()
         }
     }
 
-    pub fn event_only(&self) -> Option<&EventOnlySensorRecord> {
-        if let RecordContents::EventOnlySensor(event) = self {
-            Some(event)
-        } else {
-            None
+    impl RecordContents {
+        pub fn common_data(&self) -> Option<&SensorRecordCommon> {
+            match self {
+                RecordContents::FullSensor(s) => Some(s.common()),
+                RecordContents::CompactSensor(s) => Some(s.common()),
+                RecordContents::EventOnlySensor(_) => None,
+                RecordContents::GenericDeviceLocator(_) => None,
+                RecordContents::FruDeviceLocator(_) => None,
+                RecordContents::McDeviceLocator(_) => None,
+                RecordContents::Unknown { .. } => None,
+            }
+        }
+
+        pub fn full_sensor(&self) -> Option<&FullSensorRecord> {
+            if let RecordContents::FullSensor(full_sensor) = self {
+                Some(full_sensor)
+            } else {
+                None
+            }
+        }
+
+        pub fn compact_sensor(&self) -> Option<&CompactSensorRecord> {
+            if let RecordContents::CompactSensor(compact_sensor) = self {
+                Some(compact_sensor)
+            } else {
+                None
+            }
+        }
+
+        pub fn event_only(&self) -> Option<&EventOnlySensorRecord> {
+            if let RecordContents::EventOnlySensor(event) = self {
+                Some(event)
+            } else {
+                None
+            }
+        }
+
+        pub fn id(&self) -> Option<&SensorId> {
+            match self {
+                RecordContents::FullSensor(full) => Some(full.id_string()),
+                RecordContents::CompactSensor(compact) => Some(compact.id_string()),
+                RecordContents::EventOnlySensor(event) => Some(&event.id_string),
+                RecordContents::GenericDeviceLocator(generic) => Some(&generic.id_string),
+                RecordContents::FruDeviceLocator(fru) => Some(&fru.id_string),
+                RecordContents::McDeviceLocator(mc) => Some(&mc.id_string),
+                RecordContents::Unknown { .. } => None,
+            }
+        }
+
+        pub fn sensor_number(&self) -> Option<SensorNumber> {
+            match self {
+                RecordContents::FullSensor(full) => Some(full.sensor_number()),
+                RecordContents::CompactSensor(compact) => Some(compact.sensor_number()),
+                RecordContents::EventOnlySensor(event) => Some(event.key.sensor_number),
+                RecordContents::GenericDeviceLocator(_)
+                | RecordContents::FruDeviceLocator(_)
+                | RecordContents::McDeviceLocator(_) => None,
+                RecordContents::Unknown { .. } => None,
+            }
+        }
+
+        /// Get the sensor type for sensor records (Full, Compact, Event-Only).
+        pub fn sensor_type(&self) -> Option<SensorType> {
+            match self {
+                RecordContents::FullSensor(full) => Some(*full.ty()),
+                RecordContents::CompactSensor(compact) => Some(*compact.ty()),
+                RecordContents::EventOnlySensor(event) => Some(event.ty),
+                RecordContents::GenericDeviceLocator(_)
+                | RecordContents::FruDeviceLocator(_)
+                | RecordContents::McDeviceLocator(_) => None,
+                RecordContents::Unknown { .. } => None,
+            }
         }
     }
 
-    pub fn id(&self) -> Option<&SensorId> {
-        match self {
-            RecordContents::FullSensor(full) => Some(full.id_string()),
-            RecordContents::CompactSensor(compact) => Some(compact.id_string()),
-            RecordContents::EventOnlySensor(event) => Some(&event.id_string),
-            RecordContents::GenericDeviceLocator(generic) => Some(&generic.id_string),
-            RecordContents::FruDeviceLocator(fru) => Some(&fru.id_string),
-            RecordContents::McDeviceLocator(mc) => Some(&mc.id_string),
-            RecordContents::Unknown { .. } => None,
-        }
+    #[derive(Debug, Clone)]
+    pub struct SensorRecordCommon {
+        pub key: SensorKey,
+        // TODO: make a type EntityId
+        pub entity_id: u8,
+        pub entity_instance: EntityInstance,
+        pub initialization: SensorInitialization,
+        pub capabilities: SensorCapabilities,
+        pub ty: SensorType,
+        pub event_reading_type_code: EventReadingTypeCodes,
+        pub sensor_units: SensorUnits,
+        pub sensor_id: SensorId,
     }
 
-    pub fn sensor_number(&self) -> Option<SensorNumber> {
-        match self {
-            RecordContents::FullSensor(full) => Some(full.sensor_number()),
-            RecordContents::CompactSensor(compact) => Some(compact.sensor_number()),
-            RecordContents::EventOnlySensor(event) => Some(event.key.sensor_number),
-            RecordContents::GenericDeviceLocator(_)
-            | RecordContents::FruDeviceLocator(_)
-            | RecordContents::McDeviceLocator(_) => None,
-            RecordContents::Unknown { .. } => None,
+    impl SensorRecordCommon {
+        /// Parse common sensor record data, but set the SensorID to an empty UTF-8 String.
+        ///
+        /// You _must_ remember to [`SensorRecordCommon::set_id`] once the ID of the
+        /// record has been parsed.
+        pub(crate) fn parse_without_id(record_data: &[u8]) -> Result<(Self, &[u8]), ParseError> {
+            if record_data.len() < 17 {
+                return Err(ParseError::NotEnoughData);
+            }
+
+            let sensor_key = SensorKey::parse(&record_data[..3])?;
+
+            let entity_id = record_data[3];
+
+            let entity_instance = record_data[4];
+            let entity_instance = EntityInstance::from(entity_instance);
+
+            let initialization = record_data[5];
+            let initialization = SensorInitialization::from(initialization);
+
+            let sensor_capabilities = record_data[6];
+
+            let sensor_type = record_data[7].into();
+            let event_reading_type_code = record_data[8].into();
+
+            let assertion_event_mask_lower_thrsd_reading_mask =
+                u16::from_le_bytes([record_data[9], record_data[10]]);
+            let deassertion_event_mask_upper_thrsd_reading_mask =
+                u16::from_le_bytes([record_data[11], record_data[12]]);
+            let settable_thrsd_readable_thrsd_mask =
+                u16::from_le_bytes([record_data[13], record_data[14]]);
+
+            let capabilities = SensorCapabilities::new(
+                sensor_capabilities,
+                assertion_event_mask_lower_thrsd_reading_mask,
+                deassertion_event_mask_upper_thrsd_reading_mask,
+                settable_thrsd_readable_thrsd_mask,
+            );
+
+            let sensor_units_1 = record_data[15];
+            let base_unit = record_data[16];
+            let modifier_unit = record_data[17];
+
+            let sensor_units = SensorUnits::from(sensor_units_1, base_unit, modifier_unit);
+
+            Ok((
+                Self {
+                    key: sensor_key,
+                    entity_id,
+                    entity_instance,
+                    initialization,
+                    capabilities,
+                    ty: sensor_type,
+                    event_reading_type_code,
+                    sensor_units,
+                    sensor_id: Default::default(),
+                },
+                &record_data[18..],
+            ))
         }
-    }
 
-    /// Get the sensor type for sensor records (Full, Compact, Event-Only).
-    pub fn sensor_type(&self) -> Option<SensorType> {
-        match self {
-            RecordContents::FullSensor(full) => Some(*full.ty()),
-            RecordContents::CompactSensor(compact) => Some(*compact.ty()),
-            RecordContents::EventOnlySensor(event) => Some(event.ty),
-            RecordContents::GenericDeviceLocator(_)
-            | RecordContents::FruDeviceLocator(_)
-            | RecordContents::McDeviceLocator(_) => None,
-            RecordContents::Unknown { .. } => None,
+        pub(crate) fn set_id(&mut self, id: SensorId) {
+            self.sensor_id = id;
         }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct SensorRecordCommon {
-    pub key: SensorKey,
-    // TODO: make a type EntityId
-    pub entity_id: u8,
-    pub entity_instance: EntityInstance,
-    pub initialization: SensorInitialization,
-    pub capabilities: SensorCapabilities,
-    pub ty: SensorType,
-    pub event_reading_type_code: EventReadingTypeCodes,
-    pub sensor_units: SensorUnits,
-    pub sensor_id: SensorId,
-}
-
-impl SensorRecordCommon {
-    /// Parse common sensor record data, but set the SensorID to an empty UTF-8 String.
-    ///
-    /// You _must_ remember to [`SensorRecordCommon::set_id`] once the ID of the
-    /// record has been parsed.
-    pub(crate) fn parse_without_id(record_data: &[u8]) -> Result<(Self, &[u8]), ParseError> {
-        if record_data.len() < 17 {
-            return Err(ParseError::NotEnoughData);
-        }
-
-        let sensor_key = SensorKey::parse(&record_data[..3])?;
-
-        let entity_id = record_data[3];
-
-        let entity_instance = record_data[4];
-        let entity_instance = EntityInstance::from(entity_instance);
-
-        let initialization = record_data[5];
-        let initialization = SensorInitialization::from(initialization);
-
-        let sensor_capabilities = record_data[6];
-
-        let sensor_type = record_data[7].into();
-        let event_reading_type_code = record_data[8].into();
-
-        let assertion_event_mask_lower_thrsd_reading_mask =
-            u16::from_le_bytes([record_data[9], record_data[10]]);
-        let deassertion_event_mask_upper_thrsd_reading_mask =
-            u16::from_le_bytes([record_data[11], record_data[12]]);
-        let settable_thrsd_readable_thrsd_mask =
-            u16::from_le_bytes([record_data[13], record_data[14]]);
-
-        let capabilities = SensorCapabilities::new(
-            sensor_capabilities,
-            assertion_event_mask_lower_thrsd_reading_mask,
-            deassertion_event_mask_upper_thrsd_reading_mask,
-            settable_thrsd_readable_thrsd_mask,
-        );
-
-        let sensor_units_1 = record_data[15];
-        let base_unit = record_data[16];
-        let modifier_unit = record_data[17];
-
-        let sensor_units = SensorUnits::from(sensor_units_1, base_unit, modifier_unit);
-
-        Ok((
-            Self {
-                key: sensor_key,
-                entity_id,
-                entity_instance,
-                initialization,
-                capabilities,
-                ty: sensor_type,
-                event_reading_type_code,
-                sensor_units,
-                sensor_id: Default::default(),
-            },
-            &record_data[18..],
-        ))
-    }
-
-    pub(crate) fn set_id(&mut self, id: SensorId) {
-        self.sensor_id = id;
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn value_display_formats_unit_and_percentage() {
+        let celsius = Value::new(SensorUnits::from(0, 1, 0), 32.5);
+        let percent = Value::new(SensorUnits::from(1, 1, 0), 12.345);
+
+        assert_eq!(format!("{}", celsius.as_display(true)), "32.50 °C");
+        assert_eq!(
+            format!("{}", celsius.as_display(false)),
+            "32.50 Degrees Celsius"
+        );
+        assert_eq!(format!("{}", percent.as_display(true)), "12.35 %");
+    }
 
     #[test]
     fn test_sensor_owner_round_trip() {

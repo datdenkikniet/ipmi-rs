@@ -1,4 +1,6 @@
-use crate::connection::{Channel, IpmiCommand, Message, NetFn, NotEnoughData};
+use crate::connection::{
+    Channel, ConstantRequestDataLen, EncodeIpmiCommand, IpmiCommand, NetFn, NotEnoughData,
+};
 
 use super::{AuthType, PrivilegeLevel};
 
@@ -54,16 +56,21 @@ impl GetChannelAuthenticationCapabilities {
     }
 }
 
-impl From<GetChannelAuthenticationCapabilities> for Message {
-    fn from(value: GetChannelAuthenticationCapabilities) -> Message {
-        Message::new_request(
-            NetFn::App,
-            0x38,
-            vec![
-                0x80 | value.channel_number.value(),
-                value.privilege_level.into(),
-            ],
-        )
+impl ConstantRequestDataLen for GetChannelAuthenticationCapabilities {
+    const REQUEST_DATA_LEN: usize = 2;
+}
+
+impl EncodeIpmiCommand for GetChannelAuthenticationCapabilities {
+    const NETFN: NetFn = NetFn::App;
+    const CMD: u8 = 0x38;
+
+    fn request_data_len(&self) -> usize {
+        Self::REQUEST_DATA_LEN
+    }
+
+    fn write_request_data(&self, data: &mut [u8]) {
+        data[0] = 0x80 | self.channel_number.value();
+        data[1] = self.privilege_level.into();
     }
 }
 

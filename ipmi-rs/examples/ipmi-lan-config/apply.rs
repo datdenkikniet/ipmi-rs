@@ -169,7 +169,7 @@ fn apply_lan_config(
                 ipmi,
                 channel,
                 LanConfigParameter::Ipv6HeaderFlowLabel,
-                LanConfigParameterRequest::Raw(bytes),
+                LanConfigParameterRequest::Raw(&bytes),
             );
         } else {
             log::warn!("Invalid IPv6 flow label: {value}");

@@ -1,6 +1,6 @@
-use std::num::NonZeroU32;
+use core::num::NonZeroU32;
 
-use crate::connection::{IpmiCommand, Message, NetFn};
+use crate::connection::{ConstantRequestDataLen, EncodeIpmiCommand, IpmiCommand, NetFn};
 
 use super::{AuthError, AuthType, PrivilegeLevel};
 
@@ -20,16 +20,23 @@ pub struct BeginSessionInfo {
     pub maximum_privilege_level: PrivilegeLevel,
 }
 
-impl From<ActivateSession> for Message {
-    fn from(value: ActivateSession) -> Self {
-        let mut data = vec![0u8; 22];
+impl ConstantRequestDataLen for ActivateSession {
+    const REQUEST_DATA_LEN: usize = 22;
+}
 
-        data[0] = value.auth_type.into();
-        data[1] = value.maximum_privilege_level.into();
-        data[2..18].copy_from_slice(&value.challenge_string);
-        data[18..22].copy_from_slice(&value.initial_sequence_number.to_le_bytes());
+impl EncodeIpmiCommand for ActivateSession {
+    const NETFN: NetFn = NetFn::App;
+    const CMD: u8 = 0x3a;
 
-        Message::new_request(NetFn::App, 0x3A, data)
+    fn request_data_len(&self) -> usize {
+        Self::REQUEST_DATA_LEN
+    }
+
+    fn write_request_data(&self, data: &mut [u8]) {
+        data[0] = self.auth_type.into();
+        data[1] = self.maximum_privilege_level.into();
+        data[2..18].copy_from_slice(&self.challenge_string);
+        data[18..22].copy_from_slice(&self.initial_sequence_number.to_le_bytes());
     }
 }
 

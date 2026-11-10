@@ -1,6 +1,6 @@
 pub mod sel;
 
-use std::num::NonZeroU16;
+use core::num::NonZeroU16;
 
 pub mod sdr;
 
@@ -8,7 +8,7 @@ pub mod sdr;
 pub struct Timestamp(u32);
 
 impl core::fmt::Display for Timestamp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         if self.0 == 0 {
             write!(f, "Unknown")
         } else {

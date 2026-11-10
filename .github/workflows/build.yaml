@@ -26,6 +26,7 @@ jobs:
       matrix:
         command:
           - "-p ipmi-rs-core --no-default-features"
+          - "-p ipmi-rs-core --no-default-features -F alloc"
           - "-p ipmi-rs-core --no-default-features -F time"
           - "-p ipmi-rs-core --no-default-features -F log"
           - "-p ipmi-rs-core --all-features"
@@ -49,6 +50,16 @@ jobs:
       - name: Check a package with specific feature combination.
         run: CARGO_BUILD_WARNINGS=deny cargo check --locked ${{ matrix.command }}
 
+  check-no-std:
+    runs-on: ubuntu-latest
+    name: Check no_std without alloc
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install bare-metal target
+        run: rustup target add thumbv7em-none-eabihf
+      - name: Check allocation-free ipmi-rs-core
+        run: cargo check --locked -p ipmi-rs-core --no-default-features --target thumbv7em-none-eabihf
+
   test:
     runs-on: ubuntu-latest
     name: Test
@@ -56,6 +67,7 @@ jobs:
       matrix:
         command:
           - "-p ipmi-rs-core --no-default-features"
+          - "-p ipmi-rs-core --no-default-features -F alloc"
           - "-p ipmi-rs-core --no-default-features -F time"
           - "-p ipmi-rs-core --no-default-features -F log"
           - "-p ipmi-rs-core --all-features"
@@ -89,6 +101,6 @@ jobs:
 
   ci-success:
     runs-on: ubuntu-latest
-    needs: [check-format, check, test, clippy]
+    needs: [check-format, check, check-no-std, test, clippy]
     steps:
       - run: true
