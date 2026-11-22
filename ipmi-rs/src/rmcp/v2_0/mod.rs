@@ -181,6 +181,10 @@ pub struct State {
 }
 
 impl State {
+    pub(crate) fn session_id(&self) -> NonZeroU32 {
+        self.session_id
+    }
+
     fn validate_open_session(
         req: &OpenSessionRequest,
         resp: &OpenSessionResponse,

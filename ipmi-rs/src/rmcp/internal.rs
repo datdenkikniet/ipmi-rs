@@ -4,6 +4,7 @@
 use std::{
     io::ErrorKind,
     net::{SocketAddr, ToSocketAddrs, UdpSocket},
+    num::NonZeroU32,
     time::Duration,
 };
 
@@ -55,6 +56,16 @@ pub enum Active {
 
 #[derive(Debug, Clone)]
 pub(super) struct RmcpWithState<T>(T);
+
+impl RmcpWithState<Active> {
+    /// The session ID of the active session.
+    pub(super) fn session_id(&self) -> Option<NonZeroU32> {
+        match &self.0 {
+            Active::V1_5(state) => state.session_id(),
+            Active::V2_0(state) => Some(state.session_id()),
+        }
+    }
+}
 
 impl<T> RmcpWithState<T> {
     fn state(&self) -> &T {

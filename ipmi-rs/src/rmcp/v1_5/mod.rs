@@ -97,6 +97,10 @@ impl State {
         self.socket.release()
     }
 
+    pub(crate) fn session_id(&self) -> Option<NonZeroU32> {
+        self.session_id
+    }
+
     pub fn activate(
         mut self,
         authentication_caps: &ChannelAuthenticationCapabilities,

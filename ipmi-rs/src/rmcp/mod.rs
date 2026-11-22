@@ -1,7 +1,9 @@
 use crate::{
     connection::{IpmiConnection, NotEnoughData},
-    IpmiError,
+    Ipmi, IpmiError,
 };
+
+use ipmi_rs_core::app::auth::{CloseSession, CloseSessionError};
 use std::{net::ToSocketAddrs, time::Duration};
 
 mod socket;
@@ -128,6 +130,21 @@ impl From<V2_0ActivationError> for ActivationError {
     }
 }
 
+/// Errors that can occur while deactivating an RMCP connection.
+#[derive(Debug)]
+pub enum DeactivationError {
+    /// There is no active session to close.
+    NotActive,
+    /// Closing the session failed. The connection is inactive afterwards
+    /// regardless.
+    CloseSession(CommandError<CloseSessionError>),
+}
+
+/// An RMCP connection to a BMC.
+///
+/// Sessions are not closed from `Drop`, because that would block in a
+/// destructor. Call [`Rmcp::deactivate`] (or re-activate) to release the
+/// session slot deterministically.
 #[derive(Debug)]
 pub struct Rmcp {
     unbound_state: RmcpWithState<Unbound>,
@@ -162,15 +179,21 @@ impl Rmcp {
     ///
     /// If `rmcp_plus` is `true`, upgrade the connection to an RMCP+ connection
     /// if the remote host supports it.
+    ///
+    /// An active session is closed first. A failure to close it is logged at
+    /// the `warn` level and does not stop activation. Because the close waits
+    /// for the BMC's response, re-activation can take up to the connection's
+    /// read timeout when the BMC does not answer.
     pub fn activate(
         &mut self,
         rmcp_plus: bool,
         username: Option<&str>,
         password: Option<&[u8]>,
     ) -> Result<(), ActivationError> {
-        if self.active_state.take().is_some() {
-            // TODO: shut down currently active state.
-            log::info!("De-activating RMCP connection for re-activation");
+        if self.is_active() {
+            if let Err(error) = self.deactivate() {
+                log::warn!("Failed to close the previous IPMI session: {error:?}");
+            }
         }
 
         let inactive = self
@@ -180,6 +203,31 @@ impl Rmcp {
 
         let activated = inactive.activate(rmcp_plus, username, password)?;
         self.active_state = Some(activated);
+        Ok(())
+    }
+
+    /// Close the active IPMI session so the BMC can release its slot.
+    ///
+    /// The connection is inactive afterwards, even when the BMC rejects the
+    /// command or does not answer.
+    pub fn deactivate(&mut self) -> Result<(), DeactivationError> {
+        let Some(active) = self.active_state.take() else {
+            return Err(DeactivationError::NotActive);
+        };
+
+        // `Active::V1_5` always carries a session ID after activation; stay
+        // defensive rather than sending an ID the BMC never assigned.
+        let Some(session_id) = active.session_id() else {
+            log::debug!("Not closing the IPMI session: the active state has no session ID");
+            return Ok(());
+        };
+
+        let mut ipmi = Ipmi::new(active);
+        ipmi.send_recv(CloseSession { session_id })
+            .map_err(DeactivationError::CloseSession)?;
+
+        log::debug!("Closed IPMI session {:#010x}", session_id.get());
+
         Ok(())
     }
 }
@@ -207,5 +255,24 @@ impl IpmiConnection for Rmcp {
     ) -> Result<crate::connection::Response, Self::Error> {
         let active = self.active_state.as_mut().ok_or(RmcpIpmiError::NotActive)?;
         active.send_recv(request)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn deactivate_without_session_is_not_active() {
+        // `Rmcp::new` only resolves the address; `deactivate` must return
+        // before any socket is bound or any packet is sent.
+        let mut rmcp =
+            Rmcp::new("127.0.0.1:623", Duration::from_millis(10)).expect("resolve address");
+
+        assert!(matches!(
+            rmcp.deactivate(),
+            Err(DeactivationError::NotActive)
+        ));
+        assert!(!rmcp.is_active());
     }
 }
