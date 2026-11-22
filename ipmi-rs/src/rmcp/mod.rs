@@ -162,6 +162,15 @@ impl Rmcp {
     ///
     /// If `rmcp_plus` is `true`, upgrade the connection to an RMCP+ connection
     /// if the remote host supports it.
+    ///
+    /// # Privilege level
+    /// Sessions start out at the `User` privilege level, and have a requested
+    /// maximum of `Administrator`, which the BMC then caps to the account's
+    /// privilege limit.
+    ///
+    /// To raise the session's privilege level, call [`SetSessionPrivilegeLevel`] after activation.
+    ///
+    /// [`SetSessionPrivilegeLevel`]: crate::app::auth::SetSessionPrivilegeLevel
     pub fn activate(
         &mut self,
         rmcp_plus: bool,
