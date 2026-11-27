@@ -1,5 +1,8 @@
 # Unreleased
 
+## `ipmi-rs-core`
+* Add `SetSessionPrivilegeLevel` so callers can raise the session privilege after activation; Administrator-only commands otherwise fail with `insufficient privilege level`. Its command-specific completion codes (`0x80`-`0x82`) are reported as typed errors.
+
 # [0.5.0](https://github.com/datdenkikniet/ipmi-rs/tree/v0.5.0)
 
 * BREAKING: Refactor `IpmiCommand` to reduce/remove completion-code validation for ipmlementors. ([#28])
