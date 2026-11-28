@@ -56,6 +56,7 @@ The following IPMI commands are currently supported in `ipmi-rs-core`:
 | Get Channel Cipher Suites               | 22.15                 |
 | Get Session Challenge                   | 22.16                 |
 | Activate Session                        | 22.17                 |
+| Close Session                           | 22.19                 |
 | Get Channel Access                      | 22.23                 |
 | Get Channel Info                        | 22.24                 |
 | Set LAN Configuration Parameters        | 23.1                  |
